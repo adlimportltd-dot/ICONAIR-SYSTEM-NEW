@@ -253,7 +253,7 @@ export const listProfiles = () =>
   supabase.from('profiles').select('id, full_name, role').order('full_name').then(unwrap);
 
 export const listCustomerOptions = () =>
-  supabase.from('customers').select('id, name, city').order('name').then(unwrap);
+  supabase.from('customers_secure').select('id, name, city').order('name').then(unwrap);
 
 export const listDeviceOptions = () =>
   supabase
