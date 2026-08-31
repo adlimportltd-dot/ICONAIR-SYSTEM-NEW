@@ -7,6 +7,7 @@ import CustomerDevicesModal from '../components/CustomerDevicesModal';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { PrinterIcon } from '../components/ui/Icons';
+import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { listCustomers, createCustomer, updateCustomer, setCustomerPaid } from '../lib/queries';
 import { describeError } from '../lib/supabase';
@@ -77,6 +78,7 @@ function VatBreakdownStrip({ preVat, vatAmount }) {
 }
 
 export default function CustomersScreen() {
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
@@ -91,7 +93,7 @@ export default function CustomersScreen() {
   );
 
   // תמונת המצב הכספית הכוללת (הכרטיסיות למעלה) לא אמורה להשתנות
-  // כשמסננים את הטבלה — לכן שאילתה נפרדת, בלי סינון, רק לחישוב הסכומים.
+  // כשמסננים את הטבלה — לכן שאילתא נפרדת, בלי סינון, רק לחישוב הסכומים.
   const allCustomers = useQuery(() => listCustomers({}), []);
 
   const collectionTotals = summarizeCollection(allCustomers.data ?? []);
@@ -116,7 +118,8 @@ export default function CustomersScreen() {
     }
   }
 
-  const columns = [
+  // עמודות בסיס — זמינות לכולם, כי אין בהן שום נתון כספי.
+  const baseColumns = [
     {
       key: 'name',
       label: 'לקוח',
@@ -133,7 +136,7 @@ export default function CustomersScreen() {
       key: 'phone',
       label: 'טלפון',
       render: (row) => (
-        <a
+        
           href={`tel:${row.phone}`}
           dir="ltr"
           // בלי זה חיוג לטלפון היה פותח גם את כרטיס הלקוח
@@ -153,6 +156,11 @@ export default function CustomersScreen() {
         <span className="truncate text-[12.5px] text-gold-300">{summarizeDevicesByModel(row.devices)}</span>
       ),
     },
+  ];
+
+  // עמודות כספיות — תשלום, גבייה, תאריך פירעון. חשוב: אלה מתווספות
+  // רק אם isAdmin === true. לטכנאי הן פשוט לא קיימות בטבלה בכלל.
+  const financialColumns = [
     {
       key: 'payment',
       label: 'תשלום',
@@ -204,60 +212,73 @@ export default function CustomersScreen() {
         )
         : <span className="text-text-faint">—</span>),
     },
-    {
-      key: 'status',
-      label: 'סטטוס',
-      width: '96px',
-      render: (row) => (
-        <StatusChip tone={STATUS_TONE[row.status]}>{CUSTOMER_STATUS_LABEL[row.status]}</StatusChip>
-      ),
-    },
   ];
+
+  const statusColumn = {
+    key: 'status',
+    label: 'סטטוס',
+    width: '96px',
+    render: (row) => (
+      <StatusChip tone={STATUS_TONE[row.status]}>{CUSTOMER_STATUS_LABEL[row.status]}</StatusChip>
+    ),
+  };
+
+  // חסימה מפורשת ומוחלטת: עמודות התשלום/הגבייה/הפירעון נכנסות
+  // לרשימת העמודות רק אם isAdmin === true. טכנאי מקבל אך ורק
+  // baseColumns + statusColumn — בלי שום עמודת כסף.
+  const columns = isAdmin
+    ? [...baseColumns, ...financialColumns, statusColumn]
+    : [...baseColumns, statusColumn];
 
   return (
     <>
     <div className="print:hidden">
-      <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <GlassCard className="!py-[18px]">
-          <div className="text-[13px] font-medium text-text-dim">סך הכל הכנסות הקו</div>
-          <div className="tabular mt-1.5 font-display text-[28px] font-bold leading-tight text-gold-300">
-            💰 {formatCurrency(revenueBreakdown.total)}
-          </div>
-          <VatBreakdownStrip preVat={revenueBreakdown.preVat} vatAmount={revenueBreakdown.vatAmount} />
-        </GlassCard>
-
-        <GlassCard className="!py-[18px]">
-          <div className="flex items-center gap-3">
-            <div className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl border border-ok/25 bg-ok/10 text-[18px]">
-              🟢
+      {/* שלוש כרטיסיות הסיכום הכספי (הכנסות/שולם/ממתין) — admin בלבד.
+          לטכנאי הבלוק הזה לא קיים בדף בכלל. */}
+      {isAdmin && (
+        <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+          <GlassCard className="!py-[18px]">
+            <div className="text-[13px] font-medium text-text-dim">סך הכל הכנסות הקו</div>
+            <div className="tabular mt-1.5 font-display text-[28px] font-bold leading-tight text-gold-300">
+              💰 {formatCurrency(revenueBreakdown.total)}
             </div>
-            <div className="min-w-0">
-              <div className="text-[13px] font-medium text-text-dim">שולם בפועל</div>
-              <div className="tabular font-display text-[22px] font-bold leading-tight text-ok">
-                {formatCurrency(paidBreakdown.total)}
+            <VatBreakdownStrip preVat={revenueBreakdown.preVat} vatAmount={revenueBreakdown.vatAmount} />
+          </GlassCard>
+
+          <GlassCard className="!py-[18px]">
+            <div className="flex items-center gap-3">
+              <div className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl border border-ok/25 bg-ok/10 text-[18px]">
+                🟢
+              </div>
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-text-dim">שולם בפועל</div>
+                <div className="tabular font-display text-[22px] font-bold leading-tight text-ok">
+                  {formatCurrency(paidBreakdown.total)}
+                </div>
               </div>
             </div>
-          </div>
-          <VatBreakdownStrip preVat={paidBreakdown.preVat} vatAmount={paidBreakdown.vatAmount} />
-        </GlassCard>
+            <VatBreakdownStrip preVat={paidBreakdown.preVat} vatAmount={paidBreakdown.vatAmount} />
+          </GlassCard>
 
-        <GlassCard className="!py-[18px]">
-          <div className="flex items-center gap-3">
-            <div className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl border border-crit/25 bg-crit/10 text-[18px]">
-              🔴
-            </div>
-            <div className="min-w-0">
-              <div className="text-[13px] font-medium text-text-dim">ממתין לגבייה / חובות פתוחים</div>
-              <div className="tabular font-display text-[22px] font-bold leading-tight text-crit-soft">
-                {formatCurrency(unpaidBreakdown.total)}
+          <GlassCard className="!py-[18px]">
+            <div className="flex items-center gap-3">
+              <div className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl border border-crit/25 bg-crit/10 text-[18px]">
+                🔴
+              </div>
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-text-dim">ממתין לגבייה / חובות פתוחים</div>
+                <div className="tabular font-display text-[22px] font-bold leading-tight text-crit-soft">
+                  {formatCurrency(unpaidBreakdown.total)}
+                </div>
               </div>
             </div>
-          </div>
-          <VatBreakdownStrip preVat={unpaidBreakdown.preVat} vatAmount={unpaidBreakdown.vatAmount} />
-        </GlassCard>
-      </div>
+            <VatBreakdownStrip preVat={unpaidBreakdown.preVat} vatAmount={unpaidBreakdown.vatAmount} />
+          </GlassCard>
+        </div>
+      )}
 
-      {methodBreakdown.length > 0 && (
+      {/* פילוח לפי אמצעי תשלום — admin בלבד */}
+      {isAdmin && methodBreakdown.length > 0 && (
         <GlassCard className="mb-3.5 !py-[18px]">
           <div className="mb-3 text-[13px] font-medium text-text-dim">פילוח לפי אמצעי תשלום</div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
@@ -277,26 +298,29 @@ export default function CustomersScreen() {
         </GlassCard>
       )}
 
-      <div className="mb-3.5 flex flex-wrap gap-2">
-        {[
-          { key: '', label: 'הצג הכל' },
-          { key: 'paid', label: 'רק שולם (🟢)' },
-          { key: 'unpaid', label: 'רק ממתין לגבייה (🔴)' },
-        ].map((opt) => (
-          <button
-            key={opt.key || 'all'}
-            type="button"
-            onClick={() => setPaymentStatus(opt.key)}
-            className={`rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ${
-              paymentStatus === opt.key
-                ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
-                : 'border-white/[0.09] text-text-dim hover:border-white/20'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {/* כפתורי סינון לפי סטטוס גבייה — admin בלבד, כי הם עוסקים במצב תשלום */}
+      {isAdmin && (
+        <div className="mb-3.5 flex flex-wrap gap-2">
+          {[
+            { key: '', label: 'הצג הכל' },
+            { key: 'paid', label: 'רק שולם (🟢)' },
+            { key: 'unpaid', label: 'רק ממתין לגבייה (🔴)' },
+          ].map((opt) => (
+            <button
+              key={opt.key || 'all'}
+              type="button"
+              onClick={() => setPaymentStatus(opt.key)}
+              className={`rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ${
+                paymentStatus === opt.key
+                  ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
+                  : 'border-white/[0.09] text-text-dim hover:border-white/20'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <ScreenToolbar
         search={search}
@@ -306,7 +330,7 @@ export default function CustomersScreen() {
         countLabel="לקוחות"
         actionLabel="לקוח חדש"
         onAction={() => { setEditCustomer(null); setFormOpen(true); }}
-        extra={(
+        extra={isAdmin ? (
           <button
             type="button"
             onClick={() => window.print()}
@@ -316,7 +340,7 @@ export default function CustomersScreen() {
             <PrinterIcon className="h-4 w-4" />
             ייצוא ל-PDF
           </button>
-        )}
+        ) : undefined}
         filters={[
           {
             key: 'status',
@@ -325,13 +349,14 @@ export default function CustomersScreen() {
             placeholder: 'כל הסטטוסים',
             options: Object.entries(CUSTOMER_STATUS_LABEL).map(([value, label]) => ({ value, label })),
           },
-          {
+          // מסנן "סוג תשלום" — admin בלבד
+          ...(isAdmin ? [{
             key: 'paymentType',
             value: paymentType,
             onChange: setPaymentType,
             placeholder: 'כל סוגי התשלום',
             options: Object.entries(PAYMENT_TYPE_LABEL).map(([value, label]) => ({ value, label })),
-          },
+          }] : []),
         ]}
       />
 
@@ -372,6 +397,7 @@ export default function CustomersScreen() {
         key={formOpen ? (editCustomer?.id ?? 'new') : 'closed'}
         open={formOpen}
         editCustomer={editCustomer}
+        isAdmin={isAdmin}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);
@@ -386,7 +412,9 @@ export default function CustomersScreen() {
       />
     </div>
 
-      <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} />
+      {/* דוח ההדפסה מכיל את כל הכספים — לא מרנדרים אותו בכלל ל-DOM אם
+          לא admin, כדי שגם Ctrl+P לא יחשוף אותו. */}
+      {isAdmin && <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} />}
     </>
   );
 }
@@ -475,14 +503,11 @@ function SummaryBox({ label, value, accent = '#222' }) {
 /**
  * "לקוח חדש" ו"עריכת לקוח" הם אותו טופס — editCustomer קובע אם
  * שולחים insert (createCustomer) או update (updateCustomer). שדות
- * החיוב (סוג תשלום, סכום, סטטוס גבייה) חיים כאן לצד שאר פרטי הלקוח;
- * הטוגל המהיר בטבלה משנה רק is_paid בלי לפתוח את הטופס הזה בכלל.
- *
- * הקומפוננטה הזו מקבלת key חדש (בקריאה ב-CustomersScreen) בכל פתיחה —
- * זו הדרך שה-state הפנימי שלה תמיד מתחיל נקי לפי הלקוח הנכון, בלי
- * useEffect סנכרון.
+ * החיוב (סוג תשלום, סכום, סטטוס גבייה) חיים כאן לצד שאר פרטי הלקוח —
+ * אבל מוצגים רק אם isAdmin; לטכנאי הם פשוט לא בטופס, והם נשמרים
+ * ללא שינוי (ברירת המחדל / הערך הקיים) כשהוא שומר לקוח.
  */
-function CustomerFormModal({ open, editCustomer, onClose, onSaved }) {
+function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
   const [form, setForm] = useState(() => editCustomer
     ? {
         name: editCustomer.name ?? '',
@@ -572,56 +597,61 @@ function CustomerFormModal({ open, editCustomer, onClose, onSaved }) {
           </Field>
         </div>
 
-        <div className="rounded-row border border-white/[0.07] bg-white/[0.02] p-3.5">
-          <div className="mb-3 text-[12.5px] font-semibold text-text-dim">חיוב וגבייה</div>
-          <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
-            <Field label="סוג תשלום">
-              <Select
-                value={form.payment_type}
-                onChange={set('payment_type')}
-                options={Object.entries(PAYMENT_TYPE_LABEL).map(([value, label]) => ({ value, label }))}
-              />
-            </Field>
-            <Field label="סטטוס גבייה">
-              <Select
-                value={String(form.is_paid)}
-                onChange={(event) => setForm((prev) => ({ ...prev, is_paid: event.target.value === 'true' }))}
-                options={[
-                  { value: 'false', label: 'ממתין לגבייה' },
-                  { value: 'true', label: 'שולם' },
-                ]}
-              />
-            </Field>
-            <Field label="אופן חישוב מע״מ" hint="קובע איך הסכום שתזין מתפרש">
-              <Select
-                value={form.vat_mode}
-                onChange={set('vat_mode')}
-                options={Object.entries(VAT_MODE_LABEL).map(([value, label]) => ({ value, label }))}
-              />
-            </Field>
-            <Field label={form.vat_mode === 'excluded' ? 'מחיר בסיס (לפני מע״מ)' : 'סה״כ לתשלום (כולל מע״מ)'}>
-              <TextInput type="number" min={0} step="0.01" value={form.amount_due} onChange={set('amount_due')} />
-            </Field>
-            <Field label="תאריך פירעון" hint="מתי אמור להיכנס התשלום">
-              <TextInput type="date" value={form.payment_due_date} onChange={set('payment_due_date')} />
-            </Field>
-          </div>
+        {/* חסימה מפורשת ומוחלטת: כל בלוק החיוב/גבייה/מע״מ מוצג רק אם
+            isAdmin === true. לטכנאי הבלוק הזה לא קיים בטופס בכלל —
+            הערכים הקיימים נשלחים כמו שהם (ללא שינוי) כששומרים. */}
+        {isAdmin && (
+          <div className="rounded-row border border-white/[0.07] bg-white/[0.02] p-3.5">
+            <div className="mb-3 text-[12.5px] font-semibold text-text-dim">חיוב וגבייה</div>
+            <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+              <Field label="סוג תשלום">
+                <Select
+                  value={form.payment_type}
+                  onChange={set('payment_type')}
+                  options={Object.entries(PAYMENT_TYPE_LABEL).map(([value, label]) => ({ value, label }))}
+                />
+              </Field>
+              <Field label="סטטוס גבייה">
+                <Select
+                  value={String(form.is_paid)}
+                  onChange={(event) => setForm((prev) => ({ ...prev, is_paid: event.target.value === 'true' }))}
+                  options={[
+                    { value: 'false', label: 'ממתין לגבייה' },
+                    { value: 'true', label: 'שולם' },
+                  ]}
+                />
+              </Field>
+              <Field label="אופן חישוב מע״מ" hint="קובע איך הסכום שתזין מתפרש">
+                <Select
+                  value={form.vat_mode}
+                  onChange={set('vat_mode')}
+                  options={Object.entries(VAT_MODE_LABEL).map(([value, label]) => ({ value, label }))}
+                />
+              </Field>
+              <Field label={form.vat_mode === 'excluded' ? 'מחיר בסיס (לפני מע״מ)' : 'סה״כ לתשלום (כולל מע״מ)'}>
+                <TextInput type="number" min={0} step="0.01" value={form.amount_due} onChange={set('amount_due')} />
+              </Field>
+              <Field label="תאריך פירעון" hint="מתי אמור להיכנס התשלום">
+                <TextInput type="date" value={form.payment_due_date} onChange={set('payment_due_date')} />
+              </Field>
+            </div>
 
-          <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-white/[0.06] bg-black/20 px-3.5 py-3 text-center">
-            <div>
-              <div className="text-[10.5px] text-text-faint">לפני מע״מ</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(vat.preVat)}</div>
-            </div>
-            <div>
-              <div className="text-[10.5px] text-text-faint">מע״מ (18%)</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-text-dim">{formatCurrency(vat.vatAmount)}</div>
-            </div>
-            <div>
-              <div className="text-[10.5px] text-text-faint">סה״כ לתשלום</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-300">{formatCurrency(vat.total)}</div>
+            <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-white/[0.06] bg-black/20 px-3.5 py-3 text-center">
+              <div>
+                <div className="text-[10.5px] text-text-faint">לפני מע״מ</div>
+                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(vat.preVat)}</div>
+              </div>
+              <div>
+                <div className="text-[10.5px] text-text-faint">מע״מ (18%)</div>
+                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-text-dim">{formatCurrency(vat.vatAmount)}</div>
+              </div>
+              <div>
+                <div className="text-[10.5px] text-text-faint">סה״כ לתשלום</div>
+                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-300">{formatCurrency(vat.total)}</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <Field label="הערות">
           <TextArea value={form.notes} onChange={set('notes')} rows={2} />
