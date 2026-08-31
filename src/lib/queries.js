@@ -413,7 +413,7 @@ export const setStopStatus = (customerId, visitDate, status) =>
 
 export function listCustomers({ search = '', status = '', paymentStatus = '', paymentType = '' } = {}) {
   let query = supabase
-    .from('customers')
+    .from('customers_secure')
     .select('*, devices(model, status)')
     .order('name');
 
@@ -432,11 +432,11 @@ export const createCustomer = (payload) =>
   supabase.from('customers').insert(payload).select('*, devices(model, status)').single().then(unwrap);
 
 export const updateCustomer = (id, patch) =>
-  supabase.from('customers').update(patch).eq('id', id).select('*, devices(model, status)').single().then(unwrap);
+  supabase.from('customers').update(patch).eq('id', id).then(unwrap);
 
-/** טוגל מהיר לסטטוס גבייה — ישירות משורת הטבלה, בלי לפתוח טופס עריכה */
+/** טוגל מהיר לסטטוס גבייה — ישירות משורת הטבלה, בלי לפתוח טופס עריכה. לא מחזיר נתונים בכוונה — אין צורך, וכך אין סיכון שמידע כספי יחזור בתשובה למי שלא אמור לראות אותו. */
 export const setCustomerPaid = (id, is_paid) =>
-  supabase.from('customers').update({ is_paid }).eq('id', id).select('*, devices(model, status)').single().then(unwrap);
+  supabase.from('customers').update({ is_paid }).eq('id', id).then(unwrap);
 
 /* =====================================================================
    מכשירים
