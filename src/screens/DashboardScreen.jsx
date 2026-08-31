@@ -34,7 +34,6 @@ function DashboardSkeleton() {
 export default function DashboardScreen({ data, loading, error, onRetry, onNavigate }) {
   const { profile, isAdmin } = useAuth();
 
-  // חסימה מפורשת ומוחלטת: כרטיסי הסיכום מוצגים רק אם profile.role === 'admin'.
   const canSeeFinancialSummary = profile?.role === 'admin' && isAdmin;
 
   if (loading && !data) return <DashboardSkeleton />;
@@ -50,10 +49,10 @@ export default function DashboardScreen({ data, loading, error, onRetry, onNavig
   if (!data) return null;
 
   const kpis = mapKpis(data.kpis);
-  const callsSubtitle = `${formatNumber(data.kpis?.calls_open)} קריאות · `
-    + `${formatNumber(data.kpis?.calls_critical)} דחופות · `
+  const callsSubtitle = formatNumber(data.kpis?.calls_open) + ' קריאות · '
+    + formatNumber(data.kpis?.calls_critical) + ' דחופות · '
     + (data.kpis?.avg_close_hours
-      ? `ממוצע סגירה ${formatNumber(data.kpis.avg_close_hours, 1)} שעות`
+      ? ('ממוצע סגירה ' + formatNumber(data.kpis.avg_close_hours, 1) + ' שעות')
       : 'אין עדיין קריאות סגורות');
 
   return (
@@ -91,7 +90,7 @@ export default function DashboardScreen({ data, loading, error, onRetry, onNavig
         <StockCard
           delay={0.48}
           stock={mapOilByScent(data.scentUsage)}
-          monthTotal={`${formatNumber(data.kpis?.oil_liters_this_month, 1)} ליטר`}
+          monthTotal={formatNumber(data.kpis?.oil_liters_this_month, 1) + ' ליטר'}
         />
       </section>
     </>
