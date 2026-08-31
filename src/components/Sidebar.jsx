@@ -74,7 +74,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
 
   return (
     <aside
-      className="fixed inset-y-[18px] end-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
+      className="fixed inset-y-[18px] start-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
                  rounded-card px-4 py-[22px] glass shadow-lift lg:flex"
       aria-label="ניווט ראשי"
     >
