@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================================================================
+   ICON AIR — שכבות בסיס
+   Tailwind נושא את הפריסה, המרווחים והטיפוגרפיה.
+   כאן יושבים רק המשטחים (זכוכית, זוהר, גרעין) שחוזרים על עצמם.
+   ================================================================== */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 font-ui text-text antialiased;
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-gold-500 ring-offset-2 ring-offset-ink-950 rounded-md;
+  }
+}
+
+@layer components {
+  /* --- הרקע המרחף: שתי הילות אור + גרעין עדין --- */
+  .ambient-field {
+    @apply fixed inset-0 z-0 pointer-events-none;
+    background:
+      radial-gradient(900px 620px at 88% -8%, rgba(216, 179, 106, 0.13), transparent 62%),
+      radial-gradient(760px 560px at 4% 104%, rgba(76, 201, 192, 0.1), transparent 60%),
+      radial-gradient(1200px 900px at 50% 40%, rgba(255, 255, 255, 0.022), transparent 70%),
+      #08090b;
+  }
+
+  .ambient-field::after {
+    content: '';
+    @apply absolute inset-0;
+    opacity: 0.3;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.42'/></svg>");
+  }
+
+  /* --- משטח הזכוכית שכל הכרטיסים יושבים עליו --- */
+  .glass {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+    @apply border border-white/[0.075] shadow-glass-hi;
+  }
+
+  .glass-card {
+    @apply glass rounded-card shadow-lift;
+  }
+
+  /* --- שורה פנימית (קריאה, קו הפצה) --- */
+  .inner-row {
+    @apply rounded-row border border-white/[0.075] bg-white/[0.022];
+  }
+
+  /* --- מד התקדמות אופקי --- */
+  .meter {
+    @apply mt-2 h-[7px] overflow-hidden rounded-md bg-white/[0.07];
+  }
+
+  .meter > span {
+    @apply block h-full rounded-md;
+  }
+
+  /* --- שבב סטטוס --- */
+  .chip {
+    @apply whitespace-nowrap rounded-[7px] border border-white/[0.075] px-[9px] py-[3px]
+           text-[11px] font-semibold text-text-dim;
+  }
+
+  /* --- כפתור פעולה משני בראש כרטיס --- */
+  .ghost-btn {
+    @apply whitespace-nowrap rounded-[10px] border border-white/[0.075] px-[11px] py-1.5
+           text-[12.5px] text-text-dim transition-colors
+           hover:border-gold-500/30 hover:text-gold-300;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
