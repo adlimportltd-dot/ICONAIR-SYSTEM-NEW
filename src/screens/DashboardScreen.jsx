@@ -7,6 +7,7 @@ import RoutesCard from '../components/RoutesCard';
 import StockCard from '../components/StockCard';
 import GlassCard from '../components/ui/GlassCard';
 import { Skeleton, ErrorState } from '../components/ui/States';
+import { useAuth } from '../context/AuthContext';
 import {
   mapKpis, mapFleet, mapOilConsumption, mapServiceCalls,
   mapOilAlerts, mapRoutes, mapOilByScent, formatNumber,
@@ -31,6 +32,11 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardScreen({ data, loading, error, onRetry, onNavigate }) {
+  const { profile, isAdmin } = useAuth();
+
+  // חסימה מפורשת ומוחלטת: כרטיסי הסיכום מוצגים רק אם profile.role === 'admin'.
+  const canSeeFinancialSummary = profile?.role === 'admin' && isAdmin;
+
   if (loading && !data) return <DashboardSkeleton />;
 
   if (error) {
@@ -52,14 +58,14 @@ export default function DashboardScreen({ data, loading, error, onRetry, onNavig
 
   return (
     <>
-      <section aria-label="מדדים ראשיים" className="mb-3.5 grid grid-cols-1 gap-3.5 xs:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi, i) => (
-          <KpiCard key={kpi.id} kpi={kpi} delay={0.02 + i * 0.06} />
-        ))}
-      </section>
+      {canSeeFinancialSummary && (
+        <section aria-label="מדדים ראשיים" className="mb-3.5 grid grid-cols-1 gap-3.5 xs:grid-cols-2 xl:grid-cols-4">
+          {kpis.map((kpi, i) => (
+            <KpiCard key={kpi.id} kpi={kpi} delay={0.02 + i * 0.06} />
+          ))}
+        </section>
+      )}
 
-      {/* align-items:start משאיר לכל כרטיס את הגובה הטבעי שלו,
-          במקום למתוח את הקצר מביניהם ולייצר שטח ריק. */}
       <section className="mb-3.5 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <OilConsumptionChart delay={0.26} data={mapOilConsumption(data.oil)} />
         <FleetBreakdown delay={0.32} data={mapFleet(data.fleet)} />
