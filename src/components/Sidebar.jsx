@@ -44,7 +44,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       {isActive && (
         <span
           aria-hidden
-          className="absolute -start-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
+          className="absolute -end-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
                      bg-gold-500 shadow-gold-glow"
         />
       )}
@@ -65,13 +65,16 @@ function NavItem({ item, isActive, badge, onSelect }) {
  * בנייד מחליף אותו BottomNav.
  */
 export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
-  const { profile, isAdmin, loading } = useAuth();
-  const initials = (profile?.full_name || '?').trim().charAt(0);
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const { profile, isAdmin } = useAuth();
+  const initials = (profile?.full_name ?? '?').trim().charAt(0);
+
+  // דוחות חושפים סיכומים ומספרים על כלל העסק — רק מנהל אמור לראות את
+  // הלשונית הזו בתפריט. ה-RLS כבר מגן על הנתונים עצמם; זה חוסם רק את התצוגה.
+  const visibleNavItems = isAdmin ? navItems : navItems.filter((item) => item.id !== 'reports');
 
   return (
     <aside
-      className="fixed inset-y-[18px] start-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
+      className="fixed inset-y-[18px] end-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
                  rounded-card px-4 py-[22px] glass shadow-lift lg:flex"
       aria-label="ניווט ראשי"
     >
@@ -109,10 +112,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
           </div>
           <div className="min-w-0">
             <div className="truncate text-[13.5px] font-semibold leading-tight">
-              {/* "טוען…" רק כשבאמת עדיין טוענים — לא כשהשם פשוט ריק
-                  ב-profiles.full_name (למשל טכנאי שנוסף ידנית מלוח
-                  הבקרה של Supabase, בלי metadata.full_name בהרשמה) */}
-              {loading ? 'טוען…' : (profile?.full_name || 'ללא שם')}
+              {profile?.full_name ?? 'טוען…'}
             </div>
             <div className="mt-0.5 text-[11.5px] text-text-faint">
               {isAdmin ? 'מנהל תפעול' : 'טכנאי שטח'}
