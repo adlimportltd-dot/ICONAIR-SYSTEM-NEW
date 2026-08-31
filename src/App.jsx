@@ -111,7 +111,7 @@ function Shell() {
       <div className="relative z-[1] min-h-screen">
         <Sidebar activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
 
-        <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:me-[288px] lg:px-[22px] lg:pb-10">
+        <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:ms-[288px] lg:px-[22px] lg:pb-10">
           <TopBar
             title={active.label}
             meta={screenMeta(activeId, kpis)}
