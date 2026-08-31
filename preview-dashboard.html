@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08090B">
+</head>
+<body>
+<title>ICON AIR Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ============ ICON AIR — design tokens ============ */
+  :root{
+    --ink-950:#08090B;
+    --ink-900:#0C0E12;
+    --ink-800:#12151A;
+    --ink-700:#191D24;
+
+    --gold-500:#D8B36A;
+    --gold-300:#F0DCB4;
+    --gold-soft:rgba(216,179,106,.14);
+
+    --teal-500:#4CC9C0;
+    --slate-500:#6E86A8;
+
+    --ok:#4ED9A4;
+    --warn:#F0A43A;
+    --crit:#F0555C;
+
+    --text:#F3EFE7;
+    --text-dim:#A8A296;
+    --text-faint:#6F6B63;
+
+    --line:rgba(255,255,255,.075);
+    --line-strong:rgba(255,255,255,.13);
+    --glass:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018));
+    --glass-hi:inset 0 1px 0 rgba(255,255,255,.07);
+    --lift:0 24px 48px -30px rgba(0,0,0,.95);
+
+    --r-lg:24px;
+    --r-md:16px;
+    --r-sm:11px;
+
+    --font-ui:"Assistant",-apple-system,"Segoe UI",sans-serif;
+    --font-display:"Frank Ruhl Libre","Assistant",Georgia,serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    direction:rtl;
+    font-family:var(--font-ui);
+    font-weight:400;
+    color:var(--text);
+    background:var(--ink-950);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  :focus-visible{outline:2px solid var(--gold-500);outline-offset:3px;border-radius:6px}
+
+  /* ============ ambient ground ============ */
+  .field{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(900px 620px at 88% -8%, rgba(216,179,106,.13), transparent 62%),
+      radial-gradient(760px 560px at 4% 104%, rgba(76,201,192,.10), transparent 60%),
+      radial-gradient(1200px 900px at 50% 40%, rgba(255,255,255,.022), transparent 70%),
+      var(--ink-950);
+  }
+  .field::after{
+    content:"";position:absolute;inset:0;opacity:.30;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.42'/></svg>");
+  }
+
+  /* ============ shell ============ */
+  .app{position:relative;z-index:1;min-height:100vh}
+  .main{
+    padding:18px 18px 108px;
+    max-width:1560px;
+  }
+
+  /* ============ side rail (desktop) ============ */
+  .rail{display:none}
+  @media (min-width:1080px){
+    .rail{
+      display:flex;flex-direction:column;gap:22px;
+      position:fixed;top:18px;right:18px;bottom:18px;width:252px;z-index:20;
+      padding:22px 16px;
+      border:1px solid var(--line);border-radius:var(--r-lg);
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);
+      box-shadow:var(--lift),var(--glass-hi);
+    }
+    .main{margin-right:288px;padding:18px 22px 40px}
+  }
+
+  .brand{display:flex;align-items:center;gap:12px;padding:2px 6px 0}
+  .brand-mark{
+    width:40px;height:40px;flex:none;border-radius:13px;
+    display:grid;place-items:center;
+    background:linear-gradient(150deg,rgba(216,179,106,.30),rgba(216,179,106,.05));
+    border:1px solid rgba(216,179,106,.35);
+    box-shadow:0 8px 22px -12px rgba(216,179,106,.6),inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  .brand-name{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:.4px;line-height:1}
+  .brand-sub{font-size:11px;color:var(--text-faint);letter-spacing:1.6px;font-family:var(--font-mono);margin-top:4px}
+
+  .nav{display:flex;flex-direction:column;gap:4px}
+  .nav-label{
+    font-size:10.5px;letter-spacing:2px;color:var(--text-faint);
+    font-weight:600;padding:0 10px 8px;
+  }
+  .nav-item{
+    position:relative;display:flex;align-items:center;gap:12px;
+    width:100%;padding:11px 12px;border-radius:13px;
+    color:var(--text-dim);font-size:14.5px;font-weight:500;
+    transition:background .18s ease,color .18s ease;
+  }
+  .nav-item svg{width:19px;height:19px;flex:none;opacity:.85}
+  .nav-item:hover{background:rgba(255,255,255,.045);color:var(--text)}
+  .nav-item.is-active{
+    color:var(--gold-300);
+    background:linear-gradient(270deg,var(--gold-soft),rgba(216,179,106,.02));
+  }
+  .nav-item.is-active svg{opacity:1}
+  .nav-item.is-active::before{
+    content:"";position:absolute;right:-16px;top:50%;transform:translateY(-50%);
+    width:3px;height:22px;border-radius:3px;background:var(--gold-500);
+    box-shadow:0 0 14px 1px rgba(216,179,106,.7);
+  }
+  .nav-badge{
+    margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;
+    padding:2px 7px;border-radius:20px;
+    background:rgba(240,85,92,.16);color:#FF9498;border:1px solid rgba(240,85,92,.28);
+  }
+
+  .rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:14px}
+  .tech-card{
+    display:flex;align-items:center;gap:11px;padding:11px;
+    border-radius:15px;border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+  }
+  .avatar{
+    width:36px;height:36px;border-radius:11px;flex:none;display:grid;place-items:center;
+    font-family:var(--font-display);font-weight:700;font-size:15px;color:#221B0C;
+    background:linear-gradient(150deg,var(--gold-300),var(--gold-500));
+  }
+  .tech-name{font-size:13.5px;font-weight:600;line-height:1.2}
+  .tech-role{font-size:11.5px;color:var(--text-faint);margin-top:2px}
+
+  /* ============ topbar ============ */
+  .topbar{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 14px;margin-bottom:18px;
+    border:1px solid var(--line);border-radius:20px;
+    background:var(--glass);
+    -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+    box-shadow:var(--glass-hi);
+    position:sticky;top:8px;z-index:15;
+  }
+  .topbar .brand{display:flex;padding:0}
+  @media (min-width:1080px){ .topbar .brand{display:none} }
+  .page-head{display:none;flex-direction:column;min-width:0}
+  @media (min-width:1080px){ .page-head{display:flex} }
+  .page-title{font-family:var(--font-display);font-size:22px;font-weight:700;line-height:1.15}
+  .page-meta{font-size:12.5px;color:var(--text-faint);margin-top:3px;font-variant-numeric:tabular-nums}
+
+  .search{
+    margin-inline-start:auto;display:none;align-items:center;gap:9px;
+    padding:9px 14px;border-radius:13px;min-width:230px;
+    border:1px solid var(--line);background:rgba(0,0,0,.25);
+    color:var(--text-faint);font-size:13.5px;
+  }
+  @media (min-width:760px){ .search{display:flex} }
+  .search svg{width:16px;height:16px}
+  .icon-btn{
+    position:relative;width:40px;height:40px;flex:none;border-radius:13px;
+    display:grid;place-items:center;color:var(--text-dim);
+    border:1px solid var(--line);background:rgba(255,255,255,.03);
+    transition:color .18s,border-color .18s;
+  }
+  .icon-btn:hover{color:var(--gold-300);border-color:rgba(216,179,106,.35)}
+  .icon-btn svg{width:18px;height:18px}
+  .dot{
+    position:absolute;top:9px;left:10px;width:7px;height:7px;border-radius:50%;
+    background:var(--crit);box-shadow:0 0 0 2.5px var(--ink-900);
+  }
+  .live{
+    display:none;align-items:center;gap:7px;padding:8px 13px;border-radius:12px;
+    border:1px solid rgba(78,217,164,.22);background:rgba(78,217,164,.07);
+    font-size:12px;font-weight:600;color:var(--ok);font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  @media (min-width:960px){ .live{display:flex} }
+  .pulse{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(78,217,164,.55)}50%{opacity:.65;box-shadow:0 0 0 6px rgba(78,217,164,0)}}
+
+  /* ============ cards ============ */
+  .card{
+    position:relative;padding:20px;border-radius:var(--r-lg);
+    border:1px solid var(--line);background:var(--glass);
+    -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+    box-shadow:var(--lift),var(--glass-hi);
+    animation:rise .6s cubic-bezier(.2,.7,.3,1) backwards;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){
+    .card{animation:none}
+    .pulse{animation:none}
+  }
+  .card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px}
+  .card-title{font-family:var(--font-display);font-size:16.5px;font-weight:700;line-height:1.2}
+  .card-sub{font-size:12px;color:var(--text-faint);margin-top:4px}
+  .card-action{
+    margin-inline-start:auto;font-size:12.5px;color:var(--text-dim);
+    padding:6px 11px;border-radius:10px;border:1px solid var(--line);
+    transition:color .18s,border-color .18s;white-space:nowrap;
+  }
+  .card-action:hover{color:var(--gold-300);border-color:rgba(216,179,106,.32)}
+
+  /* ============ layout grids ============ */
+  .kpis{display:grid;gap:14px;grid-template-columns:1fr;margin-bottom:14px}
+  @media (min-width:560px){ .kpis{grid-template-columns:repeat(2,1fr)} }
+  @media (min-width:1320px){ .kpis{grid-template-columns:repeat(4,1fr)} }
+
+  .row{display:grid;gap:14px;grid-template-columns:1fr;margin-bottom:14px}
+  @media (min-width:1080px){ .row{grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start} }
+
+  /* ============ KPI ============ */
+  .kpi{padding:18px 20px}
+  .kpi-top{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+  .kpi-icon{
+    width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;
+    border:1px solid var(--line-strong);background:rgba(255,255,255,.04);
+  }
+  .kpi-icon svg{width:18px;height:18px}
+  .kpi-label{font-size:13px;color:var(--text-dim);font-weight:500}
+  .kpi-value{
+    font-family:var(--font-display);font-weight:700;font-size:38px;line-height:1;
+    font-variant-numeric:tabular-nums;letter-spacing:-.5px;
+  }
+  .kpi-unit{font-family:var(--font-ui);font-size:15px;font-weight:500;color:var(--text-dim);margin-inline-start:5px}
+  .kpi-foot{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--text-faint);flex-wrap:wrap}
+  .trend{
+    display:inline-flex;align-items:center;gap:4px;font-weight:600;
+    font-size:11.5px;padding:3px 9px;border-radius:8px;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .trend.up{color:var(--ok);background:rgba(78,217,164,.10);border:1px solid rgba(78,217,164,.2)}
+  .trend.down{color:var(--crit);background:rgba(240,85,92,.10);border:1px solid rgba(240,85,92,.2)}
+  .trend.flat{color:var(--gold-300);background:var(--gold-soft);border:1px solid rgba(216,179,106,.24)}
+  .trend svg{width:11px;height:11px}
+
+  /* ============ chart ============ */
+  .chart-wrap{position:relative}
+  .chart{display:block;width:100%;height:224px;overflow:visible}
+  .x-axis{display:flex;justify-content:space-between;margin-top:10px;padding:0 2.5%;direction:ltr;
+    font-size:11.5px;color:var(--text-faint);letter-spacing:.3px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;padding-top:15px;border-top:1px solid var(--line)}
+  .lg{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim)}
+  .swatch{width:10px;height:10px;border-radius:3px;flex:none}
+  .lg b{font-weight:600;color:var(--text);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+  /* ============ donut ============ */
+  .fleet{display:flex;flex-direction:column;gap:18px}
+  .donut-wrap{position:relative;width:180px;height:180px;margin:2px auto 0}
+  .donut{transform:rotate(-90deg);width:180px;height:180px}
+  .donut-mid{
+    position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+  }
+  .donut-num{font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .donut-cap{font-size:11.5px;color:var(--text-faint);margin-top:5px;letter-spacing:.5px}
+  .fleet-list{display:flex;flex-direction:column;gap:10px}
+  .fleet-row{display:flex;align-items:center;gap:10px;font-size:13.5px}
+  .fleet-row .name{font-weight:600}
+  .fleet-row .qty{margin-inline-start:auto;font-family:var(--font-mono);font-size:13px;color:var(--text-dim)}
+  .fleet-row .pct{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint);width:42px;text-align:left}
+
+  /* ============ service calls ============ */
+  .calls{display:flex;flex-direction:column;gap:9px}
+  .call{
+    display:grid;gap:4px 12px;padding:13px 14px;border-radius:var(--r-md);
+    border:1px solid var(--line);background:rgba(255,255,255,.022);
+    grid-template-columns:auto 1fr auto;align-items:center;
+    transition:border-color .18s,background .18s,transform .18s;
+  }
+  .call:hover{border-color:var(--line-strong);background:rgba(255,255,255,.05);transform:translateX(-3px)}
+  .sev{width:3px;height:34px;border-radius:3px;flex:none;grid-row:span 2}
+  .sev.crit{background:var(--crit);box-shadow:0 0 12px rgba(240,85,92,.55)}
+  .sev.warn{background:var(--warn);box-shadow:0 0 12px rgba(240,164,58,.4)}
+  .sev.norm{background:var(--slate-500)}
+  .sev.sched{background:rgba(255,255,255,.2)}
+  .call-main{min-width:0}
+  .call-client{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .call-desc{font-size:12.5px;color:var(--text-faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .call-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px;grid-row:span 2}
+  .chip{
+    font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;
+    border:1px solid var(--line);color:var(--text-dim);white-space:nowrap;
+  }
+  .chip.crit{color:#FF9498;border-color:rgba(240,85,92,.3);background:rgba(240,85,92,.1)}
+  .chip.warn{color:#FFC479;border-color:rgba(240,164,58,.28);background:rgba(240,164,58,.09)}
+  .chip.gold{color:var(--gold-300);border-color:rgba(216,179,106,.3);background:var(--gold-soft)}
+  .call-time{font-size:11.5px;color:var(--text-faint);font-variant-numeric:tabular-nums}
+  @media (max-width:680px){
+    .call{grid-template-columns:auto minmax(0,1fr)}
+    .call-side{grid-row:auto;flex-direction:row;align-items:center;gap:9px;margin-top:5px}
+    .sev{height:auto;align-self:stretch;min-height:38px}
+  }
+
+  /* ============ oil alerts ============ */
+  .alerts{display:flex;flex-direction:column;gap:14px}
+  .alert-top{display:flex;align-items:baseline;gap:8px}
+  .alert-client{font-size:13.5px;font-weight:600}
+  .alert-dev{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);margin-inline-start:auto}
+  .bar{height:7px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:8px}
+  .bar span{display:block;height:100%;border-radius:6px}
+  .alert-foot{display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:var(--text-faint)}
+  .alert-foot b{font-weight:600;color:var(--text-dim);font-variant-numeric:tabular-nums}
+
+  /* ============ routes ============ */
+  .routes{display:flex;flex-direction:column;gap:11px}
+  .route{
+    display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:var(--r-md);
+    border:1px solid var(--line);background:rgba(255,255,255,.022);
+  }
+  .route-ring{position:relative;width:46px;height:46px;flex:none}
+  .route-ring svg{transform:rotate(-90deg)}
+  .route-ring span{
+    position:absolute;inset:0;display:grid;place-items:center;
+    font-size:11.5px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;
+  }
+  .route-name{font-size:14px;font-weight:600}
+  .route-tech{font-size:12px;color:var(--text-faint);margin-top:3px}
+  .route-stat{margin-inline-start:auto;text-align:left}
+  .route-stat b{font-family:var(--font-mono);font-size:14px;font-weight:500}
+  .route-stat i{display:block;font-style:normal;font-size:11px;color:var(--text-faint);margin-top:3px}
+
+  /* ============ stock ============ */
+  .stock{display:flex;flex-direction:column;gap:15px}
+  .stock-row .st-top{display:flex;align-items:baseline;gap:8px;font-size:13.5px}
+  .stock-row .st-top b{font-weight:600}
+  .stock-row .st-top span{margin-inline-start:auto;font-family:var(--font-mono);font-size:12px;color:var(--text-dim)}
+
+  /* ============ mobile tab bar ============ */
+  .tabbar{
+    position:fixed;left:12px;right:12px;bottom:12px;z-index:30;
+    display:flex;justify-content:space-between;gap:2px;padding:8px 6px;padding-bottom:max(8px,env(safe-area-inset-bottom));
+    border:1px solid var(--line);border-radius:22px;
+    background:linear-gradient(180deg,rgba(24,27,33,.9),rgba(12,14,18,.94));
+    -webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);
+    box-shadow:0 22px 44px -18px rgba(0,0,0,.95),var(--glass-hi);
+  }
+  @media (min-width:1080px){ .tabbar{display:none} }
+  .tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;
+    padding:8px 2px;border-radius:15px;color:var(--text-faint);font-size:10.5px;font-weight:600;
+  }
+  .tab svg{width:20px;height:20px}
+  .tab.is-active{color:var(--gold-300);background:var(--gold-soft)}
+
+
+  /* ============ שורת כלים של מסכי ניהול ============ */
+  .toolbar{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px;margin-bottom:14px;
+    border:1px solid var(--line);border-radius:20px;background:var(--glass);
+    -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);box-shadow:var(--glass-hi);
+  }
+  .tb-search{
+    position:relative;display:flex;align-items:center;flex:1;min-width:190px;
+  }
+  .tb-search input{
+    width:100%;padding:10px 14px 10px 14px;padding-inline-end:38px;
+    border-radius:13px;border:1px solid rgba(255,255,255,.09);background:rgba(0,0,0,.3);
+    color:var(--text);font:inherit;font-size:13.5px;
+  }
+  .tb-search input::placeholder{color:var(--text-faint)}
+  .tb-search svg{position:absolute;inset-inline-end:14px;width:16px;height:16px;color:var(--text-faint)}
+  .tb-select{
+    padding:10px 13px;border-radius:13px;border:1px solid rgba(255,255,255,.09);
+    background:rgba(0,0,0,.3);color:var(--text);font:inherit;font-size:13px;min-width:132px;
+  }
+  .tb-count{font-size:12.5px;color:var(--text-faint);font-variant-numeric:tabular-nums}
+  .tb-add{
+    margin-inline-start:auto;display:flex;align-items:center;gap:6px;
+    padding:10px 14px;border-radius:13px;font-size:13.5px;font-weight:600;color:#221B0C;
+    background:linear-gradient(150deg,#F0DCB4,#D8B36A);
+  }
+  .tb-add svg{width:16px;height:16px}
+
+  /* ============ טבלה ============ */
+  .th{
+    display:grid;gap:12px;padding:0 14px 4px;
+    font-size:11.5px;font-weight:600;letter-spacing:.3px;color:var(--text-faint);
+  }
+  .tr{
+    display:grid;gap:12px;align-items:center;padding:12px 14px;border-radius:var(--r-md);
+    border:1px solid var(--line);background:rgba(255,255,255,.022);font-size:13.5px;
+    transition:border-color .18s,background .18s;
+  }
+  .tr:hover{border-color:var(--line-strong);background:rgba(255,255,255,.05)}
+  .tbody{display:flex;flex-direction:column;gap:9px}
+  .cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cell b{font-weight:600}
+  .cell small{display:block;font-size:11.5px;color:var(--text-faint);margin-top:2px}
+  .mono{font-family:var(--font-mono);font-size:12.5px;color:var(--gold-300)}
+  .muted{color:var(--text-faint);font-size:12px}
+  .mini{display:flex;align-items:center;gap:8px}
+  .mini .bar{margin-top:0;flex:1;max-width:86px}
+  .mini span.pct{font-family:var(--font-mono);font-size:11.5px;color:var(--text-dim)}
+  .chip.ok{color:var(--ok);border-color:rgba(78,217,164,.25);background:rgba(78,217,164,.1)}
+  .chip.teal{color:var(--teal-500);border-color:rgba(76,201,192,.25);background:rgba(76,201,192,.1)}
+  .chip.slate{color:#A3B6CE;border-color:rgba(110,134,168,.3);background:rgba(110,134,168,.1)}
+  .row-actions{display:flex;gap:8px}
+  .row-actions button{
+    font-size:12px;padding:5px 10px;border-radius:9px;border:1px solid var(--line);color:var(--text-dim);
+  }
+  .row-actions button:hover{color:var(--gold-300);border-color:rgba(216,179,106,.32)}
+
+  @media (max-width:680px){
+    .th{display:none}
+    .tr{display:flex;flex-direction:column;align-items:stretch;gap:7px}
+    .tr .cell{display:flex;justify-content:space-between;gap:12px;white-space:normal}
+    .tr .cell::before{content:attr(data-label);color:var(--text-faint);font-size:12px;flex:none}
+    .tr .cell:first-child::before{display:none}
+    .tr .cell:first-child{font-size:14px;font-weight:600}
+    .mini{justify-content:flex-end}
+  }
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+
+<div class="field"></div>
+
+<div class="app">
+  <!-- ===================== SIDE RAIL ===================== -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#F0DCB4" stroke-width="1.6" stroke-linecap="round" width="21" height="21">
+          <path d="M3 8h10.5a2.5 2.5 0 1 0-2.5-2.5"/>
+          <path d="M3 12h14a3 3 0 1 1-3 3"/>
+          <path d="M3 16h8.5a2.5 2.5 0 1 1-2.5 2.5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">ICON AIR</div>
+        <div class="brand-sub">FIELD OPS</div>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="ניווט ראשי">
+      <div class="nav-label">ניהול</div>
+      <button class="nav-item is-active" data-page="דשבורד" data-meta="סקירה כללית · עודכן לפני 2 דקות">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>
+        דשבורד
+      </button>
+      <button class="nav-item" data-page="מכשירים בשטח" data-meta="342 מכשירים מותקנים · 8 לא מקוונים">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3.5"/><path d="M10 6.5h4"/><circle cx="12" cy="14" r="2.6"/></svg>
+        מכשירים בשטח
+      </button>
+      <button class="nav-item" data-page="לקוחות" data-meta="96 לקוחות פעילים · 5 בתהליך הקמה">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16 5.6a3.2 3.2 0 0 1 0 6.3M18 14.6c2 .7 3.2 2.4 3.2 4.9"/></svg>
+        לקוחות
+      </button>
+      <button class="nav-item" data-page="מעקב שמנים" data-meta="128.4 ליטר הוזרמו החודש · 4 התראות מלאי">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8s5.6 6 5.6 10a5.6 5.6 0 1 1-11.2 0c0-4 5.6-10 5.6-10Z"/><path d="M9.2 14.4a2.9 2.9 0 0 0 2.8 2.8"/></svg>
+        מעקב שמנים
+      </button>
+      <button class="nav-item" data-page="קריאות שירות" data-meta="18 קריאות פתוחות · 4 דחופות">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.2a4.6 4.6 0 0 1 5.3 6.3l-9 9a2.6 2.6 0 0 1-3.7-3.7l9-9"/><path d="M4.2 14.5 9 9.7"/></svg>
+        קריאות שירות
+        <span class="nav-badge">4</span>
+      </button>
+      <button class="nav-item" data-page="דוחות" data-meta="12 דוחות שמורים · ייצוא אוטומטי פעיל">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V9M12 20V4M19 20v-7"/></svg>
+        דוחות
+      </button>
+    </nav>
+
+    <div class="rail-foot">
+      <button class="nav-item" data-page="הגדרות" data-meta="חשבון, הרשאות והתראות">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-3-1.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9h-.2a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.3-3l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 3 1.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        הגדרות
+      </button>
+      <div class="tech-card">
+        <div class="avatar">א</div>
+        <div>
+          <div class="tech-name">אבי כהן</div>
+          <div class="tech-role">מנהל תפעול · קו צפון</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#F0DCB4" stroke-width="1.6" stroke-linecap="round" width="20" height="20">
+            <path d="M3 8h10.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 12h14a3 3 0 1 1-3 3"/><path d="M3 16h8.5a2.5 2.5 0 1 1-2.5 2.5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">ICON AIR</div>
+          <div class="brand-sub">FIELD OPS</div>
+        </div>
+      </div>
+
+      <div class="page-head">
+        <h1 class="page-title" id="pageTitle">דשבורד</h1>
+        <div class="page-meta" id="pageMeta">סקירה כללית · עודכן לפני 2 דקות</div>
+      </div>
+
+      <div class="search" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+        חיפוש לקוח, מכשיר או קריאה…
+      </div>
+
+      <div class="live"><span class="pulse"></span>334 / 342 מקוונים</div>
+
+      <button class="icon-btn" aria-label="התראות">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5Z"/><path d="M13.7 19.5a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="icon-btn" aria-label="קריאה חדשה">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+
+    <div data-view="dashboard">
+
+    <!-- ============ KPI ROW ============ -->
+    <section class="kpis" aria-label="מדדים ראשיים">
+      <article class="card kpi" style="animation-delay:.02s">
+        <div class="kpi-top">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#6E86A8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3.5"/><circle cx="12" cy="14" r="2.6"/><path d="M10 6.5h4"/></svg></div>
+          <div class="kpi-label">מכשירים פעילים בשטח</div>
+        </div>
+        <div class="kpi-value">342</div>
+        <div class="kpi-foot">
+          <span class="trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 15 7-7 7 7"/></svg>12</span>
+          התקנות חדשות החודש
+        </div>
+      </article>
+
+      <article class="card kpi" style="animation-delay:.08s">
+        <div class="kpi-top">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#F0555C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.2a4.6 4.6 0 0 1 5.3 6.3l-9 9a2.6 2.6 0 0 1-3.7-3.7l9-9"/><path d="M4.2 14.5 9 9.7"/></svg></div>
+          <div class="kpi-label">קריאות שירות פתוחות</div>
+        </div>
+        <div class="kpi-value">18</div>
+        <div class="kpi-foot">
+          <span class="trend down">4 דחופות</span>
+          6.2 שעות לסגירה
+        </div>
+      </article>
+
+      <article class="card kpi" style="animation-delay:.14s">
+        <div class="kpi-top">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#4CC9C0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8s5.6 6 5.6 10a5.6 5.6 0 1 1-11.2 0c0-4 5.6-10 5.6-10Z"/><path d="M9.2 14.4a2.9 2.9 0 0 0 2.8 2.8"/></svg></div>
+          <div class="kpi-label">שמן שהוזרם החודש</div>
+        </div>
+        <div class="kpi-value">128.4<span class="kpi-unit">ליטר</span></div>
+        <div class="kpi-foot">
+          <span class="trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 15 7-7 7 7"/></svg>8.4%</span>
+          מול אוגוסט אשתקד
+        </div>
+      </article>
+
+      <article class="card kpi" style="animation-delay:.2s">
+        <div class="kpi-top">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#D8B36A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16 5.6a3.2 3.2 0 0 1 0 6.3"/></svg></div>
+          <div class="kpi-label">לקוחות פעילים</div>
+        </div>
+        <div class="kpi-value">96</div>
+        <div class="kpi-foot">
+          <span class="trend flat">97.8%</span>
+          זמינות צי · 5 בהקמה
+        </div>
+      </article>
+    </section>
+
+    <!-- ============ CHART + FLEET ============ -->
+    <section class="row">
+      <article class="card" style="animation-delay:.26s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">צריכת שמן לאורך השנה</h2>
+            <div class="card-sub">ליטרים בפועל מול תחזית · ינואר–אוגוסט 2026</div>
+          </div>
+          <button class="card-action">8 חודשים</button>
+        </div>
+
+        <div class="chart-wrap">
+          <svg class="chart" viewBox="0 0 720 224" preserveAspectRatio="none" role="img" aria-label="גרף צריכת שמן חודשית">
+            <defs>
+              <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#D8B36A" stop-opacity=".34"/>
+                <stop offset="100%" stop-color="#D8B36A" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#4CC9C0"/>
+                <stop offset="100%" stop-color="#F0DCB4"/>
+              </linearGradient>
+            </defs>
+
+            <g stroke="rgba(255,255,255,.06)" stroke-width="1" vector-effect="non-scaling-stroke">
+              <line x1="0" y1="8" x2="720" y2="8"/>
+              <line x1="0" y1="62" x2="720" y2="62"/>
+              <line x1="0" y1="116" x2="720" y2="116"/>
+              <line x1="0" y1="170" x2="720" y2="170"/>
+              <line x1="0" y1="212" x2="720" y2="212"/>
+            </g>
+
+            <!-- forecast -->
+            <path d="M20 155.1 L117.1 144.3 L214.3 133.6 L311.4 122.8 L408.6 112.1 L505.7 101.3 L602.9 90.6 L700 85.2"
+                  fill="none" stroke="rgba(110,134,168,.75)" stroke-width="1.6"
+                  stroke-dasharray="5 6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+
+            <!-- actual -->
+            <path d="M20 162.9 L117.1 137.9 L214.3 146.5 L311.4 107.5 L408.6 86.5 L505.7 96.5 L602.9 57.7 L700 65.3 L700 212 L20 212 Z"
+                  fill="url(#areaFill)"/>
+            <path d="M20 162.9 L117.1 137.9 L214.3 146.5 L311.4 107.5 L408.6 86.5 L505.7 96.5 L602.9 57.7 L700 65.3"
+                  fill="none" stroke="url(#lineGrad)" stroke-width="2.4"
+                  stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+
+            <!-- endpoint marker (lines keep a true circle under non-uniform scaling) -->
+            <line x1="700" y1="65.3" x2="700" y2="65.3" stroke="rgba(240,220,180,.16)" stroke-width="22"
+                  stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+            <line x1="700" y1="65.3" x2="700" y2="65.3" stroke="#F0DCB4" stroke-width="8"
+                  stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+            <line x1="700" y1="65.3" x2="700" y2="65.3" stroke="#0C0E12" stroke-width="3"
+                  stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+          </svg>
+        </div>
+
+        <div class="x-axis">
+          <span>ינו</span><span>פבר</span><span>מרץ</span><span>אפר</span><span>מאי</span><span>יונ</span><span>יול</span><span>אוג</span>
+        </div>
+
+        <div class="legend">
+          <span class="lg"><i class="swatch" style="background:linear-gradient(90deg,#4CC9C0,#F0DCB4)"></i> צריכה בפועל <b>128.4 ל'</b></span>
+          <span class="lg"><i class="swatch" style="background:rgba(110,134,168,.75)"></i> תחזית <b>121.0 ל'</b></span>
+          <span class="lg"><i class="swatch" style="background:#4ED9A4"></i> חריגה <b>+6.1%</b></span>
+        </div>
+      </article>
+
+      <article class="card" style="animation-delay:.32s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">פילוח הצי</h2>
+            <div class="card-sub">לפי דגם מכשיר</div>
+          </div>
+        </div>
+
+        <div class="fleet">
+          <div class="donut-wrap">
+            <svg class="donut" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="54" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="15"/>
+              <circle cx="70" cy="70" r="54" fill="none" stroke="#6E86A8" stroke-width="15" stroke-linecap="round"
+                      stroke-dasharray="158.7 180.6" stroke-dashoffset="0"/>
+              <circle cx="70" cy="70" r="54" fill="none" stroke="#4CC9C0" stroke-width="15" stroke-linecap="round"
+                      stroke-dasharray="113.1 226.2" stroke-dashoffset="-162.7"/>
+              <circle cx="70" cy="70" r="54" fill="none" stroke="#D8B36A" stroke-width="15" stroke-linecap="round"
+                      stroke-dasharray="55.5 283.8" stroke-dashoffset="-279.8"/>
+            </svg>
+            <div class="donut-mid">
+              <div class="donut-num">342</div>
+              <div class="donut-cap">מכשירים</div>
+            </div>
+          </div>
+
+          <div class="fleet-list">
+            <div class="fleet-row">
+              <i class="swatch" style="background:#6E86A8"></i>
+              <span class="name">Icon 300</span>
+              <span class="qty">164</span><span class="pct">48%</span>
+            </div>
+            <div class="fleet-row">
+              <i class="swatch" style="background:#4CC9C0"></i>
+              <span class="name">Icon 500</span>
+              <span class="qty">118</span><span class="pct">34%</span>
+            </div>
+            <div class="fleet-row">
+              <i class="swatch" style="background:#D8B36A"></i>
+              <span class="name">Icon 700</span>
+              <span class="qty">60</span><span class="pct">18%</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ============ CALLS + OIL ALERTS ============ -->
+    <section class="row">
+      <article class="card" style="animation-delay:.36s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">קריאות שירות פתוחות</h2>
+            <div class="card-sub">18 קריאות · 4 דחופות · ממוצע סגירה 6.2 שעות</div>
+          </div>
+          <button class="card-action">לכל הקריאות</button>
+        </div>
+
+        <div class="calls">
+          <div class="call">
+            <i class="sev crit"></i>
+            <div class="call-main">
+              <div class="call-client">מלון דן · תל אביב</div>
+              <div class="call-desc">Icon 700 — תקלת משאבה, אין הזרמה · אבי כהן</div>
+            </div>
+            <div class="call-side">
+              <span class="chip crit">דחוף</span>
+              <span class="call-time">SC-2419 · 40 דק'</span>
+            </div>
+          </div>
+
+          <div class="call">
+            <i class="sev crit"></i>
+            <div class="call-main">
+              <div class="call-client">קניון רמת אביב · לובי ראשי</div>
+              <div class="call-desc">Icon 500 — אין חיבור לרשת מאז 06:40 · ממתין לשיוך</div>
+            </div>
+            <div class="call-side">
+              <span class="chip crit">דחוף</span>
+              <span class="call-time">SC-2412 · 3 שע'</span>
+            </div>
+          </div>
+
+          <div class="call">
+            <i class="sev warn"></i>
+            <div class="call-main">
+              <div class="call-client">מגדלי עזריאלי · קומת כניסה</div>
+              <div class="call-desc">Icon 500 — החלפת מכל שמן Oud Noir · יוסי לוי</div>
+            </div>
+            <div class="call-side">
+              <span class="chip teal">בטיפול</span>
+              <span class="call-time">SC-2418 · 1.5 שע'</span>
+            </div>
+          </div>
+
+          <div class="call">
+            <i class="sev norm"></i>
+            <div class="call-main">
+              <div class="call-client">רשת ג'ימס · סניף רעננה</div>
+              <div class="call-desc">Icon 300 — עוצמת ריח חלשה באזור המשקולות · דניאל מור</div>
+            </div>
+            <div class="call-side">
+              <span class="chip">רגיל</span>
+              <span class="call-time">SC-2417 · אתמול</span>
+            </div>
+          </div>
+
+          <div class="call">
+            <i class="sev sched"></i>
+            <div class="call-main">
+              <div class="call-client">BMW · מרכז מכירות חיפה</div>
+              <div class="call-desc">Icon 700 — תחזוקה תקופתית, ניקוי נחיר · מתוזמן 14:30</div>
+            </div>
+            <div class="call-side">
+              <span class="chip gold">מתוזמן</span>
+              <span class="call-time">SC-2415 · היום</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" style="animation-delay:.4s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">התראות מלאי שמן</h2>
+            <div class="card-sub">מכשירים מתחת ל-20%</div>
+          </div>
+        </div>
+
+        <div class="alerts">
+          <div>
+            <div class="alert-top">
+              <span class="alert-client">מלון רויאל ביץ' · אילת</span>
+              <span class="alert-dev">ICN-700-0142</span>
+            </div>
+            <div class="bar"><span style="width:8%;background:linear-gradient(90deg,#F0555C,#FF8B90)"></span></div>
+            <div class="alert-foot"><span>Signature Gold</span><b>8% · החלפה תוך יומיים</b></div>
+          </div>
+
+          <div>
+            <div class="alert-top">
+              <span class="alert-client">ג'ימבורי פארק · ראשל"צ</span>
+              <span class="alert-dev">ICN-300-0871</span>
+            </div>
+            <div class="bar"><span style="width:12%;background:linear-gradient(90deg,#F0555C,#F0A43A)"></span></div>
+            <div class="alert-foot"><span>Fresh Linen</span><b>12% · שובץ לקו מרכז</b></div>
+          </div>
+
+          <div>
+            <div class="alert-top">
+              <span class="alert-client">משרדי אמדוקס · רעננה</span>
+              <span class="alert-dev">ICN-500-0333</span>
+            </div>
+            <div class="bar"><span style="width:15%;background:linear-gradient(90deg,#F0A43A,#F5C078)"></span></div>
+            <div class="alert-foot"><span>White Tea</span><b>15% · 4 ימים למלאי</b></div>
+          </div>
+
+          <div>
+            <div class="alert-top">
+              <span class="alert-client">קפה גרג · הרצליה פיתוח</span>
+              <span class="alert-dev">ICN-300-0605</span>
+            </div>
+            <div class="bar"><span style="width:19%;background:linear-gradient(90deg,#F0A43A,#D8B36A)"></span></div>
+            <div class="alert-foot"><span>Oud Noir</span><b>19% · 6 ימים למלאי</b></div>
+          </div>
+
+          <button class="card-action" style="margin:2px 0 0;width:100%;text-align:center">שבץ את כל ההתראות לקו הפצה</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- ============ ROUTES + STOCK ============ -->
+    <section class="row">
+      <article class="card" style="animation-delay:.44s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">קווי הפצה — היום</h2>
+            <div class="card-sub">יום רביעי, 26 באוגוסט · 47 עצירות מתוכננות</div>
+          </div>
+          <button class="card-action">מפת שטח</button>
+        </div>
+
+        <div class="routes">
+          <div class="route">
+            <div class="route-ring">
+              <svg width="46" height="46" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
+                <circle cx="23" cy="23" r="19" fill="none" stroke="#4ED9A4" stroke-width="4" stroke-linecap="round"
+                        stroke-dasharray="119.4" stroke-dashoffset="0"/>
+              </svg>
+              <span>100%</span>
+            </div>
+            <div>
+              <div class="route-name">קו שרון</div>
+              <div class="route-tech">דניאל מור · הסתיים 13:10</div>
+            </div>
+            <div class="route-stat"><b>9/9</b><i>עצירות</i></div>
+          </div>
+
+          <div class="route">
+            <div class="route-ring">
+              <svg width="46" height="46" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
+                <circle cx="23" cy="23" r="19" fill="none" stroke="#D8B36A" stroke-width="4" stroke-linecap="round"
+                        stroke-dasharray="87.2 119.4" stroke-dashoffset="0"/>
+              </svg>
+              <span>73%</span>
+            </div>
+            <div>
+              <div class="route-name">קו מרכז</div>
+              <div class="route-tech">יוסי לוי · בדרך לעזריאלי</div>
+            </div>
+            <div class="route-stat"><b>11/15</b><i>עצירות</i></div>
+          </div>
+
+          <div class="route">
+            <div class="route-ring">
+              <svg width="46" height="46" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
+                <circle cx="23" cy="23" r="19" fill="none" stroke="#4CC9C0" stroke-width="4" stroke-linecap="round"
+                        stroke-dasharray="69.2 119.4" stroke-dashoffset="0"/>
+              </svg>
+              <span>58%</span>
+            </div>
+            <div>
+              <div class="route-name">קו צפון</div>
+              <div class="route-tech">אבי כהן · קריאה דחופה בחיפה</div>
+            </div>
+            <div class="route-stat"><b>7/12</b><i>עצירות</i></div>
+          </div>
+
+          <div class="route">
+            <div class="route-ring">
+              <svg width="46" height="46" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
+                <circle cx="23" cy="23" r="19" fill="none" stroke="#F0A43A" stroke-width="4" stroke-linecap="round"
+                        stroke-dasharray="32.2 119.4" stroke-dashoffset="0"/>
+              </svg>
+              <span>27%</span>
+            </div>
+            <div>
+              <div class="route-name">קו דרום</div>
+              <div class="route-tech">רון אשכנזי · יצא באיחור 09:20</div>
+            </div>
+            <div class="route-stat"><b>3/11</b><i>עצירות</i></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" style="animation-delay:.48s">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">מלאי שמנים במחסן</h2>
+            <div class="card-sub">מתוך קיבולת מדף מלאה</div>
+          </div>
+        </div>
+
+        <div class="stock">
+          <div class="stock-row">
+            <div class="st-top"><b>Signature Gold</b><span>62%</span></div>
+            <div class="bar"><span style="width:62%;background:linear-gradient(90deg,#D8B36A,#F0DCB4)"></span></div>
+          </div>
+          <div class="stock-row">
+            <div class="st-top"><b>Fresh Linen</b><span>77%</span></div>
+            <div class="bar"><span style="width:77%;background:linear-gradient(90deg,#4CC9C0,#8FE3DC)"></span></div>
+          </div>
+          <div class="stock-row">
+            <div class="st-top"><b>White Tea</b><span>41%</span></div>
+            <div class="bar"><span style="width:41%;background:linear-gradient(90deg,#6E86A8,#A3B6CE)"></span></div>
+          </div>
+          <div class="stock-row">
+            <div class="st-top"><b>Oud Noir</b><span>18%</span></div>
+            <div class="bar"><span style="width:18%;background:linear-gradient(90deg,#F0555C,#F0A43A)"></span></div>
+          </div>
+          <div class="alert-foot" style="margin-top:2px">
+            <span>הזמנת רכש אחרונה</span><b>19.08 · 240 ליטר</b>
+          </div>
+        </div>
+      </article>
+    </section>
+    </div><!-- /dashboard -->
+
+    <div data-view="devices" hidden>
+      <div class="toolbar">
+        <label class="tb-search">
+          <input placeholder="חיפוש לפי מספר סידורי…" aria-label="חיפוש מכשיר">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+        </label>
+        <select class="tb-select" aria-label="סינון לפי דגם">
+          <option>כל הדגמים</option><option>Icon 300</option><option>Icon 500</option><option>Icon 700</option>
+        </select>
+        <select class="tb-select" aria-label="סינון לפי סטטוס">
+          <option>כל הסטטוסים</option><option>פעיל</option><option>לא מקוון</option><option>בתחזוקה</option>
+        </select>
+        <span class="tb-count">339 מכשירים</span>
+        <button class="tb-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> מכשיר חדש</button>
+      </div>
+
+      <article class="card">
+        <div class="th" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+          <span>מס' סידורי</span><span>דגם</span><span>לקוח</span><span>ניחוח</span>
+          <span>מפלס שמן</span><span>סטטוס</span><span>נראה לאחרונה</span>
+        </div>
+        <div class="tbody">
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-700-0142</span></div>
+            <div class="cell" data-label="דגם"><span class="chip gold">Icon 700</span></div>
+            <div class="cell" data-label="לקוח"><b>מלון רויאל ביץ' · אילת</b><small>טיילת צפון · לובי ראשי</small></div>
+            <div class="cell" data-label="ניחוח">Signature Gold</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:8%;background:linear-gradient(90deg,#F0555C,#F0A43A)"></span></span><span class="pct">8%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">4 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-500-0019</span></div>
+            <div class="cell" data-label="דגם"><span class="chip teal">Icon 500</span></div>
+            <div class="cell" data-label="לקוח"><b>קניון רמת אביב</b><small>לובי ראשי</small></div>
+            <div class="cell" data-label="ניחוח">White Tea</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:2%;background:linear-gradient(90deg,#F0555C,#F0A43A)"></span></span><span class="pct">0%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip crit">לא מקוון</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">3 שע'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-300-0095</span></div>
+            <div class="cell" data-label="דגם"><span class="chip slate">Icon 300</span></div>
+            <div class="cell" data-label="לקוח"><b>ג'ימבורי פארק · ראשל"צ</b><small>אזור המתנה</small></div>
+            <div class="cell" data-label="ניחוח">Fresh Linen</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:12%;background:linear-gradient(90deg,#F0555C,#F0A43A)"></span></span><span class="pct">12%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">11 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-500-0044</span></div>
+            <div class="cell" data-label="דגם"><span class="chip teal">Icon 500</span></div>
+            <div class="cell" data-label="לקוח"><b>מגדלי עזריאלי</b><small>קומת כניסה</small></div>
+            <div class="cell" data-label="ניחוח">Oud Noir</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:34%;background:linear-gradient(90deg,#6E86A8,#A3B6CE)"></span></span><span class="pct">34%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip warn">בתחזוקה</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">41 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-700-0001</span></div>
+            <div class="cell" data-label="דגם"><span class="chip gold">Icon 700</span></div>
+            <div class="cell" data-label="לקוח"><b>מלון דן · תל אביב</b><small>אולם אירועים</small></div>
+            <div class="cell" data-label="ניחוח">Vanilla Amber</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:61%;background:linear-gradient(90deg,#4CC9C0,#8FE3DC)"></span></span><span class="pct">61%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">2 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-300-0118</span></div>
+            <div class="cell" data-label="דגם"><span class="chip slate">Icon 300</span></div>
+            <div class="cell" data-label="לקוח"><b>קפה גרג · הרצליה פיתוח</b><small>עמדת קבלה</small></div>
+            <div class="cell" data-label="ניחוח">Oud Noir</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:19%;background:linear-gradient(90deg,#F0A43A,#F5C078)"></span></span><span class="pct">19%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">18 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-500-0107</span></div>
+            <div class="cell" data-label="דגם"><span class="chip teal">Icon 500</span></div>
+            <div class="cell" data-label="לקוח"><b>משרדי אמדוקס · רעננה</b><small>מסדרון מרכזי</small></div>
+            <div class="cell" data-label="ניחוח">White Tea</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:15%;background:linear-gradient(90deg,#F0A43A,#F5C078)"></span></span><span class="pct">15%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">7 דק'</div>
+          </div>
+          <div class="tr" style="grid-template-columns:150px 104px minmax(0,1.5fr) minmax(0,1fr) 150px 104px 110px">
+            <div class="cell"><span class="mono">ICN-300-0259</span></div>
+            <div class="cell" data-label="דגם"><span class="chip slate">Icon 300</span></div>
+            <div class="cell" data-label="לקוח"><b>קאנטרי קלאב · כפר סבא</b><small>חדר כושר</small></div>
+            <div class="cell" data-label="ניחוח">Green Bamboo</div>
+            <div class="cell mini" data-label="מפלס שמן"><span class="bar"><span style="width:78%;background:linear-gradient(90deg,#4CC9C0,#8FE3DC)"></span></span><span class="pct">78%</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip ok">פעיל</span></div>
+            <div class="cell muted" data-label="נראה לאחרונה">31 דק'</div>
+          </div>
+        </div>
+      </article>
+    </div><!-- /devices -->
+
+    <div data-view="service" hidden>
+      <div class="toolbar">
+        <label class="tb-search">
+          <input placeholder="חיפוש לפי קוד קריאה או כותרת…" aria-label="חיפוש קריאה">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+        </label>
+        <select class="tb-select" aria-label="סינון לפי סטטוס">
+          <option>פתוחות ובטיפול</option><option>פתוחות בלבד</option><option>בטיפול</option><option>טופלו</option>
+        </select>
+        <span class="tb-count">18 קריאות</span>
+        <button class="tb-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> קריאה חדשה</button>
+      </div>
+
+      <article class="card">
+        <div class="th" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+          <span>קוד</span><span>לקוח ותקלה</span><span>מכשיר</span><span>חומרה</span>
+          <span>סטטוס</span><span>משויך ל</span><span>נפתח</span><span></span>
+        </div>
+        <div class="tbody">
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2419</span></div>
+            <div class="cell" data-label="לקוח"><b>מלון דן · תל אביב</b><small>תקלת משאבה, אין הזרמה</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip gold">Icon 700</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip crit">דחוף</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip teal">בטיפול</span></div>
+            <div class="cell" data-label="משויך ל">אבי כהן</div>
+            <div class="cell muted" data-label="נפתח">40 דק'</div>
+            <div class="cell row-actions"><button>סגור</button></div>
+          </div>
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2412</span></div>
+            <div class="cell" data-label="לקוח"><b>קניון רמת אביב</b><small>אין חיבור לרשת מאז 06:40</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip teal">Icon 500</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip crit">דחוף</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip">פתוחה</span></div>
+            <div class="cell" data-label="משויך ל">לא שובץ</div>
+            <div class="cell muted" data-label="נפתח">3 שע'</div>
+            <div class="cell row-actions"><button>קח לטיפול</button><button>סגור</button></div>
+          </div>
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2418</span></div>
+            <div class="cell" data-label="לקוח"><b>מגדלי עזריאלי</b><small>החלפת מכל שמן Oud Noir</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip teal">Icon 500</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip warn">לטיפול</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip teal">בטיפול</span></div>
+            <div class="cell" data-label="משויך ל">יוסי לוי</div>
+            <div class="cell muted" data-label="נפתח">1.5 שע'</div>
+            <div class="cell row-actions"><button>סגור</button></div>
+          </div>
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2417</span></div>
+            <div class="cell" data-label="לקוח"><b>רשת ג'ימס · סניף רעננה</b><small>עוצמת ריח חלשה באזור המשקולות</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip slate">Icon 300</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip slate">רגיל</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip">פתוחה</span></div>
+            <div class="cell" data-label="משויך ל">דניאל מור</div>
+            <div class="cell muted" data-label="נפתח">אתמול</div>
+            <div class="cell row-actions"><button>קח לטיפול</button><button>סגור</button></div>
+          </div>
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2415</span></div>
+            <div class="cell" data-label="לקוח"><b>BMW · מרכז מכירות חיפה</b><small>תחזוקה תקופתית, ניקוי נחיר</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip gold">Icon 700</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip gold">מתוזמן</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip">פתוחה</span></div>
+            <div class="cell" data-label="משויך ל">רון אשכנזי</div>
+            <div class="cell muted" data-label="נפתח">היום</div>
+            <div class="cell row-actions"><button>קח לטיפול</button><button>סגור</button></div>
+          </div>
+          <div class="tr" style="grid-template-columns:96px minmax(0,1.8fr) 120px 90px 96px 110px 104px auto">
+            <div class="cell"><span class="mono">SC-2410</span></div>
+            <div class="cell" data-label="לקוח"><b>מלון ישרוטל · ים המלח</b><small>המכשיר לא נדלק</small></div>
+            <div class="cell" data-label="מכשיר"><span class="chip gold">Icon 700</span></div>
+            <div class="cell" data-label="חומרה"><span class="chip slate">רגיל</span></div>
+            <div class="cell" data-label="סטטוס"><span class="chip teal">בטיפול</span></div>
+            <div class="cell" data-label="משויך ל">אבי כהן</div>
+            <div class="cell muted" data-label="נפתח">2 ימים</div>
+            <div class="cell row-actions"><button>סגור</button></div>
+          </div>
+        </div>
+      </article>
+    </div><!-- /service -->
+
+    <div data-view="placeholder" hidden>
+      <article class="card" style="text-align:center;padding:48px 24px">
+        <h2 class="card-title" style="margin-bottom:8px">המסך הזה קיים בקוד</h2>
+        <p style="font-size:13px;color:var(--text-faint);max-width:44ch;margin:0 auto;line-height:1.7">
+          התצוגה הזו היא הדגמה סטטית של שלושה מסכים. הפרויקט המלא כולל גם את
+          לקוחות, מעקב שמנים, דוחות והגדרות — כולם מחוברים ל-Supabase.
+        </p>
+      </article>
+    </div>
+
+  </main>
+
+  <!-- ===================== MOBILE TAB BAR ===================== -->
+  <nav class="tabbar" aria-label="ניווט מהיר">
+    <button class="tab is-active" data-page="דשבורד" data-meta="סקירה כללית · עודכן לפני 2 דקות">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>
+      דשבורד
+    </button>
+    <button class="tab" data-page="מכשירים בשטח" data-meta="342 מכשירים מותקנים · 8 לא מקוונים">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3.5"/><circle cx="12" cy="14" r="2.6"/></svg>
+      מכשירים
+    </button>
+    <button class="tab" data-page="קריאות שירות" data-meta="18 קריאות פתוחות · 4 דחופות">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.2a4.6 4.6 0 0 1 5.3 6.3l-9 9a2.6 2.6 0 0 1-3.7-3.7l9-9"/><path d="M4.2 14.5 9 9.7"/></svg>
+      קריאות
+    </button>
+    <button class="tab" data-page="מעקב שמנים" data-meta="128.4 ליטר הוזרמו החודש · 4 התראות מלאי">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8s5.6 6 5.6 10a5.6 5.6 0 1 1-11.2 0c0-4 5.6-10 5.6-10Z"/></svg>
+      שמנים
+    </button>
+    <button class="tab" data-page="לקוחות" data-meta="96 לקוחות פעילים · 5 בתהליך הקמה">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/></svg>
+      לקוחות
+    </button>
+  </nav>
+</div>
+
+<script>
+  (function () {
+    var VIEWS = {
+      'דשבורד': 'dashboard',
+      'מכשירים בשטח': 'devices',
+      'קריאות שירות': 'service'
+    };
+
+    var title = document.getElementById('pageTitle');
+    var meta = document.getElementById('pageMeta');
+
+    function activate(page, metaText) {
+      document.querySelectorAll('.nav-item').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.page === page);
+      });
+      document.querySelectorAll('.tab').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.page === page);
+      });
+      if (title) title.textContent = page;
+      if (meta) meta.textContent = metaText || '';
+
+      var view = VIEWS[page] || 'placeholder';
+      document.querySelectorAll('[data-view]').forEach(function (section) {
+        section.hidden = section.dataset.view !== view;
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.querySelectorAll('[data-page]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        activate(b.dataset.page, b.dataset.meta);
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
