@@ -122,7 +122,7 @@ export default function CustomersScreen() {
       key: 'phone',
       label: 'טלפון',
       render: (row) => (
-      <a>
+      <a
           href={'tel:' + row.phone}
           dir="ltr"
           onClick={(event) => event.stopPropagation()}
