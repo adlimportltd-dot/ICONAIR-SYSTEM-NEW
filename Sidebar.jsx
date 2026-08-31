@@ -44,7 +44,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       {isActive && (
         <span
           aria-hidden
-          className="absolute -end-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
+          className="absolute -start-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
                      bg-gold-500 shadow-gold-glow"
         />
       )}
@@ -74,7 +74,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
 
   return (
     <aside
-      className="fixed inset-y-[18px] end-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
+      className="fixed inset-y-[18px] start-[18px] z-20 hidden w-[252px] flex-col gap-[22px]
                  rounded-card px-4 py-[22px] glass shadow-lift lg:flex"
       aria-label="ניווט ראשי"
     >
