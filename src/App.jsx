@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -19,11 +19,8 @@ import CustomersScreen from './screens/CustomersScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import OilScreen from './screens/OilScreen';
 import ServiceCallsScreen from './screens/ServiceCallsScreen';
-import RoutesScreen from './screens/RoutesScreen';
-import StockScreen from './screens/StockScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import CatalogScreen from './screens/CatalogScreen';
 
 export default function App() {
   // בלי מפתחות אין טעם להרים את שאר האפליקציה — מסך ההגדרה מסביר מה חסר
@@ -78,11 +75,19 @@ function Gate() {
 }
 
 function Shell() {
+  const { isAdmin } = useAuth();
   const [activeId, setActiveId] = useState('dashboard');
   const [newCallSignal, setNewCallSignal] = useState(0);
 
   const dashboard = useQuery(getDashboard, []);
   const kpis = dashboard.data?.kpis;
+
+  // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
+  // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
+  // מחזירים אוטומטית לדשבורד — לא רק שהלשונית מוסתרת מהתפריט.
+  useEffect(() => {
+    if (activeId === 'reports' && !isAdmin) setActiveId('dashboard');
+  }, [activeId, isAdmin]);
 
   // המספרים בכותרת ובתגי הניווט מתעדכנים גם כשלא נמצאים בדשבורד
   useRealtime(['service_calls', 'devices'], dashboard.refetch);
@@ -106,7 +111,7 @@ function Shell() {
       <div className="relative z-[1] min-h-screen">
         <Sidebar activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
 
-        <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:ms-[288px] lg:px-[22px] lg:pb-10">
+        <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:me-[288px] lg:px-[22px] lg:pb-10">
           <TopBar
             title={active.label}
             meta={screenMeta(activeId, kpis)}
@@ -131,10 +136,7 @@ function Shell() {
           {activeId === 'customers' && <CustomersScreen />}
           {activeId === 'oils' && <OilScreen />}
           {activeId === 'service' && <ServiceCallsScreen openFormSignal={newCallSignal} />}
-          {activeId === 'routes' && <RoutesScreen />}
-          {activeId === 'stock' && <StockScreen />}
-          {activeId === 'reports' && <ReportsScreen />}
-          {activeId === 'catalog' && <CatalogScreen />}
+          {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
 
