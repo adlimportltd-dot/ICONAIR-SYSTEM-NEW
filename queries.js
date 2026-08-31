@@ -269,7 +269,7 @@ export const listDeviceOptions = () =>
 
 export function listCustomers({ search = '', status = '' } = {}) {
   let query = supabase
-    .from('customers')
+    .from('customers_secure')
     .select('*, devices(count)')
     .order('name');
 
