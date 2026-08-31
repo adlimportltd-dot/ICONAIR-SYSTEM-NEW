@@ -19,6 +19,8 @@ import CustomersScreen from './screens/CustomersScreen';
 import DevicesScreen from './screens/DevicesScreen';
 import OilScreen from './screens/OilScreen';
 import ServiceCallsScreen from './screens/ServiceCallsScreen';
+import RoutesScreen from './screens/RoutesScreen';
+import StockScreen from './screens/StockScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
@@ -136,6 +138,8 @@ function Shell() {
           {activeId === 'customers' && <CustomersScreen />}
           {activeId === 'oils' && <OilScreen />}
           {activeId === 'service' && <ServiceCallsScreen openFormSignal={newCallSignal} />}
+          {activeId === 'routes' && <RoutesScreen />}
+          {activeId === 'stock' && <StockScreen />}
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
