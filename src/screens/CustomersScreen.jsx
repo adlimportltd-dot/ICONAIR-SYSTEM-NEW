@@ -20,14 +20,6 @@ const STATUS_TONE = { active: 'ok', onboarding: 'gold', paused: 'warn', churned:
 
 const EMPTY_VAT_BUCKET = { preVat: 0, vatAmount: 0, total: 0 };
 
-/**
- * מסכם שורות לקוחות (כולם, או המסוננים) לשולם/ממתין/פילוח שיטות
- * תשלום — ולכל אחד מהשלושה (הכל, שולם, ממתין) גם פירוק לפני-מע"מ /
- * מע"מ / סה"כ, לפי ההגדרה הפרטנית (included/excluded) של כל לקוח.
- * לקוח 'included' מחושב אחורה (הסכום שהוזן הוא הסופי), לקוח 'excluded'
- * קדימה (18% מתווסף) — שניהם עוברים דרך אותו computeVat, אז ההבדל
- * כבר מטופל שם; כאן רק מצטברים.
- */
 function summarizeCollection(rows) {
   const totals = rows.reduce(
     (acc, row) => {
@@ -67,7 +59,6 @@ const EMPTY_FORM = {
   payment_type: 'deferred', amount_due: '0', is_paid: false, vat_mode: 'included', payment_due_date: '',
 };
 
-/** שורת "לפני מע״מ / מע״מ (18%)" קטנה, שחוזרת בשלוש כרטיסיות ה-KPI */
 function VatBreakdownStrip({ preVat, vatAmount }) {
   return (
     <div className="mt-2.5 flex items-center gap-3 border-t border-white/[0.06] pt-2 text-[11px] text-text-faint">
@@ -92,15 +83,11 @@ export default function CustomersScreen() {
     [search, status, paymentStatus, paymentType]
   );
 
-  // תמונת המצב הכספית הכוללת (הכרטיסיות למעלה) לא אמורה להשתנות
-  // כשמסננים את הטבלה — לכן שאילתא נפרדת, בלי סינון, רק לחישוב הסכומים.
   const allCustomers = useQuery(() => listCustomers({}), []);
 
   const collectionTotals = summarizeCollection(allCustomers.data ?? []);
   const { totalRevenue, methodBreakdown, revenueBreakdown, paidBreakdown, unpaidBreakdown } = collectionTotals;
 
-  // הדוח המודפס מסכם את מה שבפועל מוצג בטבלה כרגע (אחרי חיפוש/סינון) —
-  // סיכום עקבי עם השורות שמתחתיו, לא עם המצב הגלובלי של כל הלקוחות.
   const printSummary = summarizeCollection(customers.data ?? []);
 
   function refetchAll() {
@@ -114,11 +101,10 @@ export default function CustomersScreen() {
       await setCustomerPaid(row.id, !row.is_paid);
       refetchAll();
     } catch {
-      // כשל בטוגל מהיר לא צריך להרעיש — המנהל יראה שהצ'יפ לא התחלף ויכול לנסות שוב
+      // כשל בטוגל מהיר לא צריך להרעיש
     }
   }
 
-  // עמודות בסיס — זמינות לכולם, כי אין בהן שום נתון כספי.
   const baseColumns = [
     {
       key: 'name',
@@ -137,9 +123,8 @@ export default function CustomersScreen() {
       label: 'טלפון',
       render: (row) => (
         
-          href={`tel:${row.phone}`}
+          href={'tel:' + row.phone}
           dir="ltr"
-          // בלי זה חיוג לטלפון היה פותח גם את כרטיס הלקוח
           onClick={(event) => event.stopPropagation()}
           className="tabular font-mono text-[12.5px] text-text-dim hover:text-gold-300"
         >
@@ -158,8 +143,6 @@ export default function CustomersScreen() {
     },
   ];
 
-  // עמודות כספיות — תשלום, גבייה, תאריך פירעון. חשוב: אלה מתווספות
-  // רק אם isAdmin === true. לטכנאי הן פשוט לא קיימות בטבלה בכלל.
   const financialColumns = [
     {
       key: 'payment',
@@ -187,11 +170,11 @@ export default function CustomersScreen() {
           type="button"
           onClick={(event) => togglePaid(row, event)}
           title="לחץ כדי להחליף סטטוס"
-          className={`chip transition-colors ${
+          className={'chip transition-colors ' + (
             row.is_paid
               ? 'border-ok/25 bg-ok/10 text-ok hover:border-ok/45'
               : 'border-crit/30 bg-crit/10 text-crit-soft hover:border-crit/50'
-          }`}
+          )}
         >
           {row.is_paid ? 'שולם' : 'ממתין לגבייה'}
         </button>
@@ -203,9 +186,9 @@ export default function CustomersScreen() {
       width: '112px',
       render: (row) => (row.payment_due_date
         ? (
-          <span className={`tabular font-mono text-[12px] ${
+          <span className={'tabular font-mono text-[12px] ' + (
             isOverdue(row.payment_due_date, row.is_paid) ? 'font-semibold text-crit-soft' : 'text-text-dim'
-          }`}>
+          )}>
             {formatDate(row.payment_due_date)}
             {isOverdue(row.payment_due_date, row.is_paid) && ' · באיחור'}
           </span>
@@ -223,9 +206,6 @@ export default function CustomersScreen() {
     ),
   };
 
-  // חסימה מפורשת ומוחלטת: עמודות התשלום/הגבייה/הפירעון נכנסות
-  // לרשימת העמודות רק אם isAdmin === true. טכנאי מקבל אך ורק
-  // baseColumns + statusColumn — בלי שום עמודת כסף.
   const columns = isAdmin
     ? [...baseColumns, ...financialColumns, statusColumn]
     : [...baseColumns, statusColumn];
@@ -233,8 +213,6 @@ export default function CustomersScreen() {
   return (
     <>
     <div className="print:hidden">
-      {/* שלוש כרטיסיות הסיכום הכספי (הכנסות/שולם/ממתין) — admin בלבד.
-          לטכנאי הבלוק הזה לא קיים בדף בכלל. */}
       {isAdmin && (
         <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <GlassCard className="!py-[18px]">
@@ -277,7 +255,6 @@ export default function CustomersScreen() {
         </div>
       )}
 
-      {/* פילוח לפי אמצעי תשלום — admin בלבד */}
       {isAdmin && methodBreakdown.length > 0 && (
         <GlassCard className="mb-3.5 !py-[18px]">
           <div className="mb-3 text-[13px] font-medium text-text-dim">פילוח לפי אמצעי תשלום</div>
@@ -298,7 +275,6 @@ export default function CustomersScreen() {
         </GlassCard>
       )}
 
-      {/* כפתורי סינון לפי סטטוס גבייה — admin בלבד, כי הם עוסקים במצב תשלום */}
       {isAdmin && (
         <div className="mb-3.5 flex flex-wrap gap-2">
           {[
@@ -310,11 +286,11 @@ export default function CustomersScreen() {
               key={opt.key || 'all'}
               type="button"
               onClick={() => setPaymentStatus(opt.key)}
-              className={`rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ${
+              className={'rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ' + (
                 paymentStatus === opt.key
                   ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
                   : 'border-white/[0.09] text-text-dim hover:border-white/20'
-              }`}
+              )}
             >
               {opt.label}
             </button>
@@ -349,7 +325,6 @@ export default function CustomersScreen() {
             placeholder: 'כל הסטטוסים',
             options: Object.entries(CUSTOMER_STATUS_LABEL).map(([value, label]) => ({ value, label })),
           },
-          // מסנן "סוג תשלום" — admin בלבד
           ...(isAdmin ? [{
             key: 'paymentType',
             value: paymentType,
@@ -412,20 +387,11 @@ export default function CustomersScreen() {
       />
     </div>
 
-      {/* דוח ההדפסה מכיל את כל הכספים — לא מרנדרים אותו בכלל ל-DOM אם
-          לא admin, כדי שגם Ctrl+P לא יחשוף אותו. */}
       {isAdmin && <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} />}
     </>
   );
 }
 
-/**
- * דוח ההדפסה. לא מוצג במסך בכלל (hidden) — קיים ב-DOM כל הזמן, כי
- * window.print() מדפיס את מה שכבר שם; @media print הופך רק אותו
- * ל-block ומסתיר את שאר המסך (ר' print:hidden על העטיפה למעלה).
- * צבעים בהירים במפורש (לא משתמש במשתני הדארק-תיים של האפליקציה) —
- * דף מודפס הוא נייר לבן, לא זכוכית כהה.
- */
 function CustomersPrintReport({ rows, summary }) {
   const generatedAt = new Date().toLocaleString('he-IL', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -500,13 +466,6 @@ function SummaryBox({ label, value, accent = '#222' }) {
   );
 }
 
-/**
- * "לקוח חדש" ו"עריכת לקוח" הם אותו טופס — editCustomer קובע אם
- * שולחים insert (createCustomer) או update (updateCustomer). שדות
- * החיוב (סוג תשלום, סכום, סטטוס גבייה) חיים כאן לצד שאר פרטי הלקוח —
- * אבל מוצגים רק אם isAdmin; לטכנאי הם פשוט לא בטופס, והם נשמרים
- * ללא שינוי (ברירת המחדל / הערך הקיים) כשהוא שומר לקוח.
- */
 function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
   const [form, setForm] = useState(() => editCustomer
     ? {
@@ -563,7 +522,7 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
   return (
     <Modal
       open={open}
-      title={editCustomer ? `עריכת ${editCustomer.name}` : 'לקוח חדש'}
+      title={editCustomer ? ('עריכת ' + editCustomer.name) : 'לקוח חדש'}
       subtitle={editCustomer ? 'השינויים נשמרים מיד' : 'הלקוח ייווצר מיד ויופיע ברשימה'}
       onClose={onClose}
     >
@@ -597,9 +556,6 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
           </Field>
         </div>
 
-        {/* חסימה מפורשת ומוחלטת: כל בלוק החיוב/גבייה/מע״מ מוצג רק אם
-            isAdmin === true. לטכנאי הבלוק הזה לא קיים בטופס בכלל —
-            הערכים הקיימים נשלחים כמו שהם (ללא שינוי) כששומרים. */}
         {isAdmin && (
           <div className="rounded-row border border-white/[0.07] bg-white/[0.02] p-3.5">
             <div className="mb-3 text-[12.5px] font-semibold text-text-dim">חיוב וגבייה</div>
