@@ -44,7 +44,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       {isActive && (
         <span
           aria-hidden
-          className="absolute -end-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
+          className="absolute -start-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
                      bg-gold-500 shadow-gold-glow"
         />
       )}
