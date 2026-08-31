@@ -1,223 +1,105 @@
-import { useMemo, useState } from 'react';
+import KpiCard from '../components/KpiCard';
+import OilConsumptionChart from '../components/OilConsumptionChart';
+import FleetBreakdown from '../components/FleetBreakdown';
+import ServiceCallsCard from '../components/ServiceCallsCard';
+import OilAlertsCard from '../components/OilAlertsCard';
+import RoutesCard from '../components/RoutesCard';
+import StockCard from '../components/StockCard';
 import GlassCard from '../components/ui/GlassCard';
-import DataTable, { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
-import ScreenToolbar from '../components/ui/ScreenToolbar';
-import Modal from '../components/ui/Modal';
-import { Field, TextInput, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
-import { Async, EmptyState } from '../components/ui/States';
-import { useQuery } from '../hooks/useQuery';
-import { useRealtime } from '../hooks/useRealtime';
-import { listDevices, createDevice, listCustomerOptions } from '../lib/queries';
-import { describeError } from '../lib/supabase';
-import { DEVICE_STATUS_LABEL, MODEL_TONE, relativeTime } from '../lib/mappers';
+import { Skeleton, ErrorState } from '../components/ui/States';
+import { useAuth } from '../context/AuthContext';
+import {
+  mapKpis, mapFleet, mapOilConsumption, mapServiceCalls,
+  mapOilAlerts, mapRoutes, mapOilByScent, formatNumber,
+} from '../lib/mappers';
 
-const MODELS = ['Icon 300', 'Icon 500', 'Icon 700'];
-const STATUS_TONE = { active: 'ok', offline: 'crit', maintenance: 'warn', uninstalled: 'slate' };
-
-const EMPTY_FORM = {
-  model: 'Icon 500', customer_id: '', scent_name: '',
-  oil_level_pct: 100, location_note: '', status: 'active',
-};
-
-export default function DevicesScreen() {
-  const [search, setSearch] = useState('');
-  const [model, setModel] = useState('');
-  const [status, setStatus] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
-
-  const devices = useQuery(() => listDevices({ search, model, status }), [search, model, status]);
-  const customers = useQuery(listCustomerOptions, []);
-
-  // מכשיר שיוצא מהרשת או שמתמלא לו השמן — מתעדכן כאן בלי רענון
-  useRealtime(['devices'], devices.refetch);
-
-  const customerOptions = useMemo(
-    () => (customers.data ?? []).map((c) => ({ value: c.id, label: c.city ? `${c.name} · ${c.city}` : c.name })),
-    [customers.data]
-  );
-
-  const columns = [
-    {
-      key: 'serial',
-      label: 'מס\' סידורי',
-      width: '150px',
-      render: (row) => <span className="font-mono text-[12.5px] text-gold-300">{row.serial}</span>,
-    },
-    {
-      key: 'model',
-      label: 'דגם',
-      width: '104px',
-      render: (row) => <StatusChip tone={MODEL_TONE[row.model]}>{row.model}</StatusChip>,
-    },
-    {
-      key: 'customer',
-      label: 'לקוח',
-      width: 'minmax(0,1.5fr)',
-      render: (row) => (
-        <div className="min-w-0">
-          <div className="truncate font-semibold">{row.customer?.name ?? '—'}</div>
-          <div className="truncate text-[11.5px] text-text-faint">{row.location_note || row.customer?.city}</div>
-        </div>
-      ),
-    },
-    { key: 'scent', label: 'ניחוח', render: (row) => row.scent_name ?? 'לא משויך' },
-    {
-      key: 'oil',
-      label: 'מפלס שמן',
-      width: '150px',
-      render: (row) => <MiniMeter value={row.oil_level_pct} tone={oilTone(row.oil_level_pct)} />,
-    },
-    {
-      key: 'status',
-      label: 'סטטוס',
-      width: '104px',
-      render: (row) => <StatusChip tone={STATUS_TONE[row.status]}>{DEVICE_STATUS_LABEL[row.status]}</StatusChip>,
-    },
-    {
-      key: 'seen',
-      label: 'נראה לאחרונה',
-      width: '110px',
-      render: (row) => <span className="tabular text-[12px] text-text-faint">{relativeTime(row.last_seen_at)}</span>,
-    },
-  ];
-
+function DashboardSkeleton() {
   return (
-    <>
-      <ScreenToolbar
-        search={search}
-        onSearch={setSearch}
-        searchPlaceholder="חיפוש לפי מספר סידורי…"
-        count={devices.data?.length}
-        countLabel="מכשירים"
-        actionLabel="מכשיר חדש"
-        onAction={() => setFormOpen(true)}
-        filters={[
-          {
-            key: 'model',
-            value: model,
-            onChange: setModel,
-            placeholder: 'כל הדגמים',
-            options: MODELS.map((m) => ({ value: m, label: m })),
-          },
-          {
-            key: 'status',
-            value: status,
-            onChange: setStatus,
-            placeholder: 'כל הסטטוסים',
-            options: Object.entries(DEVICE_STATUS_LABEL).map(([value, label]) => ({ value, label })),
-          },
-        ]}
-      />
-
-      <GlassCard>
-        <Async
-          loading={devices.loading}
-          error={devices.error}
-          onRetry={devices.refetch}
-          isEmpty={devices.data?.length === 0}
-          empty={
-            <EmptyState
-              title="אין מכשיר שתואם את הסינון"
-              hint="נקה את המסננים, או הוסף מכשיר חדש ושייך אותו ללקוח."
-            />
-          }
-        >
-          <DataTable columns={columns} rows={devices.data ?? []} rowKey={(row) => row.id} />
-        </Async>
-      </GlassCard>
-
-      <NewDeviceModal
-        open={formOpen}
-        customerOptions={customerOptions}
-        onClose={() => setFormOpen(false)}
-        onCreated={() => {
-          setFormOpen(false);
-          devices.refetch();
-        }}
-      />
-    </>
+    <div className="flex flex-col gap-3.5">
+      <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[132px] rounded-card" />)}
+      </div>
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Skeleton className="h-[400px] rounded-card" />
+        <Skeleton className="h-[400px] rounded-card" />
+      </div>
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Skeleton className="h-[340px] rounded-card" />
+        <Skeleton className="h-[340px] rounded-card" />
+      </div>
+    </div>
   );
 }
 
-function NewDeviceModal({ open, customerOptions, onClose, onCreated }) {
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
+export default function DashboardScreen({ data, loading, error, onRetry, onNavigate }) {
+  const { profile, isAdmin } = useAuth();
 
-  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  // חסימה מפורשת ומוחלטת: כרטיסי הסיכום/הכספים מוצגים רק אם profile.role === 'admin'.
+  // בכוונה default-deny ולא "אם role === 'technician' אז תחסום" — כי אם role
+  // עדיין לא נטען (null) או שווה לכל ערך אחר, גם אז לא רוצים להציג נתונים כספיים.
+  const canSeeFinancialSummary = profile?.role === 'admin' && isAdmin;
 
-  async function submit(event) {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
+  if (loading && !data) return <DashboardSkeleton />;
 
-    try {
-      await createDevice({
-        model: form.model,
-        customer_id: form.customer_id,
-        scent_name: form.scent_name || null,
-        status: form.status,
-        oil_level_pct: Number(form.oil_level_pct),
-        location_note: form.location_note || null,
-      });
-      setForm(EMPTY_FORM);
-      onCreated();
-    } catch (caught) {
-      setError(describeError(caught));
-    } finally {
-      setBusy(false);
-    }
+  if (error) {
+    return (
+      <GlassCard>
+        <ErrorState message={error} onRetry={onRetry} />
+      </GlassCard>
+    );
   }
 
+  if (!data) return null;
+
+  const kpis = mapKpis(data.kpis);
+  const callsSubtitle = `${formatNumber(data.kpis?.calls_open)} קריאות · `
+    + `${formatNumber(data.kpis?.calls_critical)} דחופות · `
+    + (data.kpis?.avg_close_hours
+      ? `ממוצע סגירה ${formatNumber(data.kpis.avg_close_hours, 1)} שעות`
+      : 'אין עדיין קריאות סגורות');
+
   return (
-    <Modal
-      open={open}
-      title="מכשיר חדש"
-      subtitle="המספר הסידורי נוצר אוטומטית לפי הדגם"
-      onClose={onClose}
-    >
-      <form onSubmit={submit} className="flex flex-col gap-3.5">
-        <Field label="לקוח" required>
-          <Select value={form.customer_id} onChange={set('customer_id')} options={customerOptions}
-                  placeholder="בחר לקוח" required />
-        </Field>
+    <>
+      {/* כרטיסי המדדים (ספירות ומגמות על פני כל העסק) מוצגים רק אם canSeeFinancialSummary
+          הוא true — טכנאי בשטח (role='technician') לא רואה את הבלוק הזה בכלל. */}
+      {canSeeFinancialSummary && (
+        <section aria-label="מדדים ראשיים" className="mb-3.5 grid grid-cols-1 gap-3.5 xs:grid-cols-2 xl:grid-cols-4">
+          {kpis.map((kpi, i) => (
+            <KpiCard key={kpi.id} kpi={kpi} delay={0.02 + i * 0.06} />
+          ))}
+        </section>
+      )}
 
-        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
-          <Field label="דגם" required>
-            <Select value={form.model} onChange={set('model')} options={MODELS.map((m) => ({ value: m, label: m }))} />
-          </Field>
-          <Field label="ניחוח">
-            <TextInput value={form.scent_name} onChange={set('scent_name')} placeholder="Signature Gold" />
-          </Field>
-          <Field label="מיקום במתחם" hint="לובי ראשי, חדר כושר…">
-            <TextInput value={form.location_note} onChange={set('location_note')} />
-          </Field>
-          <Field label="מפלס שמן התחלתי (%)">
-            <TextInput type="number" min={0} max={100} value={form.oil_level_pct} onChange={set('oil_level_pct')} />
-          </Field>
-        </div>
+      {/* align-items:start משאיר לכל כרטיס את הגובה הטבעי שלו,
+          במקום למתוח את הקצר מביניהם ולייצר שטח ריק. */}
+      <section className="mb-3.5 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <OilConsumptionChart delay={0.26} data={mapOilConsumption(data.oil)} />
+        <FleetBreakdown delay={0.32} data={mapFleet(data.fleet)} />
+      </section>
 
-        <Field label="סטטוס">
-          <Select
-            value={form.status}
-            onChange={set('status')}
-            options={Object.entries(DEVICE_STATUS_LABEL)
-              .filter(([value]) => value !== 'uninstalled')
-              .map(([value, label]) => ({ value, label }))}
-          />
-        </Field>
+      <section className="mb-3.5 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <ServiceCallsCard
+          delay={0.36}
+          calls={mapServiceCalls(data.calls)}
+          subtitle={callsSubtitle}
+          onOpenAll={() => onNavigate('service')}
+          onSelect={() => onNavigate('service')}
+        />
+        <OilAlertsCard
+          delay={0.4}
+          alerts={mapOilAlerts(data.alerts)}
+          onAssignAll={() => onNavigate('oils')}
+        />
+      </section>
 
-        {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-1 flex gap-2.5">
-          <PrimaryButton type="submit" loading={busy}>שמור מכשיר</PrimaryButton>
-          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
-        </div>
-      </form>
-    </Modal>
+      <section className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <RoutesCard delay={0.44} routes={mapRoutes(data.routes)} onOpenMap={() => onNavigate('devices')} />
+        <StockCard
+          delay={0.48}
+          stock={mapOilByScent(data.scentUsage)}
+          monthTotal={`${formatNumber(data.kpis?.oil_liters_this_month, 1)} ליטר`}
+        />
+      </section>
+    </>
   );
 }
