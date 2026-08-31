@@ -286,7 +286,7 @@ export const createCustomer = (payload) =>
   supabase.from('customers').insert(payload).select('*, devices(count)').single().then(unwrap);
 
 export const updateCustomer = (id, patch) =>
-  supabase.from('customers').update(patch).eq('id', id).select().single().then(unwrap);
+    supabase.from('customers').update(patch).eq('id', id).then(unwrap);
 
 /* =====================================================================
    מכשירים
