@@ -9,8 +9,8 @@ export const navItems = [
   { id: 'customers', label: 'לקוחות',          shortLabel: 'לקוחות',  icon: 'users',  inTabBar: true },
   { id: 'oils',      label: 'מעקב שמנים',      shortLabel: 'שמנים',   icon: 'drop',   inTabBar: true },
   { id: 'service',   label: 'קריאות שירות',    shortLabel: 'קריאות',  icon: 'wrench', inTabBar: true },
-  { id: 'routes',    label: 'מסלולים',         shortLabel: 'מסלולים', icon: 'route' },
-  { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'מלאי',   icon: 'box' },
+  { id: 'routes',    label: 'מסלולים',         shortLabel: 'מסלולים', icon: 'route', inTabBar: true },
+  { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'מלאי',   icon: 'box',   inTabBar: true },
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
 ];
