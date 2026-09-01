@@ -14,6 +14,7 @@ import LoginScreen from './components/auth/LoginScreen';
 import SetupScreen from './components/auth/SetupScreen';
 import { Skeleton } from './components/ui/States';
 
+import SignContractScreen from './screens/SignContractScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import CustomersScreen from './screens/CustomersScreen';
 import DevicesScreen from './screens/DevicesScreen';
@@ -24,7 +25,15 @@ import StockScreen from './screens/StockScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
+/** קישור חתימה ציבורי (?sign=<token>) — נבדק לפני SetupScreen/AuthProvider במכוון: הלקוח שחותם לא מחובר ולא צריך להיות. */
+function useSignToken() {
+  return new URLSearchParams(window.location.search).get('sign');
+}
+
 export default function App() {
+  const signToken = useSignToken();
+  if (signToken) return <SignContractScreen token={signToken} />;
+
   // בלי מפתחות אין טעם להרים את שאר האפליקציה — מסך ההגדרה מסביר מה חסר
   if (!isSupabaseConfigured) return <SetupScreen />;
 

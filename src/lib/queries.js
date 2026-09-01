@@ -712,14 +712,76 @@ export async function getReportSummary() {
 /* =====================================================================
    חוזים
 
-   שלב א׳ בלבד: העלאת חוזה קיים (כבר חתום) לכרטיס הלקוח. גלוי למנהלים
-   בלבד — גם ה-RLS על הטבלה וגם מדיניות ה-Storage חוסמים טכנאי לגמרי,
-   באותה שיטה שכבר מגינה על הנתונים הכספיים של הלקוח.
+   שני מסלולים מזינים את אותה טבלה: (א) העלאת חוזה קיים שכבר נחתם
+   בנייר (uploadContract) — גלוי למנהלים בלבד, כמו קודם. (ב) הפקת
+   חוזה דיגיטלי מהתבנית הסטנדרטית (createGeneratedContract) ושליחתו
+   לחתימה מרחוק דרך קישור ציבורי — customer.jsx לא צריך חשבון כדי
+   לחתום, רק את ה-sign_token שבקישור.
 
-   sign_token / signer_name / signature_data וכו׳ כבר קיימים בטבלה
-   מראש (ר׳ iconair_schema_phase14_contracts.sql) לקראת שלב ב׳ — שליחת
-   חוזה לחתימה דיגיטלית — אבל שום פונקציה כאן עדיין לא נוגעת בהם.
+   get_contract_for_signing / submit_contract_signature הם RPC-ים
+   security definer שכבר מותקנים ב-Supabase (מוענקים גם ל-anon) —
+   הם עוקפים את ה-RLS הרגיל של הטבלה בכוונה, כי לקוח שחותם על חוזה
+   לא מחובר למערכת בכלל. שני ה-RPC-ים בודקים את התוקן/תפוגה בעצמם.
    ===================================================================== */
+
+const CONTRACT_SIGN_TTL_DAYS = 30;
+
+/**
+ * הפקת חוזה מהתבנית הסטנדרטית: מעלה את קובץ ה-HTML שנוצר ל-Storage,
+ * ורושם שורה חדשה בסטטוס 'sent' עם sign_token — הלינק הציבורי
+ * (../?sign=<token>) הוא מה שהמנהל שולח ללקוח (למשל בוואטסאפ).
+ */
+export async function createGeneratedContract({ customerId, title, html }) {
+  const sign_token = crypto.randomUUID();
+  const path = `${customerId}/${sign_token}.html`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const { error: uploadError } = await supabase.storage
+    .from('contracts')
+    .upload(path, blob, { upsert: false, contentType: 'text/html' });
+  if (uploadError) throw uploadError;
+
+  const expires = new Date();
+  expires.setDate(expires.getDate() + CONTRACT_SIGN_TTL_DAYS);
+
+  return supabase
+    .from('contracts')
+    .insert({
+      customer_id: customerId,
+      title,
+      status: 'sent',
+      file_path: path,
+      sign_token,
+      sign_token_expires_at: expires.toISOString(),
+    })
+    .select()
+    .single()
+    .then(unwrap);
+}
+
+/**
+ * כתובת ציבורית קבועה לקובץ ב-bucket "contracts" (הוגדר public) —
+ * לא signed URL, לא תלוית session, כדי שעמוד החתימה הציבורי יוכל
+ * להציג אותה ב-iframe בלי להיות מחובר. בטוח כי שם הקובץ הוא טוקן
+ * אקראי (sign_token או uuid) שאי אפשר לנחש.
+ */
+export const contractPublicUrl = (filePath) =>
+  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/contracts/${filePath}`;
+
+/** נקרא מעמוד החתימה הציבורי (בלי session) — RPC ציבורי, מסמן 'נצפה' אוטומטית בצד השרת */
+export const getContractForSigning = (token) =>
+  supabase.rpc('get_contract_for_signing', { p_token: token }).then(unwrap);
+
+/** שולח את החתימה — RPC ציבורי; זורק אם הטוקן לא תקף/פג/כבר נחתם */
+export const submitContractSignature = ({ token, signerName, signerIdNumber, signatureData }) =>
+  supabase
+    .rpc('submit_contract_signature', {
+      p_token: token,
+      p_signer_name: signerName,
+      p_signer_id_number: signerIdNumber,
+      p_signature_data: signatureData,
+    })
+    .then(unwrap);
 
 /** רשימת החוזים של לקוח מסוים, מהחדש לישן */
 export const listContracts = (customerId) =>

@@ -57,4 +57,13 @@ export function googleMapsRouteLink(addresses) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
+/** קישור וואטסאפ עם טקסט מוכן מראש — לשליחת קישור חתימה על חוזה, בין השאר. */
+export function whatsappLink(phone, text) {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  // מספר ישראלי מקומי (05X...) -> בינלאומי (972...) בלי ה-0 המוביל
+  const international = digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
+  return `https://wa.me/${international}?text=${encodeURIComponent(text)}`;
+}
+
 export { cleanAddressForMaps };
