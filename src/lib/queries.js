@@ -708,3 +708,64 @@ export async function getReportSummary() {
 
   return { kpis, oil, fleet, scentUsage };
 }
+
+/* =====================================================================
+   חוזים
+
+   שלב א׳ בלבד: העלאת חוזה קיים (כבר חתום) לכרטיס הלקוח. גלוי למנהלים
+   בלבד — גם ה-RLS על הטבלה וגם מדיניות ה-Storage חוסמים טכנאי לגמרי,
+   באותה שיטה שכבר מגינה על הנתונים הכספיים של הלקוח.
+
+   sign_token / signer_name / signature_data וכו׳ כבר קיימים בטבלה
+   מראש (ר׳ iconair_schema_phase14_contracts.sql) לקראת שלב ב׳ — שליחת
+   חוזה לחתימה דיגיטלית — אבל שום פונקציה כאן עדיין לא נוגעת בהם.
+   ===================================================================== */
+
+/** רשימת החוזים של לקוח מסוים, מהחדש לישן */
+export const listContracts = (customerId) =>
+  supabase
+    .from('contracts')
+    .select('*')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+    .then(unwrap);
+
+/**
+ * מעלה קובץ חוזה קיים (סריקה / תמונה / PDF) ל-Storage, ורושם שורה
+ * חדשה בטבלת contracts בסטטוס 'uploaded'. שם הקובץ מקבל קידומת
+ * אקראית כדי שלא יתנגש עם קובץ אחר באותה תיקיית לקוח.
+ */
+export async function uploadContract(customerId, file, title) {
+  const cleanName = file.name.replace(/[^\w.\-]+/g, '_');
+  const path = `${customerId}/${crypto.randomUUID()}-${cleanName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('contracts')
+    .upload(path, file, { upsert: false });
+  if (uploadError) throw uploadError;
+
+  return supabase
+    .from('contracts')
+    .insert({ customer_id: customerId, title: title || file.name, status: 'uploaded', file_path: path })
+    .select()
+    .single()
+    .then(unwrap);
+}
+
+/** קישור זמני (שעה) לצפייה / הורדה של קובץ חוזה */
+export const getContractUrl = (filePath) =>
+  supabase.storage
+    .from('contracts')
+    .createSignedUrl(filePath, 60 * 60)
+    .then(({ data, error }) => {
+      if (error) throw error;
+      return data.signedUrl;
+    });
+
+/** מחיקת חוזה — גם השורה בטבלה וגם הקובץ באחסון */
+export async function deleteContract(contract) {
+  if (contract.file_path) {
+    await supabase.storage.from('contracts').remove([contract.file_path]);
+  }
+  await supabase.from('contracts').delete().eq('id', contract.id).then(unwrap);
+}
