@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react';
-import GlassCard from '../components/ui/GlassCard';
+import { useEffect, useMemo, useState } from 'react';
+import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import { StatusChip } from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
-import { PrimaryButton, SecondaryButton } from '../components/ui/Field';
+import { PrimaryButton, SecondaryButton, Select } from '../components/ui/Field';
 import { RouteIcon, NavigationIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
-import { listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, todayISO } from '../lib/queries';
+import { useAuth } from '../context/AuthContext';
+import {
+  listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, todayISO,
+  getRouteLoadPlan, listTechnicianOptions, allocateStockToTechnician,
+} from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 
@@ -55,8 +59,111 @@ export default function RoutesScreen() {
         </Async>
       </GlassCard>
 
-      {activeRoute !== undefined && <RouteStops routeName={activeRoute} />}
+      {activeRoute !== undefined && (
+        <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <RouteStops routeName={activeRoute} />
+          <RouteLoadPlanCard routeName={activeRoute} />
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * תכנון העמסה: כמה ליטרים מכל ניחוח הטכנאי צריך לטעון היום כדי למלא
+ * את כל המכשירים הפעילים בקו הזה עד הסוף — מחושב מ-capacity_ml של
+ * הדגם ומהמצב הנוכחי (oil_level_pct) של כל מכשיר, ר' getRouteLoadPlan.
+ * לא תלוי בתאריך שנבחר למעלה (זה תכנון "מהיום", לא תיעוד היסטורי).
+ * גלוי למנהלים בלבד — זו פעולת הקצאת מלאי, כמו שאר מסך "מלאי נייד".
+ */
+function RouteLoadPlanCard({ routeName }) {
+  const { isAdmin } = useAuth();
+  const plan = useQuery(() => getRouteLoadPlan(routeName), [routeName], { enabled: isAdmin });
+  const technicians = useQuery(listTechnicianOptions, [], { enabled: isAdmin });
+
+  const technicianOptions = useMemo(
+    () => (technicians.data ?? []).map((t) => ({ value: t.id, label: t.full_name ?? 'ללא שם' })),
+    [technicians.data]
+  );
+
+  const [technicianId, setTechnicianId] = useState('');
+  const [busyScent, setBusyScent] = useState(null);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState({});
+
+  useEffect(() => {
+    if (!technicianId && technicianOptions.length) setTechnicianId(technicianOptions[0].value);
+  }, [technicianOptions, technicianId]);
+
+  if (!isAdmin) return null;
+
+  async function allocate(scentName, liters) {
+    if (!technicianId) {
+      setError('בחר טכנאי קודם');
+      return;
+    }
+    setError(null);
+    setBusyScent(scentName);
+    try {
+      await allocateStockToTechnician({ technician_id: technicianId, model: null, scent_name: scentName, quantity: liters });
+      setDone((prev) => ({ ...prev, [scentName]: true }));
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusyScent(null);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <CardHead title="תכנון העמסה להיום" subtitle="לפי נפח המכל של כל דגם ומצב השמן הנוכחי במכשירים" />
+
+      <div className="mb-3.5">
+        <Select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} options={technicianOptions}
+                placeholder="בחר טכנאי לצורך הקצאה" />
+      </div>
+
+      {error && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      <Async
+        loading={plan.loading}
+        error={plan.error}
+        onRetry={plan.refetch}
+        isEmpty={plan.data?.items.length === 0}
+        empty={<EmptyState title="אין מה להעמיס" hint="כל המכשירים בקו מלאים, או שאין מכשירים עם ניחוח משויך." />}
+      >
+        <div className="flex flex-col gap-2">
+          {(plan.data?.items ?? []).map((row) => (
+            <div key={row.scent_name} className="inner-row flex items-center gap-3 px-3.5 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13.5px] font-medium">{row.scent_name}</div>
+              </div>
+              <span className="tabular font-mono text-[13px] text-gold-300">{row.liters} ל׳</span>
+              {done[row.scent_name] ? (
+                <StatusChip tone="ok">הוקצה</StatusChip>
+              ) : (
+                <SecondaryButton
+                  disabled={busyScent === row.scent_name}
+                  onClick={() => allocate(row.scent_name, row.liters)}
+                >
+                  {busyScent === row.scent_name ? 'מקצה…' : 'הקצה לטכנאי'}
+                </SecondaryButton>
+              )}
+            </div>
+          ))}
+        </div>
+      </Async>
+
+      {plan.data?.missing.length > 0 && (
+        <div className="mt-3.5 rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12px] text-warn">
+          {plan.data.missing.length} מכשירים לא נכנסו לחישוב — חסר להם ניחוח משויך או נפח מכל לדגם שלהם.
+        </div>
+      )}
+    </GlassCard>
   );
 }
 

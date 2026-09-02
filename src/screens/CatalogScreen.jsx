@@ -8,7 +8,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
   listScents, listDeviceModels, listTechnicianOptions,
-  listWarehouseStock, receiveStock, allocateStockToTechnician,
+  listWarehouseStock, receiveStock, allocateStockToTechnician, returnStockToWarehouse,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 
@@ -110,7 +110,114 @@ export default function CatalogScreen() {
         modelOptions={modelOptions}
         scentOptions={scentOptions}
       />
+
+      <ReturnStockCard
+        technicianOptions={technicianOptions}
+        modelOptions={modelOptions}
+        scentOptions={scentOptions}
+        onReturned={warehouse.refetch}
+      />
     </div>
+  );
+}
+
+const EMPTY_RETURN_FORM = { itemType: 'scent', technician_id: '', model: '', scent_name: '', quantity: '' };
+
+/**
+ * החזרת מלאי שלא נוצל בפועל מהטכנאי בחזרה למחסן — הכיוון ההפוך
+ * ל"הקצאה לטכנאי" בכרטיס למעלה, בדיוק כמו שקליטת סחורה היא ההפך
+ * מ"יצא מהמחסן". זה מה שסוגר את מעגל הדיווח: מה שהוקצה בבוקר,
+ * פחות מה שנצרך בפועל בשטח (oil_tracking), פחות מה שחזר לכאן —
+ * ר' getStockMovementsSummary במסך דוחות.
+ */
+function ReturnStockCard({ technicianOptions, modelOptions, scentOptions, onReturned }) {
+  const [form, setForm] = useState(EMPTY_RETURN_FORM);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const setItemType = (itemType) => { setForm({ ...EMPTY_RETURN_FORM, itemType, technician_id: form.technician_id }); setError(null); };
+  const isDevice = form.itemType === 'device';
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+
+    const quantity = Number(form.quantity);
+    if (isDevice && !Number.isInteger(quantity)) {
+      setError('כמות מכשירים חייבת להיות מספר יחידות שלם — בלי שברים');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await returnStockToWarehouse({
+        technician_id: form.technician_id,
+        model: isDevice ? form.model : null,
+        scent_name: isDevice ? null : form.scent_name,
+        quantity,
+      });
+      setForm({ ...EMPTY_RETURN_FORM, itemType: form.itemType, technician_id: form.technician_id });
+      onReturned();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const itemReady = isDevice ? Boolean(form.model) : Boolean(form.scent_name);
+
+  return (
+    <GlassCard>
+      <CardHead
+        title="החזרת מלאי מטכנאי"
+        subtitle="מה שיצא ברכב ולא נוצל בשטח — חוזר לכאן, ומצטבר על מה שכבר יש במחסן"
+      />
+
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <Field label="טכנאי" required>
+          <Select value={form.technician_id} onChange={set('technician_id')} options={technicianOptions}
+                  placeholder="בחר טכנאי" required />
+        </Field>
+
+        <ItemTypeToggle value={form.itemType} onChange={setItemType} />
+
+        {isDevice ? (
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <Field label="דגם" required>
+              <Select value={form.model} onChange={set('model')} options={modelOptions}
+                      placeholder="בחר דגם" required />
+            </Field>
+            <Field label="כמות (יחידות)" hint="מספר שלם" required>
+              <TextInput type="number" min={1} step={1} value={form.quantity} onChange={set('quantity')} required />
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <Field label="ניחוח" required>
+              <Select value={form.scent_name} onChange={set('scent_name')} options={scentOptions}
+                      placeholder="בחר ניחוח" required />
+            </Field>
+            <Field label="כמות (ליטרים)" hint="עשרוני מותר, למשל 1.5" required>
+              <TextInput type="number" min={0.1} step={0.1} value={form.quantity} onChange={set('quantity')} required />
+            </Field>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <PrimaryButton type="submit" loading={busy} disabled={!form.technician_id || !itemReady || !form.quantity}>
+            רשום החזרה למחסן
+          </PrimaryButton>
+        </div>
+      </form>
+    </GlassCard>
   );
 }
 

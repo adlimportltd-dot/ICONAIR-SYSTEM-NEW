@@ -24,6 +24,7 @@ import RoutesScreen from './screens/RoutesScreen';
 import StockScreen from './screens/StockScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import CatalogScreen from './screens/CatalogScreen';
 
 /** קישור חתימה ציבורי (?sign=<token>) — נבדק לפני SetupScreen/AuthProvider במכוון: הלקוח שחותם לא מחובר ולא צריך להיות. */
 function useSignToken() {
@@ -150,6 +151,7 @@ function Shell() {
           {activeId === 'routes' && <RoutesScreen />}
           {activeId === 'stock' && <StockScreen />}
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
+          {activeId === 'catalog' && <CatalogScreen />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
 

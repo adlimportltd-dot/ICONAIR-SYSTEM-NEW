@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import GlassCard, { CardHead, Swatch } from '../components/ui/GlassCard';
 import DataTable from '../components/ui/DataTable';
-import { Async } from '../components/ui/States';
-import { SecondaryButton } from '../components/ui/Field';
+import { Async, EmptyState } from '../components/ui/States';
+import { SecondaryButton, Select } from '../components/ui/Field';
 import { useQuery } from '../hooks/useQuery';
-import { getReportSummary } from '../lib/queries';
+import { getReportSummary, listRoutes, getRouteConsumptionReport, getStockMovementsSummary } from '../lib/queries';
 import { HEBREW_MONTHS, modelTone, formatNumber } from '../lib/mappers';
 
 const TONE_HEX = { slate: '#6E86A8', teal: '#4CC9C0', gold: '#D8B36A' };
@@ -26,9 +27,112 @@ export default function ReportsScreen() {
   const report = useQuery(getReportSummary, []);
 
   return (
-    <Async loading={report.loading} error={report.error} onRetry={report.refetch}>
-      {report.data && <Report data={report.data} />}
-    </Async>
+    <>
+      <Async loading={report.loading} error={report.error} onRetry={report.refetch}>
+        {report.data && <Report data={report.data} />}
+      </Async>
+
+      <RouteConsumptionSection />
+    </>
+  );
+}
+
+/**
+ * "כמה ריח קו X צרך בפועל, וכמה חזר מהטכנאי" — שני דוחות שסוגרים
+ * את המעגל שביקשת: getRouteConsumptionReport (מ-oil_tracking — מה
+ * שבאמת נרשם בשטח) ו-getStockMovementsSummary (מ-stock_movements —
+ * מה יצא מהמחסן מול מה חזר). לא תלוי ב-getReportSummary כי לזה יש
+ * מסגרת זמן/סינון קו נפרד משלו.
+ */
+function RouteConsumptionSection() {
+  const [routeName, setRouteName] = useState('');
+  const [months, setMonths] = useState(1);
+
+  const routes = useQuery(listRoutes, []);
+  const consumption = useQuery(
+    () => getRouteConsumptionReport({ routeName: routeName || undefined, months }),
+    [routeName, months],
+    { enabled: Boolean(routeName) }
+  );
+  const movements = useQuery(() => getStockMovementsSummary({ months }), [months]);
+
+  const routeOptions = (routes.data ?? [])
+    .filter((r) => r.name)
+    .map((r) => ({ value: r.name, label: `${r.name} (${r.customers} לקוחות)` }));
+
+  return (
+    <section className="mt-3.5 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <GlassCard>
+        <CardHead title="צריכת ריח לפי קו" subtitle="מבוסס רישומי 'סיום ביקור' בפועל בשטח" />
+
+        <div className="mb-3.5 flex flex-wrap gap-2.5">
+          <Select value={routeName} onChange={(e) => setRouteName(e.target.value)} options={routeOptions}
+                  placeholder="בחר קו" className="max-w-[220px]" />
+          <Select
+            value={String(months)}
+            onChange={(e) => setMonths(Number(e.target.value))}
+            options={[{ value: '1', label: 'החודש' }, { value: '3', label: '3 חודשים' }, { value: '12', label: 'שנה אחרונה' }]}
+            className="max-w-[150px]"
+          />
+        </div>
+
+        {!routeName ? (
+          <EmptyState title="בחר קו כדי לראות את הצריכה שלו" />
+        ) : (
+          <Async
+            loading={consumption.loading}
+            error={consumption.error}
+            onRetry={consumption.refetch}
+            isEmpty={consumption.data?.items.length === 0}
+            empty={
+              <EmptyState
+                title="אין עדיין נתוני צריכה לקו הזה"
+                hint="הדוח מבוסס על רישומי 'סיום ביקור' דרך מסך מעקב השמנים — אם הטכנאים עוד לא השתמשו בפיצ'ר הזה בשטח, אין כאן מה להציג."
+              />
+            }
+          >
+            <div className="mb-3 text-[12.5px] text-text-faint">
+              סה״כ {formatNumber(consumption.data?.totalLiters, 1)} ליטר · {formatNumber(consumption.data?.visitCount)} ביקורים
+            </div>
+            <div className="flex flex-col gap-2">
+              {(consumption.data?.items ?? []).map((row) => (
+                <div key={row.scent_name} className="flex items-baseline gap-2 text-[13.5px]">
+                  <span className="font-semibold">{row.scent_name}</span>
+                  <span className="tabular ms-auto font-mono text-[12.5px] text-text-dim">{row.liters} ל׳</span>
+                </div>
+              ))}
+            </div>
+          </Async>
+        )}
+      </GlassCard>
+
+      <GlassCard>
+        <CardHead title="יצא מול חזר — מלאי טכנאים" subtitle="מ-stock_movements: הקצאות מול החזרות למחסן" />
+        <Async
+          loading={movements.loading}
+          error={movements.error}
+          onRetry={movements.refetch}
+          isEmpty={movements.data?.length === 0}
+          empty={<EmptyState title="אין עדיין תנועות מלאי בטווח הזה" />}
+        >
+          <div className="flex flex-col gap-2">
+            {(movements.data ?? []).map((row) => (
+              <div key={row.label} className="rounded-row border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5">
+                <div className="mb-1 flex items-center gap-2 text-[13.5px] font-semibold">{row.label}</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                  <span className="text-text-faint">יצא: <span className="tabular font-mono text-text-dim">{row.allocated}</span></span>
+                  <span className="text-text-faint">חזר: <span className="tabular font-mono text-text-dim">{row.returned}</span></span>
+                  <span className="text-text-faint">
+                    יתרה בשטח:{' '}
+                    <span className={`tabular font-mono ${row.net > 0 ? 'text-gold-300' : 'text-text-dim'}`}>{row.net}</span>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Async>
+      </GlassCard>
+    </section>
   );
 }
 

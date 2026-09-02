@@ -308,6 +308,58 @@ export const listCustomersByRoute = (routeName) => {
   return query.then(unwrap);
 };
 
+/**
+ * תכנון העמסה לקו: כמה ליטרים מכל ניחוח צריך הטכנאי לטעון הבוקר,
+ * כדי למלא עד הסוף כל מכשיר פעיל בקו לפי המצב שלו עכשיו.
+ *
+ * הנוסחה לכל מכשיר: capacity_ml (נפח המכל של הדגם, מ-device_models) ×
+ * (100 − oil_level_pct) ÷ 100 = כמה מ"ל חסרים לו למילוי מלא. מצטבר
+ * לפי scent_name (זה מה שבאמת נטען לרכב — נוזל, לא "יחידות מכשיר"),
+ * וממיר לליטרים כי כך technician_stock/warehouse_stock מנהלים שורות ניחוח.
+ *
+ * מכשיר בלי ניחוח משויך או בלי capacity_ml לדגם שלו מוצא בנפרד
+ * ב-missing, כדי שהמנהל יראה בדיוק למה החישוב לא מלא — לא רק מספר
+ * חסר בשקט.
+ */
+export async function getRouteLoadPlan(routeName) {
+  const [devicesRows, models] = await Promise.all([
+    (() => {
+      let query = supabase
+        .from('devices')
+        .select('model, oil_level_pct, scent_name, serial, customer:customers!inner(route_name)')
+        .neq('status', 'uninstalled');
+      query = routeName === null ? query.is('customer.route_name', null) : query.eq('customer.route_name', routeName);
+      return query.then(unwrap);
+    })(),
+    listAllDeviceModels(),
+  ]);
+
+  const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
+
+  const byScent = new Map();
+  const missing = [];
+
+  for (const device of devicesRows) {
+    const capacity = capacityByModel.get(device.model);
+    const scent = device.scent_name?.trim();
+
+    if (!scent || !capacity) {
+      missing.push({ serial: device.serial, model: device.model, scent_name: device.scent_name, reason: !scent ? 'no_scent' : 'no_capacity' });
+      continue;
+    }
+
+    const neededMl = capacity * (100 - Number(device.oil_level_pct ?? 0)) / 100;
+    byScent.set(scent, (byScent.get(scent) ?? 0) + neededMl);
+  }
+
+  const items = [...byScent.entries()]
+    .map(([scent_name, ml]) => ({ scent_name, liters: Math.round((ml / 1000) * 100) / 100 }))
+    .filter((row) => row.liters > 0)
+    .sort((a, b) => b.liters - a.liters);
+
+  return { items, missing, deviceCount: devicesRows.length };
+}
+
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
 export const todayISO = () => {
   const d = new Date();
@@ -599,6 +651,20 @@ export const allocateStockToTechnician = ({ technician_id, model, scent_name, qu
     p_quantity: quantity,
   }).then(unwrap);
 
+/**
+ * החזרת מלאי שלא נוצל בפועל מהטכנאי בחזרה למחסן — הכיוון ההפוך
+ * בדיוק ל-allocateStockToTechnician, אותה אטומיות. זה מה שסוגר את
+ * המעגל לדוח העודפים: מה שהוקצה בבוקר, פחות מה שנצרך בפועל
+ * (oil_tracking), פחות מה שחזר פיזית למחסן — ר' getRouteConsumptionReport.
+ */
+export const returnStockToWarehouse = ({ technician_id, model, scent_name, quantity }) =>
+  supabase.rpc('return_stock_to_warehouse', {
+    p_technician_id: technician_id,
+    p_model: model,
+    p_scent_name: scent_name || '',
+    p_quantity: quantity,
+  }).then(unwrap);
+
 /* =====================================================================
    ניחוחות (scents) — רשימה גלובלית קבועה. כל שדה "ניחוח" באפליקציה
    נגזר מכאן, לא מטקסט חופשי — ר' iconair_schema_phase4_scents.sql.
@@ -624,11 +690,11 @@ export const setScentActive = (id, active) =>
    ===================================================================== */
 
 export const listDeviceModels = () =>
-  supabase.from('device_models').select('id, name, active').eq('active', true).order('name').then(unwrap);
+  supabase.from('device_models').select('id, name, active, capacity_ml').eq('active', true).order('name').then(unwrap);
 
 /** למסך הניהול בהגדרות — כולל דגמים מושבתים */
 export const listAllDeviceModels = () =>
-  supabase.from('device_models').select('id, name, active').order('name').then(unwrap);
+  supabase.from('device_models').select('id, name, active, capacity_ml').order('name').then(unwrap);
 
 export const createDeviceModel = (name) =>
   supabase.from('device_models').insert({ name: name.trim() }).select('id, name, active').single().then(unwrap);
@@ -707,6 +773,70 @@ export async function getReportSummary() {
   ]);
 
   return { kpis, oil, fleet, scentUsage };
+}
+
+/**
+ * צריכת ריח אמיתית של קו ספציפי, לפי ניחוח — מבוסס oil_tracking (מה
+ * שבאמת נרשם בשטח דרך "סיום ביקור"), לא על מה שהוקצה. זו התשובה
+ * המדויקת ל"כמה ליטרים כל קו צרך בפועל החודש/בטווח נתון".
+ */
+export async function getRouteConsumptionReport({ routeName, months = 1 } = {}) {
+  const start = monthsAgo(months - 1);
+
+  let query = supabase
+    .from('oil_tracking')
+    .select('scent_name, liters_added, recorded_at, device:devices!inner(customer:customers!inner(route_name))')
+    .gte('recorded_at', start.toISOString());
+
+  query = routeName === null
+    ? query.is('device.customer.route_name', null)
+    : query.eq('device.customer.route_name', routeName);
+
+  const rows = await query.then(unwrap);
+
+  const byScent = new Map();
+  for (const row of rows) {
+    const scent = row.scent_name?.trim() || 'ללא ניחוח';
+    byScent.set(scent, (byScent.get(scent) ?? 0) + Number(row.liters_added ?? 0));
+  }
+
+  const items = [...byScent.entries()]
+    .map(([scent_name, liters]) => ({ scent_name, liters: Math.round(liters * 100) / 100 }))
+    .sort((a, b) => b.liters - a.liters);
+
+  return { items, totalLiters: items.reduce((sum, r) => sum + r.liters, 0), visitCount: rows.length };
+}
+
+/**
+ * סיכום תנועות מלאי לטכנאי בטווח תאריכים — כמה יצא מהמחסן (allocate)
+ * מול כמה חזר בפועל (return), לפי ניחוח/דגם. ההפרש בין השניים הוא
+ * מה שאמור להיות עדיין ברכב (יתרת technician_stock) או שנצרך בפועל
+ * (oil_tracking) — שלושתם יחד סוגרים את מעגל "יצא / נצרך / חזר".
+ */
+export async function getStockMovementsSummary({ technicianId, months = 1 } = {}) {
+  const start = monthsAgo(months - 1);
+
+  let query = supabase
+    .from('stock_movements')
+    .select('movement_type, model, scent_name, quantity, created_at')
+    .gte('created_at', start.toISOString());
+
+  if (technicianId) query = query.eq('technician_id', technicianId);
+
+  const rows = await query.then(unwrap);
+
+  const byKey = new Map();
+  for (const row of rows) {
+    const key = row.model || row.scent_name || 'לא ידוע';
+    const bucket = byKey.get(key) ?? { label: key, allocated: 0, returned: 0 };
+    if (row.movement_type === 'allocate') bucket.allocated += Number(row.quantity);
+    else bucket.returned += Number(row.quantity);
+    byKey.set(key, bucket);
+  }
+
+  return [...byKey.values()]
+    .map((row) => ({ ...row, net: Math.round((row.allocated - row.returned) * 100) / 100 }))
+    .sort((a, b) => b.allocated - a.allocated);
 }
 
 /* =====================================================================
