@@ -264,28 +264,40 @@ export const listDeviceOptions = () =>
     .then(unwrap);
 
 /* =====================================================================
-   מסלולים — חברות בקו (מי מוצג ברשימה) עדיין נגזרת מ-customers.route_name,
-   לא מ-route_assignments. route_assignments הוא רק "שכבת עריכה" של סדר
-   וסטטוס לכל יום: מי בקו נקבע ע"י route_name, האיפה-בתור ואם-כבר-ביקרנו
-   נשמר כאן. ר' iconair_schema_phase2_routes.sql להגדרת הטבלאות.
+   מסלולים — עצירה היא "לקוח" (customers.route_name, הרוב המוחלט —
+   לקוח חד-כתובתי) או "אתר" (customer_sites, לקוח ריבוי-כתובות כמו
+   חברת ניהול עם עשרות בניינים בכמה ערים — כל בניין הוא עצירה נפרדת,
+   עם הקו שלו-עצמו, לא של הלקוח). לקוח שיש לו אתרים מוצא מהרשימה
+   ברמת-לקוח לגמרי (customersWithSites) כדי שלא יופיע פעמיים.
+   route_assignments הוא רק "שכבת עריכה" של סדר וסטטוס לכל יום —
+   מי בעצם בקו נקבע כאן, לא שם.
    ===================================================================== */
 
-/** כל הקווים עם ספירת לקוחות ומכשירים, כולל "ללא שיוך לקו". */
+/** כל הקווים עם ספירת עצירות (לקוחות חד-כתובתיים + אתרים) ומכשירים, כולל "ללא שיוך לקו". */
 export async function listRoutes() {
-  const rows = await supabase
-    .from('customers')
-    .select('route_name, devices(count)')
-    .eq('status', 'active')
-    .then(unwrap);
+  const [customers, sites, cityRoutes] = await Promise.all([
+    supabase.from('customers').select('id, route_name, devices(count)').eq('status', 'active').then(unwrap),
+    supabase.from('customer_sites').select('customer_id, city, devices(count)').then(unwrap),
+    loadCityRoutesMap(),
+  ]);
 
+  const customersWithSites = new Set(sites.map((s) => s.customer_id));
   const groups = new Map();
-  for (const row of rows) {
-    const name = row.route_name?.trim() || null;
+
+  const bump = (name, stopDelta, deviceDelta) => {
     const key = name ?? '__none__';
     const g = groups.get(key) ?? { name, customers: 0, devices: 0 };
-    g.customers += 1;
-    g.devices += row.devices?.[0]?.count ?? 0;
+    g.customers += stopDelta;
+    g.devices += deviceDelta;
     groups.set(key, g);
+  };
+
+  for (const c of customers) {
+    if (customersWithSites.has(c.id)) continue; // הצירים שלו נספרים כאתרים למטה
+    bump(c.route_name?.trim() || null, 1, c.devices?.[0]?.count ?? 0);
+  }
+  for (const s of sites) {
+    bump(cityRoutes.get(s.city) ?? null, 1, s.devices?.[0]?.count ?? 0);
   }
 
   return [...groups.values()].sort((a, b) => {
@@ -295,18 +307,52 @@ export async function listRoutes() {
   });
 }
 
-/** לקוחות פעילים על קו נתון, עם ספירת המכשירים שלהם — לרשימת עצירות. */
-export const listCustomersByRoute = (routeName) => {
-  let query = supabase
-    .from('customers')
-    .select('id, name, address, city, phone, notes, devices(count)')
-    .eq('status', 'active')
-    .order('name');
+/**
+ * עצירות פעילות על קו נתון — לקוחות חד-כתובתיים (route_name תואם,
+ * ואין להם שום אתר) + אתרים שהעיר שלהם ממופה לקו הזה. שתי הצורות
+ * מוחזרות באותה צורה בדיוק (kind מבדיל ביניהן רק לצורך תצוגה),
+ * כדי ש-RouteStops לא יצטרך לדעת איזה סוג עצירה זה.
+ */
+export async function listStopsByRoute(routeName) {
+  const [customers, sites, cityRoutes] = await Promise.all([
+    supabase.from('customers').select('id, name, address, city, phone, notes, devices(count)').eq('status', 'active').then(unwrap),
+    supabase.from('customer_sites').select('id, customer_id, label, city, customer:customers(name, phone, notes), devices(count)').then(unwrap),
+    loadCityRoutesMap(),
+  ]);
 
-  query = routeName === null ? query.is('route_name', null) : query.eq('route_name', routeName);
+  const customersWithSites = new Set(sites.map((s) => s.customer_id));
 
-  return query.then(unwrap);
-};
+  const customerStops = customers
+    .filter((c) => !customersWithSites.has(c.id))
+    .filter((c) => (routeName === null ? !c.route_name : c.route_name === routeName))
+    .map((c) => ({
+      kind: 'customer',
+      customer_id: c.id,
+      site_id: null,
+      name: c.name,
+      address: c.address,
+      city: c.city,
+      phone: c.phone,
+      notes: c.notes,
+      devices: c.devices,
+    }));
+
+  const siteStops = sites
+    .filter((s) => (cityRoutes.get(s.city) ?? null) === routeName)
+    .map((s) => ({
+      kind: 'site',
+      customer_id: s.customer_id,
+      site_id: s.id,
+      name: `${s.customer?.name ?? ''} — ${s.label}`,
+      address: `${s.label}${s.city ? `, ${s.city}` : ''}`,
+      city: s.city,
+      phone: s.customer?.phone,
+      notes: s.customer?.notes,
+      devices: s.devices,
+    }));
+
+  return [...customerStops, ...siteStops].sort((a, b) => a.name.localeCompare(b.name, 'he'));
+}
 
 /**
  * city_routes — טבלת בקרה קטנה (עיר → שם קו), ר' city_routes.sql.
@@ -422,74 +468,81 @@ async function ensureRouteId(name) {
 }
 
 /**
- * עצירות הקו ליום נתון: כל הלקוחות הפעילים על הקו (מ-customers), עם
- * סדר וסטטוס מ-route_assignments אם כבר נשמרו, או ברירת מחדל לחדשים.
- * שורות חסרות נזרעות אוטומטית (upsert עם ignoreDuplicates) כדי שסימון
- * "בוצע" מיד אחר כך תמיד ימצא שורה קיימת לעדכן.
+ * מפתח ייחודי לעצירה בצד הלקוח בלבד (לא נשמר) — site_id אם יש,
+ * אחרת customer_id. שני סוגי העצירה לא יכולים להתנגש כי הם UUID-ים
+ * מטבלאות שונות.
+ */
+export const stopKey = (stop) => stop.site_id ?? stop.customer_id;
+
+/**
+ * עצירות הקו ליום נתון: כל העצירות הפעילות על הקו (מ-listStopsByRoute —
+ * לקוחות חד-כתובתיים + אתרים), עם סדר וסטטוס מ-route_assignments אם
+ * כבר נשמרו, או ברירת מחדל לחדשות. עצירה חדשה נזרעת דרך ה-RPC
+ * upsert_route_stop (לא upsert רגיל — יש שני אינדקסים ייחודיים
+ * חלקיים שונים לעצירת-לקוח מול עצירת-אתר, ו-upsert גנרי לא יודע
+ * לבחור נכון ביניהם, ר' customer_sites.sql).
  */
 export async function listRouteAssignments(routeName, visitDate) {
-  const customers = await listCustomersByRoute(routeName);
-  if (customers.length === 0) return [];
+  const stops = await listStopsByRoute(routeName);
+  if (stops.length === 0) return [];
 
-  const ids = customers.map((c) => c.id);
+  const siteIds = stops.filter((s) => s.site_id).map((s) => s.site_id);
+  const customerIds = stops.filter((s) => !s.site_id).map((s) => s.customer_id);
+
   const existing = await supabase
     .from('route_assignments')
-    .select('customer_id, stop_order, status')
+    .select('id, customer_id, site_id, stop_order, status')
     .eq('visit_date', visitDate)
-    .in('customer_id', ids)
+    .or([
+      customerIds.length ? `and(site_id.is.null,customer_id.in.(${customerIds.join(',')}))` : null,
+      siteIds.length ? `site_id.in.(${siteIds.join(',')})` : null,
+    ].filter(Boolean).join(','))
     .then(unwrap);
 
-  const byCustomer = new Map(existing.map((a) => [a.customer_id, a]));
-  const missing = customers.filter((c) => !byCustomer.has(c.id));
+  const byKey = new Map(existing.map((a) => [a.site_id ?? a.customer_id, a]));
+  const missing = stops.filter((s) => !byKey.has(stopKey(s)));
 
   if (missing.length) {
     const routeId = await ensureRouteId(routeName);
     const maxOrder = existing.reduce((max, a) => Math.max(max, a.stop_order), 0);
-    const seedRows = missing.map((c, i) => ({
-      customer_id: c.id,
-      route_id: routeId,
-      visit_date: visitDate,
-      stop_order: maxOrder + i + 1,
-      status: 'pending',
-    }));
 
-    await supabase
-      .from('route_assignments')
-      .upsert(seedRows, { onConflict: 'customer_id,visit_date', ignoreDuplicates: true })
-      .then(unwrap);
+    const created = await Promise.all(missing.map((s, i) =>
+      supabase.rpc('upsert_route_stop', {
+        p_customer_id: s.customer_id,
+        p_site_id: s.site_id,
+        p_route_id: routeId,
+        p_visit_date: visitDate,
+        p_stop_order: maxOrder + i + 1,
+      }).then(unwrap)
+    ));
 
-    for (const row of seedRows) byCustomer.set(row.customer_id, row);
+    for (const row of created) byKey.set(row.site_id ?? row.customer_id, row);
   }
 
-  return customers
-    .map((c) => ({ ...c, stopOrder: byCustomer.get(c.id).stop_order, status: byCustomer.get(c.id).status }))
+  return stops
+    .map((s) => {
+      const a = byKey.get(stopKey(s));
+      return { ...s, id: a.id, stopOrder: a.stop_order, status: a.status };
+    })
     .sort((a, b) => a.stopOrder - b.stopOrder);
 }
 
-/** שומר סדר עצירות חדש (אחרי גרירה/חצים) — דורס stop_order לכל השורות. */
-export async function saveRouteOrder(routeName, visitDate, orderedCustomerIds) {
-  const routeId = await ensureRouteId(routeName);
-  const rows = orderedCustomerIds.map((customer_id, i) => ({
-    customer_id,
-    route_id: routeId,
-    visit_date: visitDate,
-    stop_order: i + 1,
-  }));
-
-  return supabase
-    .from('route_assignments')
-    .upsert(rows, { onConflict: 'customer_id,visit_date', ignoreDuplicates: false })
-    .then(unwrap);
+/**
+ * שומר סדר עצירות חדש (אחרי גרירה/חצים) — כל העצירות כבר קיימות
+ * כשורות route_assignments (ר' listRouteAssignments), אז זה עדכון
+ * רגיל לפי id, לא upsert.
+ */
+export async function saveRouteOrder(orderedRowIds) {
+  await Promise.all(
+    orderedRowIds.map((id, i) =>
+      supabase.from('route_assignments').update({ stop_order: i + 1 }).eq('id', id).then(unwrap)
+    )
+  );
 }
 
-/** מסמן עצירה כבוצעה/לא-בוצעה. מניח שהשורה כבר קיימת (ר' listRouteAssignments). */
-export const setStopStatus = (customerId, visitDate, status) =>
-  supabase
-    .from('route_assignments')
-    .update({ status })
-    .eq('customer_id', customerId)
-    .eq('visit_date', visitDate)
-    .then(unwrap);
+/** מסמן עצירה כבוצעה/לא-בוצעה, לפי מזהה שורת route_assignments. מניח שהשורה כבר קיימת (ר' listRouteAssignments). */
+export const setStopStatus = (rowId, status) =>
+  supabase.from('route_assignments').update({ status }).eq('id', rowId).then(unwrap);
 
 /* =====================================================================
    לקוחות

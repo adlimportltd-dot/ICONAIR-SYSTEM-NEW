@@ -196,7 +196,7 @@ function RouteStops({ routeName }) {
 
     try {
       setSaveError(null);
-      await saveRouteOrder(routeName, visitDate, next);
+      await saveRouteOrder(next);
     } catch (caught) {
       setOrder(prevOrder); // השמירה נכשלה — חוזרים לסדר הקודם
       setSaveError(describeError(caught));
@@ -210,7 +210,7 @@ function RouteStops({ routeName }) {
 
     try {
       setSaveError(null);
-      await setStopStatus(id, visitDate, nextStatus);
+      await setStopStatus(id, nextStatus);
     } catch (caught) {
       setStatusById((prev) => ({ ...prev, [id]: prevStatus }));
       setSaveError(describeError(caught));
