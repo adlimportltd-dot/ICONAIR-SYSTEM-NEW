@@ -309,6 +309,31 @@ export const listCustomersByRoute = (routeName) => {
 };
 
 /**
+ * city_routes — טבלת בקרה קטנה (עיר → שם קו), ר' city_routes.sql.
+ * קיימת כי לקוח ריבוי-כתובות (כמו חברת ניהול עם עשרות בניינים בכמה
+ * ערים) לא יכול להיות "קו אחד" ברמת הלקוח — הקו הנכון הוא תכונה של
+ * המכשיר/הכתובת שלו (devices.city), לא של הלקוח.
+ */
+export const listCityRoutes = () =>
+  supabase.from('city_routes').select('city, route_name').then(unwrap);
+
+/**
+ * הקו האמיתי של מכשיר: אם יש לו devices.city מפורש (רלוונטי בעיקר
+ * ללקוחות ריבוי-כתובות), הוא קובע דרך city_routes; אחרת נופלים חזרה
+ * ל-customer.route_name הרגיל (כל שאר הלקוחות, חד-כתובתיים). cityRoutes
+ * הוא Map<city, route_name> שכבר נטען פעם אחת ע"י הקורא.
+ */
+function effectiveDeviceRoute(device, cityRoutes) {
+  if (device.city) return cityRoutes.get(device.city) ?? device.customer?.route_name ?? null;
+  return device.customer?.route_name ?? null;
+}
+
+async function loadCityRoutesMap() {
+  const rows = await listCityRoutes();
+  return new Map(rows.map((r) => [r.city, r.route_name]));
+}
+
+/**
  * תכנון העמסה לקו: כמה ליטרים מכל ניחוח צריך הטכנאי לטעון הבוקר,
  * כדי למלא עד הסוף כל מכשיר פעיל בקו לפי המצב שלו עכשיו.
  *
@@ -317,29 +342,36 @@ export const listCustomersByRoute = (routeName) => {
  * לפי scent_name (זה מה שבאמת נטען לרכב — נוזל, לא "יחידות מכשיר"),
  * וממיר לליטרים כי כך technician_stock/warehouse_stock מנהלים שורות ניחוח.
  *
+ * שולף את כל המכשירים הפעילים (לא רק לפי customer.route_name בשאילתה)
+ * כי הקו נקבע פר-מכשיר (ר' effectiveDeviceRoute) — לא ניתן לסנן בצד
+ * השרת לפי שדה מחושב, אז הסינון לפי routeName קורה כאן אחרי החישוב.
+ *
  * מכשיר בלי ניחוח משויך או בלי capacity_ml לדגם שלו מוצא בנפרד
  * ב-missing, כדי שהמנהל יראה בדיוק למה החישוב לא מלא — לא רק מספר
  * חסר בשקט.
  */
 export async function getRouteLoadPlan(routeName) {
-  const [devicesRows, models] = await Promise.all([
-    (() => {
-      let query = supabase
-        .from('devices')
-        .select('model, oil_level_pct, scent_name, serial, customer:customers!inner(route_name)')
-        .neq('status', 'uninstalled');
-      query = routeName === null ? query.is('customer.route_name', null) : query.eq('customer.route_name', routeName);
-      return query.then(unwrap);
-    })(),
+  const [devicesRows, models, cityRoutes] = await Promise.all([
+    supabase
+      .from('devices')
+      .select('model, oil_level_pct, scent_name, serial, city, customer:customers(route_name)')
+      .neq('status', 'uninstalled')
+      .then(unwrap),
     listAllDeviceModels(),
+    loadCityRoutesMap(),
   ]);
 
   const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
 
   const byScent = new Map();
   const missing = [];
+  let deviceCount = 0;
 
   for (const device of devicesRows) {
+    const route = effectiveDeviceRoute(device, cityRoutes);
+    if (route !== routeName) continue;
+    deviceCount += 1;
+
     const capacity = capacityByModel.get(device.model);
     const scent = device.scent_name?.trim();
 
@@ -357,7 +389,7 @@ export async function getRouteLoadPlan(routeName) {
     .filter((row) => row.liters > 0)
     .sort((a, b) => b.liters - a.liters);
 
-  return { items, missing, deviceCount: devicesRows.length };
+  return { items, missing, deviceCount };
 }
 
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
@@ -779,23 +811,31 @@ export async function getReportSummary() {
  * צריכת ריח אמיתית של קו ספציפי, לפי ניחוח — מבוסס oil_tracking (מה
  * שבאמת נרשם בשטח דרך "סיום ביקור"), לא על מה שהוקצה. זו התשובה
  * המדויקת ל"כמה ליטרים כל קו צרך בפועל החודש/בטווח נתון".
+ *
+ * הקו נקבע לפי המכשיר (device.city → city_routes), לא לפי הלקוח —
+ * אותה סיבה כמו ב-getRouteLoadPlan: לקוח ריבוי-כתובות לא שייך "כולו"
+ * לקו אחד, אז הסינון קורה בצד הלקוח אחרי חישוב הקו האמיתי של כל שורה.
  */
 export async function getRouteConsumptionReport({ routeName, months = 1 } = {}) {
   const start = monthsAgo(months - 1);
 
-  let query = supabase
-    .from('oil_tracking')
-    .select('scent_name, liters_added, recorded_at, device:devices!inner(customer:customers!inner(route_name))')
-    .gte('recorded_at', start.toISOString());
-
-  query = routeName === null
-    ? query.is('device.customer.route_name', null)
-    : query.eq('device.customer.route_name', routeName);
-
-  const rows = await query.then(unwrap);
+  const [rows, cityRoutes] = await Promise.all([
+    supabase
+      .from('oil_tracking')
+      .select('scent_name, liters_added, recorded_at, device:devices!inner(city, customer:customers!inner(route_name))')
+      .gte('recorded_at', start.toISOString())
+      .then(unwrap),
+    loadCityRoutesMap(),
+  ]);
 
   const byScent = new Map();
+  let visitCount = 0;
+
   for (const row of rows) {
+    const route = effectiveDeviceRoute(row.device, cityRoutes);
+    if (route !== routeName) continue;
+    visitCount += 1;
+
     const scent = row.scent_name?.trim() || 'ללא ניחוח';
     byScent.set(scent, (byScent.get(scent) ?? 0) + Number(row.liters_added ?? 0));
   }
@@ -804,7 +844,7 @@ export async function getRouteConsumptionReport({ routeName, months = 1 } = {}) 
     .map(([scent_name, liters]) => ({ scent_name, liters: Math.round(liters * 100) / 100 }))
     .sort((a, b) => b.liters - a.liters);
 
-  return { items, totalLiters: items.reduce((sum, r) => sum + r.liters, 0), visitCount: rows.length };
+  return { items, totalLiters: items.reduce((sum, r) => sum + r.liters, 0), visitCount };
 }
 
 /**
