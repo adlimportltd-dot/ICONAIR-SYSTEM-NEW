@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
@@ -7,7 +7,7 @@ import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } fr
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
 import {
-  listOilEntries, completeVisit, listDeviceOptions, getOilByScent, listScents,
+  listOilEntries, completeVisit, createOilEntry, listDeviceOptions, getOilByScent, listScents,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, formatNumber, mapOilByScent } from '../lib/mappers';
@@ -186,6 +186,14 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [noStockNotice, setNoStockNotice] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setNoStockNotice(false);
+    }
+  }, [open]);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
@@ -205,18 +213,36 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
     setError(null);
     setBusy(true);
 
+    const payload = {
+      device_id: form.device_id,
+      scent_name: form.scent_name || null,
+      event_type: form.event_type,
+      liters_added: Number(form.liters_added || 0),
+      level_before_pct: form.level_before_pct === '' ? null : Number(form.level_before_pct),
+      level_after_pct: Number(form.level_after_pct),
+      notes: form.notes || null,
+    };
+
     try {
-      await completeVisit({
-        device_id: form.device_id,
-        scent_name: form.scent_name || null,
-        event_type: form.event_type,
-        liters_added: Number(form.liters_added || 0),
-        level_before_pct: form.level_before_pct === '' ? null : Number(form.level_before_pct),
-        level_after_pct: Number(form.level_after_pct),
-        notes: form.notes || null,
-      });
+      let usedFallback = false;
+      try {
+        await completeVisit(payload);
+      } catch (stockError) {
+        // אין מלאי נייד תואם (דגם/ניחוח) לנכות ממנו — קורה הרבה כרגע כי
+        // המלאי הנייד עוד לא באמת מאוכלס. עדיף לרשום את הביקור בלי ניכוי
+        // מאשר לחסום את הטכנאי לגמרי; ר' createOilEntry ב-queries.js —
+        // אותה טבלה, בלי הצד האטומי של המלאי. כל שגיאה אחרת (למשל מכשיר
+        // לא נמצא) ממשיכה לזרוק כרגיל, לא נבלעת כאן.
+        if (!String(stockError?.message ?? '').includes('אין מלאי נייד')) throw stockError;
+        await createOilEntry(payload);
+        usedFallback = true;
+      }
       setForm(emptyForm());
-      onCreated();
+      if (usedFallback) {
+        setNoStockNotice(true); // המודל נשאר פתוח כדי שהטכנאי יראה את ההודעה; onCreated() רק כשהוא סוגר בעצמו
+      } else {
+        onCreated();
+      }
     } catch (caught) {
       setError(describeError(caught));
     } finally {
@@ -230,7 +256,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
     <Modal
       open={open}
       title="סיום ביקור"
-      subtitle="הרישום מעדכן את מפלס השמן במכשיר ומוריד יחידה מהמלאי הנייד שלך"
+      subtitle="הרישום מעדכן את מפלס השמן במכשיר, ומנכה מהמלאי הנייד שלך אם יש לו מה לנכות"
       onClose={onClose}
     >
       <form onSubmit={submit} className="flex flex-col gap-3.5">
@@ -247,7 +273,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
               options={Object.entries(OIL_EVENT_LABEL).map(([value, label]) => ({ value, label }))}
             />
           </Field>
-          <Field label="ניחוח" hint="חייב לתאום למה שמוגדר במלאי הנייד שלך, אחרת סיום הביקור ייחסם">
+          <Field label="ניחוח" hint="אם תואם למלאי הנייד שלך — ינוכה ממנו אוטומטית; אם לא, הביקור עדיין יירשם">
             <Select value={form.scent_name} onChange={set('scent_name')} options={scentOptions}
                     placeholder="ללא ניחוח ספציפי" />
           </Field>
@@ -279,9 +305,22 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
           </div>
         )}
 
+        {noStockNotice && (
+          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-warn">
+            הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה לך מלאי רשום שתואם לדגם/ניחוח הזה.
+            תעדכן את "מלאי נייד" כשתוכל, כדי שהניכוי האוטומטי יעבוד בפעם הבאה.
+          </div>
+        )}
+
         <div className="mt-1 flex gap-2.5">
-          <PrimaryButton type="submit" loading={busy}>סיום ביקור / בוצע</PrimaryButton>
-          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+          {noStockNotice ? (
+            <PrimaryButton type="button" onClick={onCreated}>הבנתי, סגירה</PrimaryButton>
+          ) : (
+            <>
+              <PrimaryButton type="submit" loading={busy}>סיום ביקור / בוצע</PrimaryButton>
+              <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+            </>
+          )}
         </div>
       </form>
     </Modal>
