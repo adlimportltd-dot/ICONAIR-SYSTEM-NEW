@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
-import { PrimaryButton, SecondaryButton, Select } from '../components/ui/Field';
+import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } from '../components/ui/Field';
 import { RouteIcon, NavigationIcon, ChevronDownIcon } from '../components/ui/Icons';
+import Modal from '../components/ui/Modal';
 import { useQuery } from '../hooks/useQuery';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -11,8 +12,10 @@ import {
   getRouteLoadPlan, listTechnicianOptions, allocateStockToTechnician,
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
+  completeVisit, createOilEntry,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
+import { OIL_EVENT_LABEL } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 
 /**
@@ -282,6 +285,7 @@ function RouteStops({ routeName }) {
               disableDown={index === ordered.length - 1}
               deviceModels={deviceModels.data ?? []}
               scents={scents.data ?? []}
+              onVisitCompleted={stops.refetch}
             />
           ))}
         </div>
@@ -290,7 +294,7 @@ function RouteStops({ routeName }) {
   );
 }
 
-function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents }) {
+function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
   const devices = customer.devices ?? [];
@@ -381,7 +385,13 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
       {open && devices.length > 0 && (
         <div className="flex flex-col gap-2 border-t border-white/[0.06] px-3.5 pb-3.5 pt-3">
           {devices.map((device) => (
-            <DeviceDetailRow key={device.id} device={device} deviceModels={deviceModels} scents={scents} />
+            <DeviceDetailRow
+              key={device.id}
+              device={device}
+              deviceModels={deviceModels}
+              scents={scents}
+              onVisitCompleted={onVisitCompleted}
+            />
           ))}
         </div>
       )}
@@ -394,8 +404,11 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
  * (לפי capacity_ml של הדגם — אותו חישוב כמו בכרטיס "תכנון העמסה").
  * לטכנאי יש עיפרון ליד ניחוח/דגם — לוחצים, בוחרים ערך חדש, וזה נשלח
  * כבקשת שינוי לאישור מנהל (requestDeviceChange) ולא נכתב ישירות.
+ * "עדכון שמן" פותח את אותו סיום-ביקור שיש במסך "מעקב שמנים" — כאן
+ * בלי בחירת מכשיר (כבר ידוע מההקשר), כדי שהטכנאי יעדכן מהמסלול עצמו.
  */
-function DeviceDetailRow({ device, deviceModels, scents }) {
+function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
+  const [oilModalOpen, setOilModalOpen] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
   const fillMl = model?.capacity_ml
     ? Math.round((model.capacity_ml * (100 - (device.oil_level_pct ?? 0))) / 100)
@@ -427,8 +440,166 @@ function DeviceDetailRow({ device, deviceModels, scents }) {
             למילוי: <b className="tabular font-semibold text-gold-300">{fillMl} מ״ל</b>
           </span>
         )}
+
+        <button
+          type="button"
+          onClick={() => setOilModalOpen(true)}
+          className="ms-auto flex-none rounded-[8px] border border-gold-500/30 bg-gold-500/[0.1]
+                     px-2.5 py-1 text-[11.5px] font-semibold text-gold-300 transition-colors
+                     hover:border-gold-500/50"
+        >
+          עדכון שמן / סיום ביקור
+        </button>
       </div>
+
+      <CompleteVisitModal
+        open={oilModalOpen}
+        device={device}
+        scents={scents}
+        onClose={() => setOilModalOpen(false)}
+        onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
+      />
     </div>
+  );
+}
+
+/**
+ * טופס "סיום ביקור" מוקטן, ישירות מתוך שורת המכשיר במסלול — אותה
+ * לוגיקה בדיוק כמו NewOilEntryModal במסך "מעקב שמנים" (completeVisit
+ * מנכה מהמלאי הנייד אטומית; אם אין מלאי תואם נופלים ל-createOilEntry
+ * שרק רושם בלי לנסות לנכות), רק בלי שדה בחירת מכשיר — הוא כבר ידוע.
+ */
+function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [noStockNotice, setNoStockNotice] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        event_type: 'refill',
+        scent_name: device.scent_name ?? '',
+        liters_added: '0.35',
+        level_before_pct: String(device.oil_level_pct ?? ''),
+        level_after_pct: '100',
+        notes: '',
+      });
+      setError(null);
+      setNoStockNotice(false);
+    }
+  }, [open, device]);
+
+  if (!open || !form) return null;
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const after = Number(form.level_after_pct || 0);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+
+    const payload = {
+      device_id: device.id,
+      scent_name: form.scent_name || null,
+      event_type: form.event_type,
+      liters_added: Number(form.liters_added || 0),
+      level_before_pct: form.level_before_pct === '' ? null : Number(form.level_before_pct),
+      level_after_pct: after,
+      notes: form.notes || null,
+    };
+
+    try {
+      let usedFallback = false;
+      try {
+        await completeVisit(payload);
+      } catch (stockError) {
+        if (!String(stockError?.message ?? '').includes('אין מלאי נייד')) throw stockError;
+        await createOilEntry(payload);
+        usedFallback = true;
+      }
+      if (usedFallback) {
+        setNoStockNotice(true);
+      } else {
+        onSaved();
+      }
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title="עדכון שמן / סיום ביקור"
+      subtitle={`${device.model ?? 'מכשיר'} · ${device.scent_name || 'ללא ניחוח משויך'}`}
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="סוג רישום">
+            <Select
+              value={form.event_type}
+              onChange={set('event_type')}
+              options={Object.entries(OIL_EVENT_LABEL).map(([value, label]) => ({ value, label }))}
+            />
+          </Field>
+          <Field label="ניחוח" hint="אם תואם למלאי הנייד שלך — ינוכה ממנו אוטומטית">
+            <Select
+              value={form.scent_name}
+              onChange={set('scent_name')}
+              options={scents.map((s) => ({ value: s.name, label: s.name }))}
+              placeholder="ללא ניחוח ספציפי"
+            />
+          </Field>
+          <Field label="ליטרים שהוזרמו">
+            <TextInput type="number" step="0.001" min="0" value={form.liters_added} onChange={set('liters_added')} />
+          </Field>
+          <Field label="מפלס לפני (%)">
+            <TextInput type="number" min={0} max={100} value={form.level_before_pct} onChange={set('level_before_pct')} />
+          </Field>
+        </div>
+
+        <Field label="מפלס אחרי (%)" required>
+          <TextInput type="number" min={0} max={100} value={form.level_after_pct} onChange={set('level_after_pct')} required />
+        </Field>
+
+        <div className="rounded-row border border-white/[0.075] bg-white/[0.022] px-3.5 py-3">
+          <div className="mb-1.5 text-[11.5px] text-text-faint">המפלס שיישמר במכשיר</div>
+          <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
+        </div>
+
+        <Field label="הערות">
+          <TextArea value={form.notes} onChange={set('notes')} rows={2} />
+        </Field>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+            {error}
+          </div>
+        )}
+
+        {noStockNotice && (
+          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-warn">
+            הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה מלאי רשום שתואם. עדכן "מלאי נייד" כשתוכל.
+          </div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          {noStockNotice ? (
+            <PrimaryButton type="button" onClick={onSaved}>הבנתי, סגירה</PrimaryButton>
+          ) : (
+            <>
+              <PrimaryButton type="submit" loading={busy}>סיום ביקור / בוצע</PrimaryButton>
+              <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+            </>
+          )}
+        </div>
+      </form>
+    </Modal>
   );
 }
 
