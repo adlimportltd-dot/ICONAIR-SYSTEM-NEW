@@ -1,9 +1,35 @@
+import { useState } from 'react';
 import { navItems, settingsNavItem } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
 import { iconMap, AirMarkIcon } from './ui/Icons';
+import { brandLogoUrl, BRAND_LOGO_EXT_FALLBACK } from '../lib/queries';
 
-/** לוגו + שם המערכת. משמש בסרגל הצד, בשורה העליונה בנייד ובמסך ההתחברות. */
-export function Brand({ compact = false }) {
+/**
+ * מנסה לטעון את הלוגו שהמנהל העלה (מסך הגדרות → מיתוג), עובר על
+ * סיומות הקובץ האפשריות בזו אחר זו. אם אף אחת לא נטענת (לא הועלה
+ * לוגו בכלל) — נופל חזרה לסמל+טקסט המובנה של המערכת.
+ */
+function BrandLogo({ compact, overrideSrc }) {
+  const [extIndex, setExtIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return <BuiltInMark compact={compact} />;
+
+  return (
+    <img
+      src={overrideSrc ?? brandLogoUrl(BRAND_LOGO_EXT_FALLBACK[extIndex])}
+      alt="ICON AIR"
+      className={compact ? 'h-11 max-w-[220px] object-contain' : 'h-12 max-w-[240px] object-contain'}
+      onError={() => {
+        if (overrideSrc) { setFailed(true); return; }
+        if (extIndex + 1 < BRAND_LOGO_EXT_FALLBACK.length) setExtIndex(extIndex + 1);
+        else setFailed(true);
+      }}
+    />
+  );
+}
+
+function BuiltInMark({ compact }) {
   return (
     <div className={`flex items-center gap-3 ${compact ? '' : 'px-1.5 pt-0.5'}`}>
       <div
@@ -21,6 +47,11 @@ export function Brand({ compact = false }) {
       </div>
     </div>
   );
+}
+
+/** לוגו + שם המערכת. משמש בסרגל הצד, בשורה העליונה בנייד ובמסך ההתחברות. */
+export function Brand({ compact = false, overrideSrc }) {
+  return <BrandLogo compact={compact} overrideSrc={overrideSrc} />;
 }
 
 /** פריט ניווט — כולל פס הזהב שמסמן את המסך הפעיל */

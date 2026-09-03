@@ -9,8 +9,10 @@ import {
   listProfiles, getRouteBreakdown,
   listAllScents, createScent, setScentActive,
   listAllDeviceModels, createDeviceModel, setDeviceModelActive,
+  uploadBrandLogo,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
+import { Brand } from '../components/Sidebar';
 
 export default function SettingsScreen() {
   const { profile, session, isAdmin, signOut } = useAuth();
@@ -91,10 +93,100 @@ export default function SettingsScreen() {
           </Async>
         </GlassCard>
 
+        {isAdmin && <BrandingCard />}
         {isAdmin && <DeviceModelsCard deviceModels={deviceModels} />}
         {isAdmin && <ScentsCard scents={scents} />}
       </div>
     </section>
+  );
+}
+
+/**
+ * העלאת לוגו המותג — הדבקה ישירה (Ctrl+V מה-clipboard) או בחירת קובץ.
+ * נשמר תמיד לאותו נתיב קבוע ב-bucket "branding" (upsert), כך שכל
+ * מקום באפליקציה שמציג את <Brand> מתעדכן אוטומטית בלי שינוי קוד נוסף.
+ */
+function BrandingCard() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  async function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      setError('רק קובץ תמונה (PNG / JPG / SVG / WebP) מתקבל');
+      return;
+    }
+    setError(null);
+    setDone(false);
+    setBusy(true);
+    try {
+      const url = await uploadBrandLogo(file);
+      setPreviewUrl(url);
+      setDone(true);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onPaste(event) {
+    const item = [...event.clipboardData.items].find((i) => i.type.startsWith('image/'));
+    if (item) handleFile(item.getAsFile());
+  }
+
+  function onDrop(event) {
+    event.preventDefault();
+    setDragOver(false);
+    handleFile(event.dataTransfer.files?.[0]);
+  }
+
+  return (
+    <GlassCard>
+      <CardHead title="מיתוג — לוגו המערכת" subtitle="מוצג בסרגל הצד, במסך הכניסה ובראש המסך בנייד" />
+
+      <div className="mb-4 flex items-center justify-center rounded-row border border-white/[0.07] bg-white/[0.02] p-5">
+        <Brand overrideSrc={previewUrl ?? undefined} />
+      </div>
+
+      <label
+        tabIndex={0}
+        onPaste={onPaste}
+        onDrop={onDrop}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        className={`flex cursor-pointer flex-col items-center gap-2 rounded-row border border-dashed
+                    px-4 py-8 text-center transition-colors focus:outline-none focus:ring-2
+                    focus:ring-gold-500 ${dragOver ? 'border-gold-500/60 bg-gold-500/[0.06]' : 'border-white/[0.14]'}`}
+      >
+        <span className="text-[13.5px] font-medium text-text-dim">
+          {busy ? 'מעלה…' : 'לחצו כדי לבחור קובץ, גררו לכאן, או פשוט הדביקו (Ctrl+V)'}
+        </span>
+        <span className="text-[11.5px] text-text-faint">PNG / JPG / SVG / WebP</span>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={busy}
+          onChange={(e) => handleFile(e.target.files?.[0])}
+        />
+      </label>
+
+      {error && (
+        <div className="mt-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5
+                        text-[12.5px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      {done && !error && (
+        <div className="mt-3.5 rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-2.5 text-[12.5px] text-ok">
+          הלוגו עודכן בהצלחה. במסכים אחרים שכבר פתוחים אצלך או אצל אחרים — רענון הדף (F5) מציג את הגרסה החדשה.
+        </div>
+      )}
+    </GlassCard>
   );
 }
 

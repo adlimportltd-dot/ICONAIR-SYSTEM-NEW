@@ -1054,3 +1054,29 @@ export async function deleteContract(contract) {
   }
   await supabase.from('contracts').delete().eq('id', contract.id).then(unwrap);
 }
+
+/**
+ * לוגו המותג: קובץ יחיד בנתיב קבוע ב-bucket הציבורי "branding" —
+ * upsert דורס את הקודם, כך שאין צורך בשורת DB שמצביעה לקובץ.
+ * upload_at מצורף ל-URL כ-cache-buster (אחרת הדפדפן ימשיך להציג
+ * את התמונה הישנה מה-cache גם אחרי דריסה).
+ */
+const BRAND_LOGO_PATH = 'logo';
+
+export async function uploadBrandLogo(file) {
+  const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  const path = `${BRAND_LOGO_PATH}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('branding')
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+
+  return `${brandLogoUrl(ext)}?v=${Date.now()}`;
+}
+
+export const brandLogoUrl = (ext = 'png') =>
+  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branding/${BRAND_LOGO_PATH}.${ext}`;
+
+/** סדר הסיומות שננסה כשמציגים את הלוגו בלי לדעת מראש איזה פורמט הועלה */
+export const BRAND_LOGO_EXT_FALLBACK = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
