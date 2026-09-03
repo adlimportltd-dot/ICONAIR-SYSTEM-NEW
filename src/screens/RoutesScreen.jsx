@@ -6,6 +6,7 @@ import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } fr
 import { RouteIcon, NavigationIcon, ChevronDownIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
 import { useQuery } from '../hooks/useQuery';
+import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
   listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, todayISO,
@@ -177,6 +178,10 @@ function RouteLoadPlanCard({ routeName }) {
 function RouteStops({ routeName }) {
   const [visitDate, setVisitDate] = useState(todayISO);
   const stops = useQuery(() => listRouteAssignments(routeName, visitDate), [routeName, visitDate]);
+
+  // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
+  // כבוצעה על הקו הזה, המסך הזה מתעדכן חי בלי רענון ידני.
+  useRealtime(['route_assignments'], stops.refetch);
   const deviceModels = useQuery(listAllDeviceModels, []);
   const scents = useQuery(listAllScents, []);
 

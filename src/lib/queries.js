@@ -1118,3 +1118,18 @@ export const reviewDeviceChangeRequest = ({ requestId, approve, note }) =>
   supabase
     .rpc('review_device_change_request', { p_request_id: requestId, p_approve: approve, p_review_note: note || null })
     .then(unwrap);
+
+/**
+ * ביקורים שהושלמו לאחרונה (route_assignments.status='done'), להתראת
+ * הפעמון בראש המסך. updated_at מתעדכן אוטומטית ע"י טריגר (ר'
+ * iconair_schema_phase14_visit_sync_and_capacity.sql) — לפני הטריגר
+ * הזה השדה פשוט לא זז, אז המיון "לאחרונה" לא היה אמין.
+ */
+export const listRecentCompletedVisits = (limit = 8) =>
+  supabase
+    .from('route_assignments')
+    .select('id, updated_at, customer:customers(name), site:customer_sites(label), route:routes(name)')
+    .eq('status', 'done')
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+    .then(unwrap);

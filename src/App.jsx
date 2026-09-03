@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits } from './lib/queries';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
 import { allNavItems, screenMeta } from './config/navigation';
@@ -94,6 +94,11 @@ function Shell() {
   const dashboard = useQuery(getDashboard, []);
   const kpis = dashboard.data?.kpis;
 
+  // "בוצע" בשטח → מגיע לפעמון של המנהל בזמן אמת (route_assignments
+  // status='done'). רק מנהל צריך את זה — לטכנאי כבר יש את הסטטוס
+  // מול העיניים במסך המסלולים שלו עצמו.
+  const completedVisits = useQuery(listRecentCompletedVisits, [], { enabled: isAdmin });
+
   // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
   // מחזירים אוטומטית לדשבורד — לא רק שהלשונית מוסתרת מהתפריט.
@@ -102,7 +107,38 @@ function Shell() {
   }, [activeId, isAdmin]);
 
   // המספרים בכותרת ובתגי הניווט מתעדכנים גם כשלא נמצאים בדשבורד
-  useRealtime(['service_calls', 'devices'], dashboard.refetch);
+  useRealtime(['service_calls', 'devices', 'route_assignments'], dashboard.refetch);
+  useRealtime(['route_assignments'], completedVisits.refetch, { enabled: isAdmin });
+
+  // Toast "בוצע" חי: ברגע שרשימת הביקורים-שהושלמו מקבלת שורה שלא
+  // ראינו קודם, מציגים הודעה חולפת — לא רק תג פסיבי על הפעמון.
+  // ה-ref של ה-id-ים "שכבר ראינו" מתחיל ריק, ומתמלא בטעינה הראשונה
+  // בלי טוסט (אחרת כל login היה מציג טוסט על ההיסטוריה הקיימת).
+  const seenVisitIds = useRef(null);
+  const [visitToast, setVisitToast] = useState(null);
+
+  useEffect(() => {
+    if (!isAdmin || !completedVisits.data) return;
+
+    if (seenVisitIds.current === null) {
+      seenVisitIds.current = new Set(completedVisits.data.map((v) => v.id));
+      return;
+    }
+
+    const fresh = completedVisits.data.find((v) => !seenVisitIds.current.has(v.id));
+    if (fresh) {
+      seenVisitIds.current = new Set(completedVisits.data.map((v) => v.id));
+      const name = fresh.customer?.name ?? fresh.site?.label ?? 'לקוח';
+      const stop = fresh.site?.label && fresh.customer?.name ? `${name} — ${fresh.site.label}` : name;
+      setVisitToast(`בוצע: ${stop}${fresh.route?.name ? ` (${fresh.route.name})` : ''}`);
+    }
+  }, [isAdmin, completedVisits.data]);
+
+  useEffect(() => {
+    if (!visitToast) return undefined;
+    const timer = setTimeout(() => setVisitToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [visitToast]);
 
   const navigate = useCallback((id) => {
     setActiveId(id);
@@ -120,6 +156,18 @@ function Shell() {
     <>
       <div className="ambient-field" aria-hidden />
 
+      {visitToast && (
+        <div
+          role="status"
+          className="glass fixed inset-x-0 top-4 z-50 mx-auto flex w-fit max-w-[92vw] items-center
+                     gap-2.5 rounded-pill px-4 py-2.5 text-[13px] font-medium shadow-lift
+                     animate-rise"
+        >
+          <span className="h-2 w-2 flex-none rounded-full bg-ok" />
+          {visitToast}
+        </div>
+      )}
+
       <div className="relative z-[1] min-h-screen">
         <Sidebar activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
 
@@ -130,6 +178,8 @@ function Shell() {
             online={kpis?.devices_online ?? 0}
             total={kpis?.devices_total ?? 0}
             alerts={kpis?.calls_critical ?? 0}
+            completedVisits={completedVisits.data ?? []}
+            completedVisitsLoading={completedVisits.loading}
             onNewCall={openNewCall}
             onSearch={() => navigate('devices')}
           />
