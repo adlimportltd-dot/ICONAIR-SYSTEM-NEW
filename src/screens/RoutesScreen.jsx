@@ -3,7 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
 import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } from '../components/ui/Field';
-import { RouteIcon, NavigationIcon, ChevronDownIcon } from '../components/ui/Icons';
+import { RouteIcon, NavigationIcon, PhoneIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
@@ -13,10 +13,10 @@ import {
   getRouteLoadPlan, listTechnicianOptions, allocateStockToTechnician,
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
-  completeVisit, createOilEntry,
+  completeVisit, createOilEntry, listOilHistoryForDevices,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { OIL_EVENT_LABEL } from '../lib/mappers';
+import { OIL_EVENT_LABEL, formatDateTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 
 /**
@@ -302,8 +302,9 @@ function RouteStops({ routeName }) {
 function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
+  const call = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
   const devices = customer.devices ?? [];
-  const [open, setOpen] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
 
   return (
     <div className={`inner-row transition-opacity ${done ? 'opacity-55' : ''}`}>
@@ -346,26 +347,40 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           ✓
         </button>
 
-        <div className="min-w-0 flex-1">
-          <div className={`truncate text-[14px] font-semibold ${done ? 'line-through' : ''}`}>{customer.name}</div>
+        <button
+          type="button"
+          onClick={() => setCardOpen(true)}
+          className="min-w-0 flex-1 text-start"
+          aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
+        >
+          <div className={`truncate text-[14px] font-semibold transition-colors hover:text-gold-300 ${done ? 'line-through' : ''}`}>
+            {customer.name}
+          </div>
           <div className="truncate text-[12px] text-text-faint">{customer.address || '—'}</div>
-        </div>
+        </button>
 
         {devices.length > 0 && (
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
+            onClick={() => setCardOpen(true)}
             className="flex flex-none items-center gap-1.5 rounded-[7px] border border-white/[0.075]
                        px-[9px] py-[3px] text-[11px] font-semibold text-text-dim transition-colors
                        hover:border-gold-500/30 hover:text-gold-300"
           >
             {devices.length} מכשירים
-            <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
           </button>
         )}
 
         <div className="flex flex-none gap-2">
+          <SecondaryButton
+            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+            disabled={!call}
+            onClick={() => call && (window.location.href = call)}
+            aria-label={`התקשר אל ${customer.name}`}
+          >
+            <PhoneIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">התקשר</span>
+          </SecondaryButton>
           <SecondaryButton
             className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
             disabled={!waze}
@@ -387,20 +402,120 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
         </div>
       </div>
 
-      {open && devices.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-white/[0.06] px-3.5 pb-3.5 pt-3">
-          {devices.map((device) => (
-            <DeviceDetailRow
-              key={device.id}
-              device={device}
-              deviceModels={deviceModels}
-              scents={scents}
-              onVisitCompleted={onVisitCompleted}
-            />
-          ))}
-        </div>
-      )}
+      <CustomerCardModal
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        stop={customer}
+        callHref={call}
+        wazeHref={waze}
+        mapsHref={maps}
+        deviceModels={deviceModels}
+        scents={scents}
+        onVisitCompleted={onVisitCompleted}
+      />
     </div>
+  );
+}
+
+/**
+ * כרטיסייה מלאה של עצירה — נפתחת בלחיצה על שם הלקוח/האתר בשורה.
+ * מרכזת פרטי קשר, את כל המכשירים (עם עריכה/עדכון שמן כמו קודם), ואת
+ * היסטוריית השמן האחרונה שלהם — כדי שהטכנאי לא יצטרך לנחש מה קרה
+ * בביקורים הקודמים. אין כאן שום נתון כספי בכוונה (ר' דרישת המשתמש).
+ */
+function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, deviceModels, scents, onVisitCompleted }) {
+  const devices = stop.devices ?? [];
+  const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
+  const history = useQuery(() => listOilHistoryForDevices(deviceIds, 20), [deviceIds.join(',')], { enabled: open });
+
+  const deviceById = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={stop.name}
+      subtitle={stop.address || undefined}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          <SecondaryButton
+            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+            disabled={!callHref}
+            onClick={() => callHref && (window.location.href = callHref)}
+          >
+            <PhoneIcon className="h-4 w-4" />
+            {stop.phone || 'אין טלפון'}
+          </SecondaryButton>
+          <SecondaryButton
+            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+            disabled={!wazeHref}
+            onClick={() => wazeHref && window.open(wazeHref, '_blank', 'noopener')}
+          >
+            <NavigationIcon className="h-4 w-4" />
+            וייז
+          </SecondaryButton>
+          <SecondaryButton
+            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+            disabled={!mapsHref}
+            onClick={() => mapsHref && window.open(mapsHref, '_blank', 'noopener')}
+          >
+            <NavigationIcon className="h-4 w-4" />
+            Maps
+          </SecondaryButton>
+        </div>
+
+        {stop.notes && (
+          <div className="rounded-row border border-white/[0.06] bg-white/[0.015] px-3.5 py-2.5 text-[12.5px] text-text-dim">
+            {stop.notes}
+          </div>
+        )}
+
+        <div>
+          <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint">
+            מכשירים ({devices.length})
+          </div>
+          <div className="flex flex-col gap-2">
+            {devices.length === 0 && (
+              <div className="text-[12.5px] text-text-faint">אין מכשירים רשומים בעצירה זו.</div>
+            )}
+            {devices.map((device) => (
+              <DeviceDetailRow
+                key={device.id}
+                device={device}
+                deviceModels={deviceModels}
+                scents={scents}
+                onVisitCompleted={() => { onVisitCompleted?.(); history.refetch(); }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint">
+            היסטוריית שמן אחרונה
+          </div>
+          <Async loading={history.loading} error={history.error} onRetry={history.refetch}
+                 isEmpty={(history.data?.length ?? 0) === 0}
+                 empty={<div className="text-[12.5px] text-text-faint">אין עדיין היסטוריה למכשירים האלה.</div>}>
+            <div className="flex flex-col gap-1.5">
+              {(history.data ?? []).map((entry) => (
+                <div key={entry.id} className="inner-row flex items-center gap-3 px-3 py-2 text-[12px]">
+                  <span className="tabular flex-none text-text-faint">{formatDateTime(entry.recorded_at)}</span>
+                  <span className="flex-none text-text-dim">{OIL_EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {deviceById.get(entry.device_id)?.model ?? ''} · {entry.scent_name || 'ללא ניחוח'}
+                  </span>
+                  <span className="tabular flex-none text-text-faint">
+                    {entry.level_before_pct ?? '—'}% ← {entry.level_after_pct}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Async>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

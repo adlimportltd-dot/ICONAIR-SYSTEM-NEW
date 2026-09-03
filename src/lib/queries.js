@@ -1133,3 +1133,15 @@ export const listRecentCompletedVisits = (limit = 8) =>
     .order('updated_at', { ascending: false })
     .limit(limit)
     .then(unwrap);
+
+/** היסטוריית שמן לרשימת מכשירים נתונה (הכרטיסייה המלאה של עצירה במסלול) */
+export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
+  deviceIds.length === 0
+    ? Promise.resolve([])
+    : supabase
+        .from('oil_tracking')
+        .select('id, device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, recorded_at, notes')
+        .in('device_id', deviceIds)
+        .order('recorded_at', { ascending: false })
+        .limit(limit)
+        .then(unwrap);

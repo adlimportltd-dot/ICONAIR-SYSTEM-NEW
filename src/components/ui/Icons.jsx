@@ -88,6 +88,14 @@ export function NavigationIcon(props) {
   );
 }
 
+export function PhoneIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4.5 4h3.2l1.5 4-2 1.3a11.5 11.5 0 0 0 5.5 5.5l1.3-2 4 1.5v3.2c0 1-.9 1.7-1.8 1.5A16.5 16.5 0 0 1 3 5.8C2.8 4.9 3.5 4 4.5 4Z" />
+    </svg>
+  );
+}
+
 export function ChevronDownIcon(props) {
   return (
     <svg {...base} strokeWidth={2} {...props}>
