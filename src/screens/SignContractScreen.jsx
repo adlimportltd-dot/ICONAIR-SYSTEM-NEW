@@ -186,7 +186,7 @@ function LightInput(props) {
     <input
       {...props}
       className="w-full rounded-lg border border-[#ccc] bg-[#fff] px-3.5 py-2.5 text-[14px] text-[#1a1a1a]
-                 focus:border-[#D8B36A] focus:outline-none"
+                 focus:border-[#C5A059] focus:outline-none"
     />
   );
 }

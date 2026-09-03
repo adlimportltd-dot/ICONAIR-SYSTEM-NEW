@@ -66,7 +66,7 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
       disabled={loading || props.disabled}
       className={`rounded-pill px-4 py-2.5 text-[13.5px] font-semibold text-[#221B0C]
                   transition-opacity disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
-      style={{ background: 'linear-gradient(150deg, #F0DCB4, #D8B36A)' }}
+      style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
       {...props}
     >
       {loading ? 'שומר…' : children}

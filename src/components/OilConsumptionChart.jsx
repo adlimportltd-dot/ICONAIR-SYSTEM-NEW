@@ -79,16 +79,16 @@ export default function OilConsumptionChart({ delay, data }) {
         >
           <defs>
             <linearGradient id="oilArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#D8B36A" stopOpacity=".34" />
-              <stop offset="100%" stopColor="#D8B36A" stopOpacity="0" />
+              <stop offset="0%" stopColor="#C5A059" stopOpacity=".34" />
+              <stop offset="100%" stopColor="#C5A059" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="oilLine" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#4CC9C0" />
-              <stop offset="100%" stopColor="#F0DCB4" />
+              <stop offset="100%" stopColor="#D4AF37" />
             </linearGradient>
           </defs>
 
-          <g stroke="rgba(37,30,16,.08)" strokeWidth="1" vectorEffect="non-scaling-stroke">
+          <g stroke="rgba(255,255,255,.06)" strokeWidth="1" vectorEffect="non-scaling-stroke">
             {GRID_LINES.map((y) => (
               <line key={y} x1="0" y1={y} x2={W} y2={y} />
             ))}
@@ -118,9 +118,9 @@ export default function OilConsumptionChart({ delay, data }) {
           {/* נקודת הסיום: קו באורך אפס עם קצה עגול — נשאר עיגול מושלם
               גם כשה-SVG נמתח בצורה לא-אחידה, בניגוד ל-circle */}
           {[
-            { stroke: 'rgba(240,220,180,.16)', width: 22 },
-            { stroke: '#F0DCB4', width: 8 },
-            { stroke: '#FFFFFF', width: 3 },
+            { stroke: 'rgba(212,175,55,.16)', width: 22 },
+            { stroke: '#D4AF37', width: 8 },
+            { stroke: '#0C0E12', width: 3 },
           ].map((dot) => (
             <line
               key={dot.width}
@@ -146,7 +146,7 @@ export default function OilConsumptionChart({ delay, data }) {
 
       <div className="mt-4 flex flex-wrap gap-4 border-t border-white/[0.075] pt-[15px]">
         <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
-          <Swatch style={{ background: 'linear-gradient(90deg,#4CC9C0,#F0DCB4)' }} />
+          <Swatch style={{ background: 'linear-gradient(90deg,#4CC9C0,#D4AF37)' }} />
           צריכה בפועל <b className="tabular font-semibold text-text">{summary.actualTotal}</b>
         </span>
         <span className="flex items-center gap-2 text-[12.5px] text-text-dim">

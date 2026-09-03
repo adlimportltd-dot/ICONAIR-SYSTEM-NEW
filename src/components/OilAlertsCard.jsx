@@ -5,7 +5,7 @@ function levelFill(level) {
   if (level <= 10) return 'linear-gradient(90deg,#F0555C,#FF8B90)';
   if (level <= 13) return 'linear-gradient(90deg,#F0555C,#F0A43A)';
   if (level <= 16) return 'linear-gradient(90deg,#F0A43A,#F5C078)';
-  return 'linear-gradient(90deg,#F0A43A,#D8B36A)';
+  return 'linear-gradient(90deg,#F0A43A,#C5A059)';
 }
 
 export default function OilAlertsCard({ delay, alerts = [], onAssignAll }) {

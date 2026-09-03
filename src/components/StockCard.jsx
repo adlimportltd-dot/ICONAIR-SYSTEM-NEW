@@ -1,7 +1,7 @@
 import GlassCard, { CardHead } from './ui/GlassCard';
 
 const FILL = {
-  gold: 'linear-gradient(90deg,#D8B36A,#F0DCB4)',
+  gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
   teal: 'linear-gradient(90deg,#4CC9C0,#8FE3DC)',
   slate: 'linear-gradient(90deg,#6E86A8,#A3B6CE)',
   crit: 'linear-gradient(90deg,#F0555C,#F0A43A)',

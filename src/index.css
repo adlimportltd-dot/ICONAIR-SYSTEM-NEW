@@ -11,10 +11,10 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* המערכת בהירה תמיד — זה אומר לדפדפן לצייר את כל ה-UI הילידי
-       (תפריט select פתוח, סקרולבר, בורר תאריך) בגרסה הבהירה שלו,
-       תואמת לרקע הלבן/שנהב של המותג. */
-    color-scheme: light;
+    /* המערכת כהה תמיד (אין מצב בהיר) — זה אומר לדפדפן לצייר את כל
+       ה-UI הילידי (תפריט select פתוח, סקרולבר, בורר תאריך) בגרסה
+       הכהה שלו, תואמת לפחם העמוק של המותג. */
+    color-scheme: dark;
   }
 
   body {
@@ -29,46 +29,46 @@
 
   /* --- תפריט select פתוח ---
      הרשימה עצמה מצוירת ע"י מערכת ההפעלה, לא ע"י הדף — CSS לא שולט
-     בה במלואה בכל דפדפן. השורות הבאות נותנות רקע/טקסט לבנים תואמים
+     בה במלואה בכל דפדפן. השורות הבאות נותנות רקע/טקסט כהים תואמים
      למותג בדפדפנים שכן מכבדים אותן (כרום/אדג'). */
   select {
-    color-scheme: light;
+    color-scheme: dark;
   }
 
   select option {
-    background-color: #ffffff;
-    color: #221b0c;
+    background-color: #121212;
+    color: #ffffff;
   }
 
   select option:checked,
   select option:hover {
-    background-color: #d8b36a;
-    color: #221b0c;
+    background-color: #d4af37;
+    color: #0a0a0a;
   }
 }
 
 @layer components {
-  /* --- הרקע המרחף: שנהב נקי + שתי הילות זהב/טורקיז עדינות מאוד --- */
+  /* --- הרקע המרחף: פחם עמוק + הילת זהב מרוסנת אחת --- */
   .ambient-field {
     @apply fixed inset-0 z-0 pointer-events-none;
     background:
-      radial-gradient(900px 620px at 88% -8%, rgba(216, 179, 106, 0.1), transparent 62%),
-      radial-gradient(760px 560px at 4% 104%, rgba(30, 148, 138, 0.05), transparent 60%),
-      #fbf9f4;
+      radial-gradient(1000px 700px at 85% -10%, rgba(212, 175, 55, 0.07), transparent 60%),
+      radial-gradient(800px 600px at 5% 105%, rgba(197, 160, 89, 0.04), transparent 60%),
+      #0a0a0a;
   }
 
   .ambient-field::after {
     content: '';
     @apply absolute inset-0;
-    opacity: 0.035;
-    mix-blend-mode: multiply;
+    opacity: 0.18;
+    mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.42'/></svg>");
   }
 
-  /* --- משטח הכרטיסים: לבן נקי, מסגרת דקה ויוקרתית, הצללה רכה --- */
+  /* --- משטח הכרטיסים: פחם, מסגרת זהב דקה ומטית, הצללה עמוקה --- */
   .glass {
-    background: #ffffff;
-    @apply border border-white/[0.08] shadow-glass-hi;
+    background: linear-gradient(180deg, #141414, #101010);
+    @apply border border-gold-300/[0.14] shadow-glass-hi;
   }
 
   .glass-card {
@@ -77,7 +77,7 @@
 
   /* --- שורה פנימית (קריאה, קו הפצה) --- */
   .inner-row {
-    @apply rounded-row border border-white/[0.075] bg-white/[0.022];
+    @apply rounded-row border border-gold-300/[0.1] bg-white/[0.02];
   }
 
   /* --- מד התקדמות אופקי --- */
@@ -91,15 +91,15 @@
 
   /* --- שבב סטטוס --- */
   .chip {
-    @apply whitespace-nowrap rounded-[7px] border border-white/[0.075] px-[9px] py-[3px]
+    @apply whitespace-nowrap rounded-[7px] border border-gold-300/[0.1] px-[9px] py-[3px]
            text-[11px] font-semibold text-text-dim;
   }
 
   /* --- כפתור פעולה משני בראש כרטיס --- */
   .ghost-btn {
-    @apply whitespace-nowrap rounded-[10px] border border-white/[0.075] px-[11px] py-1.5
+    @apply whitespace-nowrap rounded-[10px] border border-gold-300/[0.1] px-[11px] py-1.5
            text-[12.5px] text-text-dim transition-colors
-           hover:border-gold-500/30 hover:text-gold-300;
+           hover:border-gold-300/40 hover:text-gold-300;
   }
 
   .tabular {

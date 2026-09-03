@@ -9,8 +9,8 @@ export function Brand({ compact = false }) {
       <div
         className="grid h-10 w-10 flex-none place-items-center rounded-pill border border-gold-500/35 text-gold-300"
         style={{
-          background: 'linear-gradient(150deg, rgba(216,179,106,.30), rgba(216,179,106,.05))',
-          boxShadow: '0 8px 22px -12px rgba(216,179,106,.6), inset 0 1px 0 rgba(255,255,255,.16)',
+          background: 'linear-gradient(150deg, rgba(212,175,55,.30), rgba(212,175,55,.05))',
+          boxShadow: '0 8px 22px -12px rgba(212,175,55,.6), inset 0 1px 0 rgba(255,255,255,.16)',
         }}
       >
         <AirMarkIcon className="h-[21px] w-[21px]" />
@@ -37,7 +37,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
                   ${isActive ? 'text-gold-300' : 'text-text-dim hover:bg-white/[0.045] hover:text-text'}`}
       style={
         isActive
-          ? { background: 'linear-gradient(270deg, rgba(216,179,106,.14), rgba(216,179,106,.02))' }
+          ? { background: 'linear-gradient(270deg, rgba(212,175,55,.14), rgba(212,175,55,.02))' }
           : undefined
       }
     >
@@ -106,7 +106,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
           <div
             className="grid h-9 w-9 flex-none place-items-center rounded-[11px]
                        font-display text-[15px] font-bold text-[#221B0C]"
-            style={{ background: 'linear-gradient(150deg, #F0DCB4, #D8B36A)' }}
+            style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
           >
             {initials}
           </div>

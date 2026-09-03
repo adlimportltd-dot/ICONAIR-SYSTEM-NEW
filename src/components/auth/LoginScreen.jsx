@@ -48,19 +48,19 @@ export default function LoginScreen() {
 
       <div className="relative z-[1] flex min-h-screen items-center justify-center p-5">
         <div
-          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-white/[0.09]
+          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-gold-300/[0.14]
                      shadow-lift lg:grid-cols-[1.05fr_1fr]"
-          style={{ background: '#ffffff' }}
+          style={{ background: 'linear-gradient(180deg, #141414, #101010)' }}
         >
           {/* --- פאנל מותג: רק במסכים רחבים --- */}
           <div
             className="relative hidden flex-col justify-between overflow-hidden border-e
-                       border-white/[0.07] p-9 lg:flex"
+                       border-gold-300/[0.1] p-9 lg:flex"
             style={{
               background:
-                'radial-gradient(120% 140% at 0% 0%, rgba(216,179,106,.14), transparent 60%),' +
-                'radial-gradient(120% 140% at 100% 100%, rgba(30,148,138,.07), transparent 55%),' +
-                '#fdfbf6',
+                'radial-gradient(120% 140% at 0% 0%, rgba(212,175,55,.1), transparent 60%),' +
+                'radial-gradient(120% 140% at 100% 100%, rgba(197,160,89,.05), transparent 55%),' +
+                '#0d0d0d',
             }}
           >
             <div>
