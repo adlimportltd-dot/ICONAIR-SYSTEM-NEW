@@ -82,7 +82,7 @@ export function StatusChip({ tone = 'neutral', children }) {
   const tones = {
     neutral: '',
     ok: 'text-ok border-ok/25 bg-ok/10',
-    warn: 'text-[#FFC479] border-warn/30 bg-warn/[0.09]',
+    warn: 'text-warn border-warn/30 bg-warn/[0.09]',
     crit: 'text-crit-soft border-crit/30 bg-crit/10',
     gold: 'text-gold-300 border-gold-500/30 bg-gold-500/[0.14]',
     teal: 'text-teal-500 border-teal-500/25 bg-teal-500/10',

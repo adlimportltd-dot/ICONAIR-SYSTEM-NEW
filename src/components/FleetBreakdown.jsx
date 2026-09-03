@@ -35,7 +35,7 @@ export default function FleetBreakdown({ delay, data = [] }) {
       <div className="flex flex-col gap-[18px]">
         <div className="relative mx-auto mt-0.5 h-[180px] w-[180px]">
           <svg viewBox="0 0 140 140" className="h-[180px] w-[180px] -rotate-90" aria-hidden>
-            <circle cx="70" cy="70" r={R} fill="none" stroke="rgba(255,255,255,.05)" strokeWidth="15" />
+            <circle cx="70" cy="70" r={R} fill="none" stroke="rgba(37,30,16,.07)" strokeWidth="15" />
             {arcs.map((arc) => (
               <circle
                 key={arc.model}

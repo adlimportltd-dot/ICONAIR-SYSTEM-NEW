@@ -135,7 +135,7 @@ export default function SignContractScreen({ token }) {
               )}
             </div>
 
-            <form onSubmit={submit} className="rounded-xl bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,.08)] sm:p-7">
+            <form onSubmit={submit} className="rounded-xl bg-[#fff] p-5 shadow-[0_1px_4px_rgba(0,0,0,.08)] sm:p-7">
               <h3 className="mb-4 text-[16px] font-bold">חתימה על החוזה</h3>
 
               <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
@@ -185,7 +185,7 @@ function LightInput(props) {
   return (
     <input
       {...props}
-      className="w-full rounded-lg border border-[#ccc] bg-white px-3.5 py-2.5 text-[14px] text-[#1a1a1a]
+      className="w-full rounded-lg border border-[#ccc] bg-[#fff] px-3.5 py-2.5 text-[14px] text-[#1a1a1a]
                  focus:border-[#D8B36A] focus:outline-none"
     />
   );

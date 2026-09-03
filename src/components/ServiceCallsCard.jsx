@@ -10,7 +10,7 @@ const SEVERITY_BAR = {
 
 const SEVERITY_CHIP = {
   crit: 'text-crit-soft border-crit/30 bg-crit/10',
-  warn: 'text-[#FFC479] border-warn/30 bg-warn/[0.09]',
+  warn: 'text-warn border-warn/30 bg-warn/[0.09]',
   norm: '',
   sched: 'text-gold-300 border-gold-500/30 bg-gold-500/[0.14]',
 };

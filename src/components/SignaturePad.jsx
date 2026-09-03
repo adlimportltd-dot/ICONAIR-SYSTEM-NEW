@@ -72,7 +72,7 @@ const SignaturePad = forwardRef(function SignaturePad({ height = 160 }, ref) {
     <canvas
       ref={canvasRef}
       style={{ height, touchAction: 'none' }}
-      className="w-full cursor-crosshair rounded-lg border border-[#ccc] bg-white"
+      className="w-full cursor-crosshair rounded-lg border border-[#ccc] bg-[#fff]"
       onMouseDown={start}
       onMouseMove={move}
       onMouseUp={end}

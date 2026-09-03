@@ -88,7 +88,7 @@ export default function OilConsumptionChart({ delay, data }) {
             </linearGradient>
           </defs>
 
-          <g stroke="rgba(255,255,255,.06)" strokeWidth="1" vectorEffect="non-scaling-stroke">
+          <g stroke="rgba(37,30,16,.08)" strokeWidth="1" vectorEffect="non-scaling-stroke">
             {GRID_LINES.map((y) => (
               <line key={y} x1="0" y1={y} x2={W} y2={y} />
             ))}
@@ -120,7 +120,7 @@ export default function OilConsumptionChart({ delay, data }) {
           {[
             { stroke: 'rgba(240,220,180,.16)', width: 22 },
             { stroke: '#F0DCB4', width: 8 },
-            { stroke: '#0C0E12', width: 3 },
+            { stroke: '#FFFFFF', width: 3 },
           ].map((dot) => (
             <line
               key={dot.width}

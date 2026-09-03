@@ -11,10 +11,10 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* המערכת כהה תמיד (אין מצב בהיר) — זה אומר לדפדפן לצייר את כל
-       ה-UI הילידי (תפריט select פתוח, סקרולבר, בורר תאריך) בגרסה
-       הכהה שלו, במקום ברירת המחדל הבהירה שנראית "אפורה ומיושנת". */
-    color-scheme: dark;
+    /* המערכת בהירה תמיד — זה אומר לדפדפן לצייר את כל ה-UI הילידי
+       (תפריט select פתוח, סקרולבר, בורר תאריך) בגרסה הבהירה שלו,
+       תואמת לרקע הלבן/שנהב של המותג. */
+    color-scheme: light;
   }
 
   body {
@@ -29,18 +29,15 @@
 
   /* --- תפריט select פתוח ---
      הרשימה עצמה מצוירת ע"י מערכת ההפעלה, לא ע"י הדף — CSS לא שולט
-     בה במלואה בכל דפדפן. בכרום/אדג' (רוב המשתמשים בפועל כאן) שתי
-     השורות הבאות כן נאכפות ונותנות רקע/טקסט תואמים למותג; בפיירפוקס
-     ה-color-scheme למעלה כבר עובר לפופאפ כהה של הדפדפן עצמו, גם בלי
-     זה. select { color-scheme } למטה חוזר במפורש כי חלק מהדפדפנים
-     לא יורשים את ה-color-scheme מ-html לתוך ה-UA popup של select. */
+     בה במלואה בכל דפדפן. השורות הבאות נותנות רקע/טקסט לבנים תואמים
+     למותג בדפדפנים שכן מכבדים אותן (כרום/אדג'). */
   select {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   select option {
-    background-color: #12151a;
-    color: #f3efe7;
+    background-color: #ffffff;
+    color: #221b0c;
   }
 
   select option:checked,
@@ -51,30 +48,27 @@
 }
 
 @layer components {
-  /* --- הרקע המרחף: שתי הילות אור + גרעין עדין --- */
+  /* --- הרקע המרחף: שנהב נקי + שתי הילות זהב/טורקיז עדינות מאוד --- */
   .ambient-field {
     @apply fixed inset-0 z-0 pointer-events-none;
     background:
-      radial-gradient(900px 620px at 88% -8%, rgba(216, 179, 106, 0.13), transparent 62%),
-      radial-gradient(760px 560px at 4% 104%, rgba(76, 201, 192, 0.1), transparent 60%),
-      radial-gradient(1200px 900px at 50% 40%, rgba(255, 255, 255, 0.022), transparent 70%),
-      #08090b;
+      radial-gradient(900px 620px at 88% -8%, rgba(216, 179, 106, 0.1), transparent 62%),
+      radial-gradient(760px 560px at 4% 104%, rgba(30, 148, 138, 0.05), transparent 60%),
+      #fbf9f4;
   }
 
   .ambient-field::after {
     content: '';
     @apply absolute inset-0;
-    opacity: 0.3;
-    mix-blend-mode: overlay;
+    opacity: 0.035;
+    mix-blend-mode: multiply;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.42'/></svg>");
   }
 
-  /* --- משטח הזכוכית שכל הכרטיסים יושבים עליו --- */
+  /* --- משטח הכרטיסים: לבן נקי, מסגרת דקה ויוקרתית, הצללה רכה --- */
   .glass {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
-    -webkit-backdrop-filter: blur(22px);
-    backdrop-filter: blur(22px);
-    @apply border border-white/[0.075] shadow-glass-hi;
+    background: #ffffff;
+    @apply border border-white/[0.08] shadow-glass-hi;
   }
 
   .glass-card {

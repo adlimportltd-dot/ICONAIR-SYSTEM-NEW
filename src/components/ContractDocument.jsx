@@ -10,7 +10,7 @@ export default function ContractDocument({ customer, idNumber, items = [], contr
   const rows = items.filter((row) => Number(row.quantity) > 0);
 
   return (
-    <div dir="rtl" className="rounded-xl bg-white p-6 text-[13.5px] leading-relaxed text-[#1a1a1a] sm:p-9" style={{ colorScheme: 'light' }}>
+    <div dir="rtl" className="rounded-xl bg-[#fff] p-6 text-[13.5px] leading-relaxed text-[#1a1a1a] sm:p-9" style={{ colorScheme: 'light' }}>
       <div className="mb-4 flex items-baseline justify-between border-b-2 border-[#1a1a1a] pb-3.5">
         <div>
           <h1 className="font-display text-[22px] font-bold tracking-wide">ICON AIR</h1>

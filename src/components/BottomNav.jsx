@@ -14,12 +14,12 @@ export default function BottomNav({ activeId, onSelect, criticalCalls = 0 }) {
     <nav
       aria-label="ניווט מהיר"
       className="fixed inset-x-3 bottom-3 z-30 flex justify-between gap-0.5
-                 rounded-[22px] border border-white/[0.075] px-1.5 py-2 lg:hidden"
+                 rounded-[22px] border border-white/[0.09] px-1.5 py-2 lg:hidden"
       style={{
-        background: 'linear-gradient(180deg, rgba(24,27,33,.9), rgba(12,14,18,.94))',
+        background: 'linear-gradient(180deg, rgba(255,255,255,.97), rgba(255,255,255,.9))',
         backdropFilter: 'blur(26px)',
         WebkitBackdropFilter: 'blur(26px)',
-        boxShadow: '0 22px 44px -18px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.07)',
+        boxShadow: '0 22px 44px -18px rgba(37,30,16,.28), inset 0 1px 0 rgba(255,255,255,.9)',
         paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
       }}
     >
@@ -42,7 +42,7 @@ export default function BottomNav({ activeId, onSelect, criticalCalls = 0 }) {
             {item.shortLabel}
             {badge > 0 && (
               <span className="tabular absolute end-[18%] top-1 min-w-[16px] rounded-full bg-crit
-                               px-1 font-mono text-[9.5px] leading-4 text-white">
+                               px-1 font-mono text-[9.5px] leading-4 text-[#fff]">
                 {badge}
               </span>
             )}

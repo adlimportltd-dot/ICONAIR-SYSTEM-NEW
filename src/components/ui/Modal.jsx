@@ -52,7 +52,8 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
         type="button"
         aria-label="סגור"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/65 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default backdrop-blur-sm"
+        style={{ background: 'rgba(20,16,8,.5)' }}
       />
 
       <div
