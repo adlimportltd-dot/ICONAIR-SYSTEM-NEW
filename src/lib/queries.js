@@ -315,8 +315,12 @@ export async function listRoutes() {
  */
 export async function listStopsByRoute(routeName) {
   const [customers, sites, cityRoutes] = await Promise.all([
-    supabase.from('customers').select('id, name, address, city, phone, notes, devices(count)').eq('status', 'active').then(unwrap),
-    supabase.from('customer_sites').select('id, customer_id, label, city, customer:customers(name, phone, notes), devices(count)').then(unwrap),
+    supabase.from('customers')
+      .select('id, name, address, city, phone, notes, route_name, devices(id, model, scent_name, oil_level_pct)')
+      .eq('status', 'active').then(unwrap),
+    supabase.from('customer_sites')
+      .select('id, customer_id, label, city, customer:customers(name, phone, notes), devices(id, model, scent_name, oil_level_pct)')
+      .then(unwrap),
     loadCityRoutesMap(),
   ]);
 
@@ -1080,3 +1084,37 @@ export const brandLogoUrl = (ext = 'png') =>
 
 /** סדר הסיומות שננסה כשמציגים את הלוגו בלי לדעת מראש איזה פורמט הועלה */
 export const BRAND_LOGO_EXT_FALLBACK = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+
+/* =====================================================================
+   בקשות שינוי במכשיר (ניחוח / דגם) — פאנל הטכנאי במסך המסלולים
+   מציע שינוי, אבל לא כותב ישירות ל-devices: הכתיבה בפועל קורית רק
+   דרך ה-RPC review_device_change_request, ורק למנהל (is_admin),
+   כדי שכל שינוי יעבור אישור מפורש. ר' device_change_requests.sql.
+   ===================================================================== */
+
+export const requestDeviceChange = ({ deviceId, field, oldValue, newValue, note }) =>
+  supabase
+    .from('device_change_requests')
+    .insert({ device_id: deviceId, field, old_value: oldValue ?? null, new_value: newValue, note: note || null })
+    .select()
+    .single()
+    .then(unwrap);
+
+/** למנהל בלבד — כל הבקשות הממתינות, עם פרטי המכשיר/לקוח כדי לדעת על מה מדובר */
+export const listPendingDeviceChangeRequests = () =>
+  supabase
+    .from('device_change_requests')
+    .select(`
+      id, field, old_value, new_value, note, requested_at,
+      requester:profiles!device_change_requests_requested_by_fkey(full_name),
+      device:devices(id, serial, model, scent_name, customer:customers(name))
+    `)
+    .eq('status', 'pending')
+    .order('requested_at', { ascending: true })
+    .then(unwrap);
+
+/** מנהל בלבד (נאכף ב-RPC עצמו) — מאשר או דוחה, ומעדכן את devices בפועל אם אושר */
+export const reviewDeviceChangeRequest = ({ requestId, approve, note }) =>
+  supabase
+    .rpc('review_device_change_request', { p_request_id: requestId, p_approve: approve, p_review_note: note || null })
+    .then(unwrap);
