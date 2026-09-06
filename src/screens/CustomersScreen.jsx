@@ -289,7 +289,7 @@ export default function CustomersScreen() {
               className={'rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ' + (
                 paymentStatus === opt.key
                   ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
-                  : 'border-white/[0.09] text-text-dim hover:border-white/20'
+                  : 'border-white/[0.09] text-text-dim hover:border-white/[0.2]'
               )}
             >
               {opt.label}

@@ -6,7 +6,7 @@ const SEVERITY_BAR = {
   crit: 'bg-crit shadow-[0_0_12px_rgba(240,85,92,.55)]',
   warn: 'bg-warn shadow-[0_0_12px_rgba(240,164,58,.4)]',
   norm: 'bg-slate-500',
-  sched: 'bg-white/20',
+  sched: 'bg-white/[0.2]',
 };
 
 const SEVERITY_CHIP = {
