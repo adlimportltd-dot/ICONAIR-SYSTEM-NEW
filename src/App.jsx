@@ -106,8 +106,13 @@ function Shell() {
     if (activeId === 'reports' && !isAdmin) setActiveId('dashboard');
   }, [activeId, isAdmin]);
 
-  // המספרים בכותרת ובתגי הניווט מתעדכנים גם כשלא נמצאים בדשבורד
-  useRealtime(['service_calls', 'devices', 'route_assignments'], dashboard.refetch);
+  // המספרים בכותרת ובתגי הניווט מתעדכנים גם כשלא נמצאים בדשבורד.
+  // isLive עוקב אחרי מצב ה-WebSocket עצמו (לא רק "יש נתונים") — מוצג
+  // ב-TopBar כתג "חי" אמיתי, לא קישוט: אם החיבור נופל, התג נעלם.
+  const [isLive, setIsLive] = useState(false);
+  useRealtime(['service_calls', 'devices', 'route_assignments'], dashboard.refetch, {
+    onStatusChange: (status) => setIsLive(status === 'SUBSCRIBED'),
+  });
   useRealtime(['route_assignments'], completedVisits.refetch, { enabled: isAdmin });
 
   // Toast "בוצע" חי: ברגע שרשימת הביקורים-שהושלמו מקבלת שורה שלא
@@ -178,6 +183,7 @@ function Shell() {
             online={kpis?.devices_online ?? 0}
             total={kpis?.devices_total ?? 0}
             alerts={kpis?.calls_critical ?? 0}
+            isLive={isLive}
             completedVisits={completedVisits.data ?? []}
             completedVisitsLoading={completedVisits.loading}
             onNewCall={openNewCall}

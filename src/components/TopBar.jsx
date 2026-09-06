@@ -91,7 +91,7 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
  * בנייד הלוגו מחליף את כותרת המסך כדי לחסוך רוחב.
  */
 export default function TopBar({
-  title, meta, online, total, alerts = 0, completedVisits = [], completedVisitsLoading = false,
+  title, meta, online, total, alerts = 0, isLive = false, completedVisits = [], completedVisitsLoading = false,
   onOpenNotifications, onNewCall, onSearch,
 }) {
   const allOnline = total > 0 && online === total;
@@ -117,6 +117,18 @@ export default function TopBar({
         <SearchIcon className="h-4 w-4" />
         חיפוש לקוח, מכשיר או קריאה…
       </button>
+
+      {isLive && (
+        <div
+          className="tabular hidden items-center gap-[6px] rounded-xl border border-gold-300/[0.18]
+                     bg-gold-500/[0.06] px-[11px] py-2 text-[11px] font-semibold uppercase
+                     tracking-[0.6px] text-gold-300 wide:flex"
+          title="חיבור בזמן אמת פעיל — הנתונים מתעדכנים אוטומטית"
+        >
+          <span className="h-[6px] w-[6px] rounded-full bg-gold-300 animate-pulse-dot" />
+          חי
+        </div>
+      )}
 
       {total > 0 && (
         <div

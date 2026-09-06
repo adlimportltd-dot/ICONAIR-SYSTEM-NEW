@@ -13,9 +13,12 @@ import { supabase } from '../lib/supabase';
  */
 let channelSeq = 0;
 
-export function useRealtime(tables, onChange, { enabled = true } = {}) {
+export function useRealtime(tables, onChange, { enabled = true, onStatusChange } = {}) {
   const handler = useRef(onChange);
   handler.current = onChange;
+
+  const statusHandler = useRef(onStatusChange);
+  statusHandler.current = onStatusChange;
 
   const key = tables.join(',');
 
@@ -40,7 +43,7 @@ export function useRealtime(tables, onChange, { enabled = true } = {}) {
       );
     });
 
-    channel.subscribe();
+    channel.subscribe((status) => statusHandler.current?.(status));
 
     return () => {
       supabase.removeChannel(channel);
