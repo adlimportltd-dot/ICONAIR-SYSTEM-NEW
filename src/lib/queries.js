@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { enqueue, isNetworkError } from './offlineQueue';
 
 /**
  * כל הגישה ל-Supabase עוברת דרך הקובץ הזה.
@@ -612,7 +613,7 @@ export const listCustomerDevices = (customerId) =>
     .order('serial')
     .then(unwrap);
 
-export const createDevice = (payload) =>
+const createDeviceRemote = (payload) =>
   supabase
     .from('devices')
     // serial מושאר ריק בכוונה — טריגר בבסיס הנתונים מייצר ICN-700-0143
@@ -620,6 +621,29 @@ export const createDevice = (payload) =>
     .select('*, customer:customers(id, name, city, route_name)')
     .single()
     .then(unwrap);
+
+/**
+ * גרסה שמודעת לניתוק רשת: אם הטכנאי בלי קליטה, הרישום נכנס לתור
+ * offline (ר' offlineQueue.js) במקום להיזרק כשגיאה — ה-UI מקבל בחזרה
+ * אובייקט מסומן `__queued`, לא את שורת ה-device האמיתית (זו עוד לא
+ * קיימת ב-DB עד שהתור יסתנכרן), אז מסכים שקוראים לזה צריכים להתייחס
+ * לזה כ"נשמר, יופיע ברשימה אחרי סנכרון" ולא לצפות לאובייקט מלא בחזרה.
+ */
+export async function createDevice(payload) {
+  if (!navigator.onLine) {
+    await enqueue('createDevice', payload);
+    return { __queued: true, ...payload };
+  }
+  try {
+    return await createDeviceRemote(payload);
+  } catch (error) {
+    if (isNetworkError(error)) {
+      await enqueue('createDevice', payload);
+      return { __queued: true, ...payload };
+    }
+    throw error;
+  }
+}
 
 export const updateDevice = (id, patch) =>
   supabase.from('devices').update(patch).eq('id', id).select().single().then(unwrap);
@@ -645,7 +669,7 @@ export const listOilEntries = ({ limit = 60 } = {}) =>
  * טריגר בבסיס הנתונים עושה את זה, כדי שהיומן והמכשיר לא יוכלו לסתור זה את זה
  * גם אם מישהו יכניס שורה ישירות מה-SQL Editor.
  */
-export const createOilEntry = (payload) =>
+const createOilEntryRemote = (payload) =>
   supabase
     .from('oil_tracking')
     .insert(payload)
@@ -657,6 +681,23 @@ export const createOilEntry = (payload) =>
     .single()
     .then(unwrap);
 
+/** גרסה מודעת-לניתוק — ר' ההערה על createDevice למעלה, אותו עיקרון בדיוק. */
+export async function createOilEntry(payload) {
+  if (!navigator.onLine) {
+    await enqueue('createOilEntry', payload);
+    return { __queued: true, ...payload };
+  }
+  try {
+    return await createOilEntryRemote(payload);
+  } catch (error) {
+    if (isNetworkError(error)) {
+      await enqueue('createOilEntry', payload);
+      return { __queued: true, ...payload };
+    }
+    throw error;
+  }
+}
+
 /**
  * "סיום ביקור" — עוטפת את אותו insert שעושה createOilEntry, אבל דרך
  * ה-RPC complete_visit (ר' iconair_schema_phase3_visits.sql) שגם מוריד
@@ -664,7 +705,7 @@ export const createOilEntry = (payload) =>
  * הפעולה נכשלת ושום דבר לא נרשם. עד שה-SQL ההוא ירוץ, הקריאה הזו
  * תיכשל עם "function public.complete_visit does not exist".
  */
-export const completeVisit = ({
+const completeVisitRemote = ({
   device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, notes,
 }) =>
   supabase
@@ -679,6 +720,47 @@ export const completeVisit = ({
     })
     .single()
     .then(unwrap);
+
+/** גרסה מודעת-לניתוק — ר' ההערה על createDevice למעלה, אותו עיקרון בדיוק. */
+export async function completeVisit(payload) {
+  if (!navigator.onLine) {
+    await enqueue('completeVisit', payload);
+    return { __queued: true, ...payload };
+  }
+  try {
+    return await completeVisitRemote(payload);
+  } catch (error) {
+    if (isNetworkError(error)) {
+      await enqueue('completeVisit', payload);
+      return { __queued: true, ...payload };
+    }
+    throw error;
+  }
+}
+
+/**
+ * מריץ בזמן סנכרון (offlineSync.js) — לא ב-UI החי. אם עד שהתור הגיע
+ * לפה כבר אין מלאי נייד תואם (מישהו אחר צרך אותו בינתיים, או שהטכנאי
+ * עצמו כבר השתמש בו בפעולה מסונכרנת קודמת מאותו תור), נופלים לאותה
+ * "רשומה בלי ניכוי מלאי" שה-UI החי כבר עושה (ר' NewOilEntryModal /
+ * CompleteVisitModal) — כדי שביקור אמיתי שהתבצע בשטח לעולם לא ייעלם
+ * רק כי הנהלת המלאי לא הסתדרה, גם כשזה מתגלה מאוחר יותר בסנכרון.
+ */
+async function completeVisitForSync(payload) {
+  try {
+    return await completeVisitRemote(payload);
+  } catch (error) {
+    if (!String(error?.message ?? '').includes('אין מלאי נייד')) throw error;
+    return createOilEntryRemote(payload);
+  }
+}
+
+/** ממופה מ-offlineSync.js לפי type של פריט בתור — לא לקרוא ישירות מ-UI. */
+export const OFFLINE_EXECUTORS = {
+  createDevice: createDeviceRemote,
+  createOilEntry: createOilEntryRemote,
+  completeVisit: completeVisitForSync,
+};
 
 /* =====================================================================
    מלאי נייד (technician_stock) — "מה יש ברכב עכשיו".

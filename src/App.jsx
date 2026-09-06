@@ -5,6 +5,9 @@ import { isSupabaseConfigured } from './lib/supabase';
 import { getDashboard, listRecentCompletedVisits } from './lib/queries';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { startAutoSync } from './lib/offlineSync';
+import { listQueue } from './lib/offlineQueue';
 import { allNavItems, screenMeta } from './config/navigation';
 
 import Sidebar from './components/Sidebar';
@@ -145,6 +148,40 @@ function Shell() {
     return () => clearTimeout(timer);
   }, [visitToast]);
 
+  // Offline-first: פעולות שדה קריטיות (עדכון שמן/סיום ביקור/רישום מכשיר,
+  // ר' queries.js) נכתבות לתור מקומי כשאין רשת, במקום להיזרק כשגיאה.
+  // pendingCount נבדק בכל טעינה + בכל שינוי במסך, לא רק פעם אחת — כדי
+  // שהמונה בפס העליון יהיה נכון גם רגע אחרי שטכנאי שומר עוד פעולה
+  // בזמן שהוא עדיין לא מקוון.
+  const isOnline = useOnlineStatus();
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncToast, setSyncToast] = useState(null);
+
+  const refreshPendingCount = useCallback(() => {
+    listQueue().then((items) => setPendingCount(items.filter((i) => i.status === 'pending').length));
+  }, []);
+
+  useEffect(() => {
+    refreshPendingCount();
+    const stop = startAutoSync({
+      onSynced: (result) => {
+        refreshPendingCount();
+        setSyncToast(`סונכרנו ${result.synced} פעולות שנשמרו בזמן שהיית לא מקוון`);
+      },
+    });
+    const interval = setInterval(refreshPendingCount, 5000);
+    return () => {
+      stop();
+      clearInterval(interval);
+    };
+  }, [refreshPendingCount]);
+
+  useEffect(() => {
+    if (!syncToast) return undefined;
+    const timer = setTimeout(() => setSyncToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [syncToast]);
+
   const navigate = useCallback((id) => {
     setActiveId(id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -160,6 +197,30 @@ function Shell() {
   return (
     <>
       <div className="ambient-field" aria-hidden />
+
+      {!isOnline && (
+        <div
+          role="status"
+          className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-2
+                     bg-warn px-3 py-2 text-center text-[13px] font-semibold text-[#221B0C]"
+        >
+          <span className="h-2 w-2 flex-none animate-pulse-dot rounded-full bg-[#221B0C]" />
+          מצב לא מקוון — הנתונים יישמרו ויסתנכרנו אוטומטית ברגע שהחיבור יחזור
+          {pendingCount > 0 && ` (${pendingCount} פעולות ממתינות)`}
+        </div>
+      )}
+
+      {syncToast && (
+        <div
+          role="status"
+          className="glass fixed inset-x-0 top-4 z-50 mx-auto flex w-fit max-w-[92vw] items-center
+                     gap-2.5 rounded-pill px-4 py-2.5 text-[13px] font-medium shadow-lift
+                     animate-rise"
+        >
+          <span className="h-2 w-2 flex-none rounded-full bg-ok" />
+          {syncToast}
+        </div>
+      )}
 
       {visitToast && (
         <div
