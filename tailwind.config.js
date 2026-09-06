@@ -63,9 +63,13 @@ export default {
         pill: '13px',
       },
       boxShadow: {
-        lift: '0 24px 48px -30px rgba(0,0,0,.95)',
-        'glass-hi': 'inset 0 1px 0 rgba(255,255,255,.07)',
+        // הצללה דו-שכבתית: אחת רחבה ורכה לעומק כללי, אחת צמודה וחדה
+        // יותר שנותנת לכרטיס "לקום" מהרקע — ביחד זה מה שנראה תלת-ממדי
+        // במקום שטוח, בלי להיות כבד מדי.
+        lift: '0 32px 64px -28px rgba(0,0,0,.85), 0 10px 22px -14px rgba(0,0,0,.65)',
+        'glass-hi': 'inset 0 1px 0 rgba(255,255,255,.06), inset 0 0 32px rgba(212,175,55,.03)',
         'gold-glow': '0 0 14px 1px rgba(212,175,55,.7)',
+        'icon-glow': '0 6px 16px -6px rgba(212,175,55,.35), inset 0 1px 0 rgba(255,255,255,.1)',
       },
       keyframes: {
         rise: {

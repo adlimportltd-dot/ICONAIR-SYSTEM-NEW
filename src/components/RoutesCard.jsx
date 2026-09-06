@@ -1,4 +1,5 @@
 import GlassCard, { CardHead } from './ui/GlassCard';
+import { RouteIcon } from './ui/Icons';
 
 /**
  * אין טבלת route_stops (ביקורים מתוכננים) בסכימה הפשוטה, אז אין "התקדמות
@@ -44,6 +45,7 @@ export default function RoutesCard({ delay, routes = [], onOpenMap }) {
   return (
     <GlassCard delay={delay}>
       <CardHead
+        icon={RouteIcon}
         title="פילוח לפי קו הפצה"
         subtitle={`${routes.length} קווים · ${totalDevices} מכשירים בשטח`}
         action="למסלולים"

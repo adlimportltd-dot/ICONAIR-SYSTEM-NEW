@@ -1,4 +1,5 @@
 import GlassCard, { CardHead } from './ui/GlassCard';
+import { BoxIcon } from './ui/Icons';
 
 const FILL = {
   gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
@@ -10,7 +11,7 @@ const FILL = {
 export default function StockCard({ delay, stock = [], monthTotal }) {
   return (
     <GlassCard delay={delay}>
-      <CardHead title="תצרוכת שמן לפי ניחוח" subtitle="החודש הנוכחי, מתוך יומן המילויים" />
+      <CardHead icon={BoxIcon} title="תצרוכת שמן לפי ניחוח" subtitle="החודש הנוכחי, מתוך יומן המילויים" />
 
       <div className="flex flex-col gap-[15px]">
         {stock.map((item) => (

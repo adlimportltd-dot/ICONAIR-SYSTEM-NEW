@@ -1,4 +1,5 @@
 import GlassCard, { CardHead, Swatch } from './ui/GlassCard';
+import { DeviceIcon } from './ui/Icons';
 
 /* הזהב שמור לדגם הדגל (Icon 700) — הצבע מסמן היררכיה, לא רק קטגוריה */
 const TONE = {
@@ -30,7 +31,7 @@ export default function FleetBreakdown({ delay, data = [] }) {
 
   return (
     <GlassCard delay={delay}>
-      <CardHead title="פילוח הצי" subtitle="לפי דגם מכשיר" />
+      <CardHead icon={DeviceIcon} title="פילוח הצי" subtitle="לפי דגם מכשיר" />
 
       <div className="flex flex-col gap-[18px]">
         <div className="relative mx-auto mt-0.5 h-[180px] w-[180px]">

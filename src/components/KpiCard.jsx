@@ -34,21 +34,21 @@ export default function KpiCard({ kpi, delay }) {
   if (!Icon) return null;
 
   return (
-    <GlassCard delay={delay} className="!px-5 !py-[18px]">
-      <div className="mb-3.5 flex items-center gap-[11px]">
-        <div className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl
-                        border border-white/[0.13] bg-white/[0.04]">
+    <GlassCard delay={delay} className="!px-6 !py-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="grid h-10 w-10 flex-none place-items-center rounded-xl
+                        border border-gold-300/[0.16] bg-gold-500/[0.07] shadow-icon-glow">
           <Icon className={`h-[18px] w-[18px] ${iconTone[kpi.iconColor]}`} />
         </div>
-        <div className="text-[13px] font-medium text-text-dim">{kpi.label}</div>
+        <div className="text-[12.5px] font-semibold uppercase tracking-[1.1px] text-text-faint">{kpi.label}</div>
       </div>
 
-      <div className="tabular font-display text-[38px] font-bold leading-none tracking-tight">
+      <div className="tabular font-display text-[44px] font-bold leading-none tracking-[-0.5px]">
         {kpi.value}
-        {kpi.unit && <span className="ms-[5px] font-ui text-[15px] font-medium text-text-dim">{kpi.unit}</span>}
+        {kpi.unit && <span className="ms-[6px] font-ui text-[15px] font-medium text-text-dim">{kpi.unit}</span>}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px] text-text-faint">
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-[12.5px] text-text-faint">
         <Trend {...kpi.trend} />
         {kpi.footnote}
       </div>

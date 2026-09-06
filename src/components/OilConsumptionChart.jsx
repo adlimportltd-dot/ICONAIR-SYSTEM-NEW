@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import GlassCard, { CardHead, Swatch } from './ui/GlassCard';
+import { DropIcon } from './ui/Icons';
 
 /* מערכת הקואורדינטות של הגרף. ה-SVG נמתח לרוחב הכרטיס
    (preserveAspectRatio="none"), ולכן כל קו מקבל vector-effect
@@ -32,8 +33,35 @@ function buildScale(series) {
   return { x, y };
 }
 
-const toPath = (values, x, y) =>
-  values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i, values.length).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+/**
+ * עקומת Catmull-Rom הפוכה לבזייה מעוקבת — עוברת בדיוק דרך כל נקודת
+ * נתון (בניגוד לעקומה מוחלקת-בממוצע), אבל בלי הפינות החדות של קווים
+ * ישרים. זה מה שנותן לגרף מראה "אנליטיקס" נקי במקום סקיצה גרפית.
+ */
+function smoothPath(points) {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)} L${points[1][0].toFixed(1)} ${points[1][1].toFixed(1)}`;
+  }
+
+  let d = `M${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+
+    d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+const toPath = (values, x, y) => smoothPath(values.map((v, i) => [x(i, values.length), y(v)]));
 
 export default function OilConsumptionChart({ delay, data }) {
   const { months = [], actual = [], forecast = [], summary = {} } = data ?? {};
@@ -57,6 +85,7 @@ export default function OilConsumptionChart({ delay, data }) {
   return (
     <GlassCard delay={delay}>
       <CardHead
+        icon={DropIcon}
         title="צריכת שמן לאורך השנה"
         subtitle="ליטרים בפועל מול ממוצע נגרר של 3 החודשים הקודמים"
         action={`${months.length} חודשים`}
@@ -120,7 +149,7 @@ export default function OilConsumptionChart({ delay, data }) {
           {[
             { stroke: 'rgba(212,175,55,.16)', width: 22 },
             { stroke: '#D4AF37', width: 8 },
-            { stroke: '#0C0E12', width: 3 },
+            { stroke: '#121212', width: 3 },
           ].map((dot) => (
             <line
               key={dot.width}

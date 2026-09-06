@@ -1,4 +1,5 @@
 import GlassCard, { CardHead } from './ui/GlassCard';
+import { WrenchIcon } from './ui/Icons';
 
 /* פס החומרה בקצה השורה — הדחיפות נקראת לפני שקוראים מילה */
 const SEVERITY_BAR = {
@@ -19,6 +20,7 @@ export default function ServiceCallsCard({ delay, calls = [], subtitle, onOpenAl
   return (
     <GlassCard delay={delay}>
       <CardHead
+        icon={WrenchIcon}
         title="קריאות שירות פתוחות"
         subtitle={subtitle}
         action="לכל הקריאות"

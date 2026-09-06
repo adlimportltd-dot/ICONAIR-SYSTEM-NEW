@@ -11,10 +11,10 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
   const template = columns.map((c) => c.width ?? 'minmax(0,1fr)').join(' ');
 
   return (
-    <div className="flex flex-col gap-[9px]">
+    <div className="flex flex-col gap-2.5">
       {/* כותרות — רק בתצוגת הרשת */}
       <div
-        className="hidden gap-3 px-3.5 pb-1 text-[11.5px] font-semibold tracking-wide text-text-faint sm:grid"
+        className="hidden gap-3 px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.8px] text-text-faint sm:grid"
         style={{ gridTemplateColumns: actions ? `${template} auto` : template }}
       >
         {columns.map((column) => (
@@ -32,8 +32,8 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
           <div
             key={key}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`inner-row px-3.5 py-3 transition-colors ${
-              onRowClick ? 'cursor-pointer hover:border-white/[0.13] hover:bg-white/[0.05]' : ''
+            className={`inner-row px-4 py-[15px] ${
+              onRowClick ? 'cursor-pointer hover:border-gold-300/30 hover:bg-white/[0.045]' : ''
             }`}
           >
             {/* --- רשת: מרוחב sm ומעלה --- */}

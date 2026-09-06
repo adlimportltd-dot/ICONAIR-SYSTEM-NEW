@@ -1,4 +1,5 @@
 import GlassCard, { CardHead } from './ui/GlassCard';
+import { DropIcon } from './ui/Icons';
 
 /** ככל שהמכל ריק יותר, המד אדום יותר — הצבע נגזר מהמספר, לא מוגדר ידנית */
 function levelFill(level) {
@@ -11,7 +12,7 @@ function levelFill(level) {
 export default function OilAlertsCard({ delay, alerts = [], onAssignAll }) {
   return (
     <GlassCard delay={delay}>
-      <CardHead title="התראות מלאי שמן" subtitle="מכשירים מתחת ל-20%" />
+      <CardHead icon={DropIcon} title="התראות מלאי שמן" subtitle="מכשירים מתחת ל-20%" />
 
       <div className="flex flex-col gap-3.5">
         {alerts.map((alert) => (
