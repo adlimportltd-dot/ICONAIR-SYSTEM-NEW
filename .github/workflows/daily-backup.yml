@@ -1,0 +1,52 @@
+name: Daily Backup & Morning Health Check
+
+# 05:00 UTC = 08:00 שעון ישראל בקיץ (IDT, UTC+3) / 07:00 בחורף (IST, UTC+2).
+# GitHub Actions cron לא יודע DST — ריצה סביב 8:00 בבוקר בכל השנה, עם סטייה
+# של עד שעה בחורף. אפשר גם להריץ ידנית בכל רגע דרך "Run workflow" למעלה.
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install script dependencies
+        run: npm install --no-save pg @supabase/supabase-js
+
+      - name: Set backup timestamp
+        run: echo "STAMP=$(date -u +%Y-%m-%d_%H-%M-%SZ)" >> "$GITHUB_ENV"
+
+      - name: Dump database (schema + data)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir -p backup
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges --format=plain \
+            --file="backup/database_${STAMP}.sql"
+
+      - name: Back up storage buckets (contracts, branding)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-storage-buckets.cjs backup/media
+
+      - name: Upload backup as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iconair-backup-${{ env.STAMP }}
+          path: backup
+          retention-days: 90
+
+      - name: Morning health check
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/morning-health-check.cjs
