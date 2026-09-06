@@ -30,7 +30,7 @@ export function CardHead({ icon: Icon, title, subtitle, action, onAction }) {
       )}
       <div className="min-w-0">
         <h2 className="font-display text-[16.5px] font-bold leading-tight">{title}</h2>
-        {subtitle && <div className="mt-1 text-xs text-text-faint">{subtitle}</div>}
+        {subtitle && <div className="mt-1 text-[13px] text-text-faint">{subtitle}</div>}
       </div>
       {action && (
         <button type="button" onClick={onAction} className="ghost-btn ms-auto">

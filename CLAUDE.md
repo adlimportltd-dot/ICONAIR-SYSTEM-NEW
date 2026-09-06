@@ -69,8 +69,18 @@
 - מספר-על (KPI): `font-display text-[44px] font-bold tabular leading-none
   tracking-[-0.5px]`. תווית מעליו: `text-[12.5px] font-semibold uppercase
   tracking-[1.1px] text-text-faint`.
-- כותרת עמודת טבלה: `text-[11px] font-semibold uppercase tracking-[0.8px]
+- כותרת עמודת טבלה: `text-[12px] font-semibold uppercase tracking-[0.8px]
   text-text-faint`.
+- **רצפת גודל טקסט (2026-09-06, אחרי תיקון קונטרסט/גדלים בכל המערכת):**
+  טקסט גוף/תווית/הינט בטפסים ומודלים — מינימום `13px`, ועדיף `14px`
+  (`Field` label/input/hint, `Modal` subtitle, כפתורים — כולם כבר ב-13-14px,
+  ר' `Field.jsx`). היוצא מן הכלל היחיד: שבבי סטטוס קומפקטיים (`.chip`,
+  `12px`) ו-badges קטנים כמו מד-אחוזים בטבלה — אלה נשארים קומפקטיים
+  בכוונה כי הם תגית/מספר בודד בתוך תא, לא טקסט לקריאה רציפה; גם הם
+  לא יורדים מתחת ל-`12px`. `text-faint` (הדרג השלישי/העמום) הוגדר מחדש
+  ל-`#A39B8E` בדיוק כדי שגם הטקסט ה"פחות חשוב" יהיה קריא, לא רק חוקי —
+  אל תשתמש בגוונים אפורים נוספים/חדשים לטקסט משני, רק בשלושת ה-`text`
+  tokens הקיימים.
 - כל ספרה שמייצגת נתון אמיתי (לא אינדקס/מק"ט) מקבלת `tabular` (=
   `font-variant-numeric: tabular-nums`, מוגדר ב-`index.css`) — כדי
   שספרות לא "יקפצו" ברוחב כשהן מתעדכנות.

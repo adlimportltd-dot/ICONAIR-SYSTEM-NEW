@@ -21,7 +21,7 @@ function Trend({ direction, text, hideArrow }) {
   return (
     <span
       className={`tabular inline-flex items-center gap-1 whitespace-nowrap rounded-lg border
-                  px-[9px] py-[3px] text-[11.5px] font-semibold ${trendTone[direction]}`}
+                  px-[9px] py-[4px] text-[12.5px] font-semibold ${trendTone[direction]}`}
     >
       {!hideArrow && direction !== 'flat' && <Arrow className="h-[11px] w-[11px]" />}
       {text}
@@ -48,7 +48,7 @@ export default function KpiCard({ kpi, delay }) {
         {kpi.unit && <span className="ms-[6px] font-ui text-[15px] font-medium text-text-dim">{kpi.unit}</span>}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-[12.5px] text-text-faint">
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px] text-text-faint">
         <Trend {...kpi.trend} />
         {kpi.footnote}
       </div>

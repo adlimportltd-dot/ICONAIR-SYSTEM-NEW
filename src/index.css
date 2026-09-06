@@ -93,15 +93,15 @@
 
   /* --- שבב סטטוס --- */
   .chip {
-    @apply whitespace-nowrap rounded-[7px] border border-gold-300/[0.1] px-[9px] py-[3px]
-           text-[11px] font-semibold text-text-dim;
+    @apply whitespace-nowrap rounded-[7px] border border-gold-300/[0.16] px-[10px] py-[4px]
+           text-[12px] font-semibold text-text-dim;
   }
 
   /* --- כפתור פעולה משני בראש כרטיס --- */
   .ghost-btn {
-    @apply whitespace-nowrap rounded-[10px] border border-gold-300/[0.1] px-[11px] py-1.5
-           text-[12.5px] text-text-dim transition-colors
-           hover:border-gold-300/40 hover:text-gold-300;
+    @apply whitespace-nowrap rounded-[10px] border border-gold-300/[0.16] px-3 py-1.5
+           text-[13.5px] font-medium text-text-dim transition-colors
+           hover:border-gold-300/50 hover:text-gold-300;
   }
 
   .tabular {

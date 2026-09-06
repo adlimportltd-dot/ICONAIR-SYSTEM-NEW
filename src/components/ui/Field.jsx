@@ -7,15 +7,15 @@ const controlClass =
 
 export function Field({ label, hint, error, children, required }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[12.5px] font-medium text-text-dim">
+    <label className="flex flex-col gap-2">
+      <span className="text-[14px] font-medium text-text-dim">
         {label}
         {required && <span className="ms-1 text-gold-500">*</span>}
       </span>
       {children}
       {error
-        ? <span className="text-[11.5px] text-crit-soft">{error}</span>
-        : hint && <span className="text-[11.5px] text-text-faint">{hint}</span>}
+        ? <span className="text-[13px] text-crit-soft">{error}</span>
+        : hint && <span className="text-[13px] text-text-faint">{hint}</span>}
     </label>
   );
 }
@@ -64,7 +64,7 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
     <button
       type="button"
       disabled={loading || props.disabled}
-      className={`rounded-pill px-4 py-2.5 text-[13.5px] font-semibold text-[#221B0C]
+      className={`rounded-pill px-4 py-2.5 text-[14px] font-semibold text-[#221B0C]
                   transition-opacity disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
       style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
       {...props}
@@ -76,7 +76,7 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
 
 export function SecondaryButton({ className = '', children, ...props }) {
   return (
-    <button type="button" className={`ghost-btn px-4 py-2.5 text-[13.5px] ${className}`} {...props}>
+    <button type="button" className={`ghost-btn px-4 py-2.5 text-[14px] ${className}`} {...props}>
       {children}
     </button>
   );
