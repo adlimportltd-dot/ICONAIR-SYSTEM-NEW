@@ -12,7 +12,8 @@ import { useRealtime } from '../hooks/useRealtime';
 import {
   listCustomerDevices,
   listCustomerSites,
-  updateCustomerSiteAmount,
+  createCustomerSite,
+  upsertSiteModelPrice,
   listScents,
   listDeviceModels,
   listContracts,
@@ -55,9 +56,11 @@ const CONTRACT_STATUS_TONE = {
 export default function CustomerDevicesModal({ customer, onClose, onDevicesChanged }) {
   const { isAdmin } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
+  const [deviceFormSite, setDeviceFormSite] = useState(null);
   const [confirmDeleteDeviceId, setConfirmDeleteDeviceId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
 
   const customerId = customer?.id ?? null;
 
@@ -102,6 +105,10 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
   const rows = devices.data ?? [];
   const siteRows = sites.data ?? [];
   const hasSites = siteRows.length > 0;
+  const siteOptions = useMemo(
+    () => siteRows.map((s) => ({ value: s.id, label: [s.label, s.city].filter(Boolean).join(' · ') })),
+    [siteRows]
+  );
 
   // מכשיר עם site_id מקובץ תחת הכתובת שלו; מכשיר בלי site_id (למשל
   // לפני שהכתובות יובאו, או נרשם ידנית בלי לבחור כתובת) נופל ל"ללא
@@ -118,7 +125,13 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
 
   function handleCreated() {
     devices.refetch();
+    sites.refetch();
     onDevicesChanged?.();
+  }
+
+  function openAddDevice(site = null) {
+    setDeviceFormSite(site);
+    setFormOpen(true);
   }
 
   async function handleDeleteDevice(device) {
@@ -148,14 +161,32 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
         subtitle={[customer?.city, customer?.route_name].filter(Boolean).join(' · ') || undefined}
         onClose={onClose}
       >
-        <div className="mb-3.5 flex items-center gap-3">
+        <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
           <div className="text-[12.5px] text-text-dim">
             {devices.loading ? 'טוען מכשירים…' : `${rows.length} מכשירים רשומים`}
           </div>
-          <PrimaryButton className="ms-auto" onClick={() => setFormOpen(true)}>
-            הוסף מכשיר
-          </PrimaryButton>
+          <div className="ms-auto flex flex-wrap gap-2">
+            {isAdmin && (
+              <SecondaryButton onClick={() => setAddSiteOpen((v) => !v)}>
+                הוסף כתובת
+              </SecondaryButton>
+            )}
+            <PrimaryButton onClick={() => openAddDevice(null)}>
+              הוסף מכשיר
+            </PrimaryButton>
+          </div>
         </div>
+
+        {addSiteOpen && (
+          <AddSiteForm
+            customerId={customerId}
+            onCancel={() => setAddSiteOpen(false)}
+            onCreated={() => {
+              setAddSiteOpen(false);
+              sites.refetch();
+            }}
+          />
+        )}
 
         {deleteError && (
           <div className="mb-3 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
@@ -171,8 +202,8 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
             confirmDeleteDeviceId={confirmDeleteDeviceId}
             deletingId={deletingId}
             onDeleteDevice={handleDeleteDevice}
-            vatMode={customer?.vat_mode}
-            onAmountSaved={sites.refetch}
+            onAddDevice={openAddDevice}
+            onPriceSaved={sites.refetch}
           />
         ) : (
           <Async
@@ -208,12 +239,68 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
       <DeviceFormModal
         open={formOpen}
         lockedCustomer={customer}
+        siteOptions={siteOptions}
+        lockedSite={deviceFormSite}
         scentOptions={scentOptions}
         modelOptions={modelOptions}
         onClose={() => setFormOpen(false)}
         onCreated={handleCreated}
       />
     </>
+  );
+}
+
+/** טופס קטן ומוטבע להוספת כתובת חדשה ללקוח — לא מודאל נפרד, כדי שיהיה ברור שזה חלק מאותו כרטיס לקוח */
+function AddSiteForm({ customerId, onCancel, onCreated }) {
+  const [label, setLabel] = useState('');
+  const [city, setCity] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!label.trim()) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await createCustomerSite(customerId, { label: label.trim(), city: city.trim() });
+      onCreated();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-3.5 rounded-row border border-gold-300/[0.2] bg-gold-500/[0.05] p-3.5">
+      <div className="flex flex-wrap items-end gap-2.5">
+        <label className="flex min-w-[160px] flex-1 flex-col gap-1">
+          <span className="text-[11.5px] text-text-faint">שם הכתובת *</span>
+          <input
+            autoFocus
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="לדוגמה: אהוד מנור 9"
+            required
+            className="rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2 text-[13px] text-text
+                       focus:border-gold-500/45 focus:outline-none"
+          />
+        </label>
+        <label className="flex min-w-[120px] flex-1 flex-col gap-1">
+          <span className="text-[11.5px] text-text-faint">עיר</span>
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2 text-[13px] text-text
+                       focus:border-gold-500/45 focus:outline-none"
+          />
+        </label>
+        <PrimaryButton type="submit" loading={busy}>שמירת כתובת</PrimaryButton>
+        <SecondaryButton type="button" onClick={onCancel}>ביטול</SecondaryButton>
+      </div>
+      {error && <div className="mt-2.5 text-[12px] text-crit-soft">{error}</div>}
+    </form>
   );
 }
 
@@ -270,21 +357,48 @@ function DeviceRow({ device, isAdmin, confirmDeleteDeviceId, deletingId, onDelet
 }
 
 /**
+ * מחשב את פילוח הדגמים והסכום לכתובת: כמות מכל דגם (מכשירים מותקנים
+ * בפועל, לא uninstalled) × מחיר-ליחידה שהוגדר לאותו דגם באותה כתובת
+ * (customer_site_model_prices — ר' phase17). דגם בלי מחיר מוגדר נכנס
+ * לסכימה עם 0 — מוצג בבירור בטבלה, לא נעלם. המחיר תמיד לפני מע״מ.
+ */
+function computeSiteBreakdown(devices, prices) {
+  const priceByModel = new Map((prices ?? []).map((p) => [p.model, Number(p.unit_price)]));
+  const countByModel = new Map();
+  for (const d of devices) {
+    if (d.status === 'uninstalled') continue;
+    countByModel.set(d.model, (countByModel.get(d.model) ?? 0) + 1);
+  }
+  const lines = [...countByModel.entries()]
+    .map(([model, count]) => {
+      const unitPrice = priceByModel.get(model) ?? 0;
+      return { model, count, unitPrice, lineTotal: count * unitPrice };
+    })
+    .sort((a, b) => a.model.localeCompare(b.model, 'he'));
+
+  const preVatRaw = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+  return { lines, ...computeVat(preVatRaw, 'excluded') };
+}
+
+/**
  * פילוח לפי כתובת — ללקוח רב-כתובתי (כמו אוורסט) יש עשרות אתרים
- * (customer_sites), כל אחד עם המכשירים והעלות הידנית שלו. במקום סכום
- * גלובלי אחד לכל הלקוח, כל כתובת היא כרטיסייה נפרדת עם פילוח דגמים
- * ועלות משלה — בדיוק מה שביקש המשתמש.
+ * (customer_sites), כל אחד עם המכשירים ומחירי-הדגמים שלו. במקום סכום
+ * גלובלי אחד לכל הלקוח, כל כתובת היא כרטיסייה נפרדת עם פילוח דגמים,
+ * מחיר ליחידה לכל דגם, וסיכום (לפני מע״מ / מע״מ / כולל) משלה.
  */
 function SitesSection({
-  sites, devicesBySite, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, vatMode, onAmountSaved,
+  sites, devicesBySite, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, onAddDevice, onPriceSaved,
 }) {
   const unassigned = devicesBySite.get('__none__') ?? [];
-  const grandTotal = sites.reduce((sum, s) => sum + computeVat(s.amount_due, vatMode).total, 0);
+  const grandTotal = sites.reduce(
+    (sum, s) => sum + computeSiteBreakdown(devicesBySite.get(s.id) ?? [], s.prices).total,
+    0
+  );
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between rounded-row border border-gold-300/[0.2] bg-gold-500/[0.06] px-3.5 py-2.5">
-        <span className="text-[12.5px] font-medium text-text-dim">{sites.length} כתובות · סה״כ לכל הכתובות</span>
+        <span className="text-[12.5px] font-medium text-text-dim">{sites.length} כתובות · סה״כ לכל הכתובות (כולל מע״מ)</span>
         <span className="tabular font-mono text-[15px] font-bold text-gold-600">{formatCurrency(grandTotal)}</span>
       </div>
 
@@ -297,8 +411,8 @@ function SitesSection({
           confirmDeleteDeviceId={confirmDeleteDeviceId}
           deletingId={deletingId}
           onDeleteDevice={onDeleteDevice}
-          vatMode={vatMode}
-          onAmountSaved={onAmountSaved}
+          onAddDevice={onAddDevice}
+          onPriceSaved={onPriceSaved}
         />
       ))}
 
@@ -323,27 +437,10 @@ function SitesSection({
   );
 }
 
-/** כרטיסיית כתובת בודדת: כותרת + פילוח דגמים + רשימת מכשירים + עלות ניתנת לעריכה */
-function SiteCard({ site, devices, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, vatMode, onAmountSaved }) {
+/** כרטיסיית כתובת בודדת: כותרת + טבלת מחיר-לדגם + סיכום מע״מ + רשימת מכשירים */
+function SiteCard({ site, devices, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, onAddDevice, onPriceSaved }) {
   const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState(String(site.amount_due ?? 0));
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(null);
-
-  const vat = computeVat(site.amount_due, vatMode);
-
-  async function saveAmount() {
-    setSaveError(null);
-    setSaving(true);
-    try {
-      await updateCustomerSiteAmount(site.id, Number(amount || 0));
-      onAmountSaved?.();
-    } catch (caught) {
-      setSaveError(describeError(caught));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const breakdown = computeSiteBreakdown(devices, site.prices);
 
   return (
     <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
@@ -355,46 +452,38 @@ function SiteCard({ site, devices, isAdmin, confirmDeleteDeviceId, deletingId, o
           </div>
         </div>
         <div className="flex-none text-end">
-          <div className="tabular font-mono text-[14px] font-semibold text-gold-600">{formatCurrency(vat.total)}</div>
+          <div className="tabular font-mono text-[14px] font-semibold text-gold-600">{formatCurrency(breakdown.total)}</div>
           <div className="text-[10.5px] text-text-faint">{devices.length} מכשירים</div>
         </div>
       </button>
 
       {open && (
         <div className="mt-3 border-t border-black/[0.06] pt-3">
-          {isAdmin && (
-            <div className="mb-3 flex flex-wrap items-end gap-2.5">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11.5px] text-text-faint">סכום לכתובת זו (₪, כולל/לפני מע״מ לפי הגדרת הלקוח)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-[140px] rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-1.5 text-[13px] text-text
-                             focus:border-gold-500/45 focus:outline-none"
-                />
-              </label>
-              <SecondaryButton onClick={saveAmount} disabled={saving}>
-                {saving ? 'שומר…' : 'שמירת סכום'}
-              </SecondaryButton>
-              <span className="text-[11px] text-text-faint">
-                לפני מע״מ {formatCurrency(vat.preVat)} · מע״מ {formatCurrency(vat.vatAmount)}
-              </span>
-            </div>
-          )}
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="text-[12.5px] font-semibold text-text-dim">תמחור לפי דגם</h4>
+            {isAdmin && (
+              <SecondaryButton onClick={() => onAddDevice(site)}>הוסף מכשיר לכתובת זו</SecondaryButton>
+            )}
+          </div>
 
-          {saveError && (
-            <div className="mb-3 rounded-row border border-crit/25 bg-crit/[0.07] px-3 py-2 text-[12px] text-crit-soft">
-              {saveError}
-            </div>
-          )}
-
-          {devices.length === 0 ? (
+          {breakdown.lines.length === 0 ? (
             <div className="text-[12.5px] text-text-faint">אין מכשירים בכתובת הזו</div>
           ) : (
-            <div className="flex flex-col gap-[9px]">
+            <div className="flex flex-col gap-1.5">
+              {breakdown.lines.map((line) => (
+                <ModelPriceRow key={line.model} site={site} line={line} isAdmin={isAdmin} onSaved={onPriceSaved} />
+              ))}
+
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 rounded-row bg-black/[0.03] px-3 py-2.5 text-[12px]">
+                <span className="text-text-faint">לפני מע״מ <b className="tabular font-mono text-text">{formatCurrency(breakdown.preVat)}</b></span>
+                <span className="text-text-faint">מע״מ (18%) <b className="tabular font-mono text-text">{formatCurrency(breakdown.vatAmount)}</b></span>
+                <span className="text-text-faint">סה״כ כולל מע״מ <b className="tabular font-mono text-[13px] text-gold-600">{formatCurrency(breakdown.total)}</b></span>
+              </div>
+            </div>
+          )}
+
+          {devices.length > 0 && (
+            <div className="mt-3.5 flex flex-col gap-[9px]">
               {devices.map((device) => (
                 <DeviceRow
                   key={device.id}
@@ -409,6 +498,66 @@ function SiteCard({ site, devices, isAdmin, confirmDeleteDeviceId, deletingId, o
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** שורת "דגם · כמות · מחיר ליחידה · סה״כ" בטבלת התמחור של כתובת אחת */
+function ModelPriceRow({ site, line, isAdmin, onSaved }) {
+  const [price, setPrice] = useState(String(line.unitPrice));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function save() {
+    setError(null);
+    setSaving(true);
+    try {
+      await upsertSiteModelPrice(site.id, line.model, Number(price || 0));
+      onSaved?.();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2.5 rounded-row border border-black/[0.06] bg-ink-900 px-3 py-2">
+      <StatusChip tone={modelTone(line.model)}>{line.model}</StatusChip>
+      <span className="tabular text-[12px] text-text-faint">× {line.count}</span>
+
+      {isAdmin ? (
+        <div className="ms-auto flex items-center gap-1.5">
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-[90px] rounded-pill border border-black/[0.09] bg-ink-800 px-2.5 py-1 text-[12.5px] text-text
+                       focus:border-gold-500/45 focus:outline-none"
+          />
+          <span className="text-[11px] text-text-faint">₪ / יח׳</span>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || Number(price || 0) === line.unitPrice}
+            className="rounded-pill border border-gold-300/[0.3] bg-gold-500/[0.1] px-2.5 py-1 text-[11.5px]
+                       font-semibold text-gold-600 transition-colors disabled:opacity-40
+                       hover:border-gold-300/50"
+          >
+            {saving ? 'שומר…' : 'שמירה'}
+          </button>
+        </div>
+      ) : (
+        <span className="tabular ms-auto text-[12px] text-text-faint">{formatCurrency(line.unitPrice)} / יח׳</span>
+      )}
+
+      <span className="tabular w-[80px] flex-none text-end font-mono text-[13px] font-semibold">
+        {formatCurrency(line.lineTotal)}
+      </span>
+
+      {error && <div className="w-full text-[11px] text-crit-soft">{error}</div>}
     </div>
   );
 }

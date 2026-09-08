@@ -628,22 +628,39 @@ export const listCustomerDevices = (customerId) =>
 
 /**
  * הכתובות (אתרים) של לקוח רב-כתובתי כמו אוורסט — כל כתובת עם המכשירים
- * ששייכים אליה (site_id, לא customer_id) והעלות הידנית שלה (amount_due,
- * ר' phase16). ללקוח חד-כתובתי הרגיל תמיד תחזור רשימה ריקה — זה מה
+ * ששייכים אליה (site_id, לא customer_id) ומחירי הדגמים שהוגדרו לה
+ * (customer_site_model_prices, ר' phase17 — מחיר ליחידה לכל דגם,
+ * לפני מע"מ; הסכום לכתובת נסכם בצד הלקוח מכמות המכשירים × המחיר
+ * לדגם שלהם). ללקוח חד-כתובתי הרגיל תמיד תחזור רשימה ריקה — זה מה
  * ש-CustomerDevicesModal בודק כדי להחליט אם להציג פילוח לפי כתובת
  * או את הרשימה השטוחה הרגילה.
  */
 export const listCustomerSites = (customerId) =>
   supabase
     .from('customer_sites')
-    .select('*, devices(id, model, status)')
+    .select('*, devices(id, model, status), prices:customer_site_model_prices(model, unit_price)')
     .eq('customer_id', customerId)
     .order('label')
     .then(unwrap);
 
-/** עדכון הסכום הידני לכתובת בודדת — ר' listCustomerSites */
-export const updateCustomerSiteAmount = (siteId, amount_due) =>
-  supabase.from('customer_sites').update({ amount_due }).eq('id', siteId).then(unwrap);
+/** יצירת כתובת/אתר חדש ללקוח קיים — עוד לא משויכים אליה מכשירים, זה קורה דרך DeviceFormModal (lockedSite) */
+export const createCustomerSite = (customerId, { label, city }) =>
+  supabase
+    .from('customer_sites')
+    .insert({ customer_id: customerId, label, city: city || null })
+    .select()
+    .single()
+    .then(unwrap);
+
+/**
+ * קביעת מחיר ליחידה לדגם מסוים בכתובת מסוימת — upsert לפי (site_id, model),
+ * כדי שאפשר יהיה לקרוא לזה גם בפעם הראשונה (אין עדיין שורה) וגם בעדכון.
+ */
+export const upsertSiteModelPrice = (siteId, model, unit_price) =>
+  supabase
+    .from('customer_site_model_prices')
+    .upsert({ site_id: siteId, model, unit_price }, { onConflict: 'site_id,model' })
+    .then(unwrap);
 
 /**
  * מחיקת מכשיר לגמרי מהמערכת (לא רק "ניתוק" מהלקוח — customer_id הוא

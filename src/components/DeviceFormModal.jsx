@@ -6,7 +6,7 @@ import { describeError } from '../lib/supabase';
 import { DEVICE_STATUS_LABEL } from '../lib/mappers';
 
 const EMPTY_FORM = {
-  model: 'Icon 500', customer_id: '', scent_name: '',
+  model: 'Icon 500', customer_id: '', site_id: '', scent_name: '',
   oil_level_pct: 100, location_note: '', status: 'active',
 };
 
@@ -21,6 +21,10 @@ const EMPTY_FORM = {
  *
  * lockedCustomer — כשהחלון נפתח מתוך כרטיס לקוח, הלקוח כבר ידוע
  * ואי אפשר לשנות אותו; אחרת בוחרים אותו מהרשימה.
+ *
+ * siteOptions/lockedSite — רק ללקוח רב-כתובתי (יש לו customer_sites).
+ * lockedSite קובע מראש איזו כתובת (למשל כשנפתח מתוך כרטיסיית כתובת
+ * ספציפית); בלעדיו, וכשיש siteOptions, מוצג בורר כתובת חופשי.
  */
 export default function DeviceFormModal({
   open,
@@ -28,6 +32,8 @@ export default function DeviceFormModal({
   scentOptions = [],
   modelOptions = [],
   lockedCustomer = null,
+  siteOptions = [],
+  lockedSite = null,
   onClose,
   onCreated,
 }) {
@@ -41,13 +47,14 @@ export default function DeviceFormModal({
   const keepOpen = useRef(false);
 
   const customerId = lockedCustomer?.id ?? '';
+  const siteId = lockedSite?.id ?? '';
 
   useEffect(() => {
     if (!open) return;
-    setForm({ ...EMPTY_FORM, customer_id: customerId });
+    setForm({ ...EMPTY_FORM, customer_id: customerId, site_id: siteId });
     setError(null);
     setAdded([]);
-  }, [open, customerId]);
+  }, [open, customerId, siteId]);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
@@ -63,6 +70,7 @@ export default function DeviceFormModal({
       const device = await createDevice({
         model: form.model,
         customer_id: form.customer_id,
+        site_id: form.site_id || null,
         scent_name: form.scent_name || null,
         status: form.status,
         oil_level_pct: Number(form.oil_level_pct),
@@ -107,6 +115,20 @@ export default function DeviceFormModal({
           <Field label="לקוח" required>
             <Select value={form.customer_id} onChange={set('customer_id')} options={customerOptions}
                     placeholder="בחר לקוח" required />
+          </Field>
+        )}
+
+        {lockedSite ? (
+          <Field label="כתובת">
+            <div className="inner-row flex items-center gap-2 px-3.5 py-2.5 text-[14px]">
+              <span className="truncate font-semibold">{lockedSite.label}</span>
+              <span className="ms-auto flex-none text-[11.5px] text-text-faint">קבוע לכרטיסייה זו</span>
+            </div>
+          </Field>
+        ) : siteOptions.length > 0 && (
+          <Field label="כתובת" hint="ללקוח הזה יש כמה כתובות — לאיזו שייך המכשיר?">
+            <Select value={form.site_id} onChange={set('site_id')} options={siteOptions}
+                    placeholder="בחר כתובת" />
           </Field>
         )}
 
