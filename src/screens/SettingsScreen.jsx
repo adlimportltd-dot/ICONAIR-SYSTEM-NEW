@@ -47,14 +47,14 @@ export default function SettingsScreen() {
       <GlassCard>
         <CardHead title="החשבון שלי" />
 
-        <dl className="flex flex-col gap-3 text-[13.5px]">
+        <dl className="flex flex-col gap-3 text-[15px]">
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-text-faint">שם</dt>
             <dd className="font-semibold">{profile?.full_name ?? '—'}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-text-faint">אימייל</dt>
-            <dd dir="ltr" className="font-mono text-[12.5px]">{session?.user?.email ?? '—'}</dd>
+            <dd dir="ltr" className="font-mono text-[14px]">{session?.user?.email ?? '—'}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-text-faint">הרשאה</dt>
@@ -66,7 +66,7 @@ export default function SettingsScreen() {
           </div>
         </dl>
 
-        <p className="mt-4 text-[11.5px] leading-relaxed text-text-faint">
+        <p className="mt-4 text-[13px] leading-relaxed text-text-faint">
           שינוי הרשאה נעשה בטבלת <span className="font-mono text-text-dim">profiles</span> ב-Supabase
           ונכנס לתוקף מיד, בלי שתצטרך להתחבר מחדש.
         </p>
@@ -161,10 +161,10 @@ function BrandingCard() {
                     px-4 py-8 text-center transition-colors focus:outline-none focus:ring-2
                     focus:ring-gold-500 ${dragOver ? 'border-gold-500/60 bg-gold-500/[0.06]' : 'border-black/[0.14]'}`}
       >
-        <span className="text-[13.5px] font-medium text-text-dim">
+        <span className="text-[15px] font-medium text-text-dim">
           {busy ? 'מעלה…' : 'לחצו כדי לבחור קובץ, גררו לכאן, או פשוט הדביקו (Ctrl+V)'}
         </span>
-        <span className="text-[11.5px] text-text-faint">PNG / JPG / SVG / WebP</span>
+        <span className="text-[13px] text-text-faint">PNG / JPG / SVG / WebP</span>
         <input
           type="file"
           accept="image/*"
@@ -176,13 +176,13 @@ function BrandingCard() {
 
       {error && (
         <div className="mt-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5
-                        text-[12.5px] text-crit-soft">
+                        text-[14px] text-crit-soft">
           {error}
         </div>
       )}
 
       {done && !error && (
-        <div className="mt-3.5 rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-2.5 text-[12.5px] text-ok">
+        <div className="mt-3.5 rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-2.5 text-[14px] text-ok">
           הלוגו עודכן בהצלחה. במסכים אחרים שכבר פתוחים אצלך או אצל אחרים — רענון הדף (F5) מציג את הגרסה החדשה.
         </div>
       )}
@@ -242,7 +242,7 @@ function DeviceModelsCard({ deviceModels }) {
       </form>
 
       {error && (
-        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
           {error}
         </div>
       )}
@@ -256,7 +256,7 @@ function DeviceModelsCard({ deviceModels }) {
               type="button"
               onClick={() => toggle(m)}
               title={m.active ? 'לחץ להשבית' : 'לחץ להפעיל מחדש'}
-              className={`rounded-pill border px-3 py-1.5 text-[12.5px] transition-colors ${
+              className={`rounded-pill border px-3 py-1.5 text-[14px] transition-colors ${
                 m.active
                   ? 'border-black/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
                   : 'border-black/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'
@@ -322,7 +322,7 @@ function ScentsCard({ scents }) {
       </form>
 
       {error && (
-        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
           {error}
         </div>
       )}
@@ -336,7 +336,7 @@ function ScentsCard({ scents }) {
               type="button"
               onClick={() => toggle(s)}
               title={s.active ? 'לחץ להשבית' : 'לחץ להפעיל מחדש'}
-              className={`rounded-pill border px-3 py-1.5 text-[12.5px] transition-colors ${
+              className={`rounded-pill border px-3 py-1.5 text-[14px] transition-colors ${
                 s.active
                   ? 'border-black/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
                   : 'border-black/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'

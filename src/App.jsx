@@ -73,7 +73,7 @@ function Gate() {
         <div className="relative z-[1] flex min-h-screen items-center justify-center p-5">
           <div className="glass-card max-w-[460px] p-6 text-center">
             <h1 className="font-display text-[19px] font-bold">לא נמצא פרופיל למשתמש</h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-text-dim">
+            <p className="mt-2 text-[14px] leading-relaxed text-text-dim">
               המשתמש קיים ב-Authentication אבל אין לו שורה בטבלת
               <span className="font-mono text-gold-600"> profiles</span>.
               ודא שהרצת את <span className="font-mono text-gold-600">iconair_schema.sql</span> —
@@ -202,7 +202,7 @@ function Shell() {
         <div
           role="status"
           className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-2
-                     bg-warn px-3 py-2 text-center text-[13px] font-semibold text-[#221B0C]"
+                     bg-warn px-3 py-2 text-center text-[14px] font-semibold text-[#221B0C]"
         >
           <span className="h-2 w-2 flex-none animate-pulse-dot rounded-full bg-[#221B0C]" />
           מצב לא מקוון — הנתונים יישמרו ויסתנכרנו אוטומטית ברגע שהחיבור יחזור
@@ -214,7 +214,7 @@ function Shell() {
         <div
           role="status"
           className="glass fixed inset-x-0 top-4 z-50 mx-auto flex w-fit max-w-[92vw] items-center
-                     gap-2.5 rounded-pill px-4 py-2.5 text-[13px] font-medium shadow-lift
+                     gap-2.5 rounded-pill px-4 py-2.5 text-[14px] font-medium shadow-lift
                      animate-rise"
         >
           <span className="h-2 w-2 flex-none rounded-full bg-ok" />
@@ -226,7 +226,7 @@ function Shell() {
         <div
           role="status"
           className="glass fixed inset-x-0 top-4 z-50 mx-auto flex w-fit max-w-[92vw] items-center
-                     gap-2.5 rounded-pill px-4 py-2.5 text-[13px] font-medium shadow-lift
+                     gap-2.5 rounded-pill px-4 py-2.5 text-[14px] font-medium shadow-lift
                      animate-rise"
         >
           <span className="h-2 w-2 flex-none rounded-full bg-ok" />

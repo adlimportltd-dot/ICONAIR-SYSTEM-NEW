@@ -18,15 +18,15 @@ export default function OilAlertsCard({ delay, alerts = [], onAssignAll }) {
         {alerts.map((alert) => (
           <div key={alert.deviceId}>
             <div className="flex items-baseline gap-2">
-              <span className="text-[13.5px] font-semibold">{alert.client}</span>
-              <span className="ms-auto font-mono text-[11px] text-text-faint">{alert.deviceId}</span>
+              <span className="text-[15px] font-semibold">{alert.client}</span>
+              <span className="ms-auto font-mono text-[13px] text-text-faint">{alert.deviceId}</span>
             </div>
 
             <div className="meter">
               <span style={{ width: `${alert.level}%`, background: levelFill(alert.level) }} />
             </div>
 
-            <div className="mt-[7px] flex justify-between text-[11.5px] text-text-faint">
+            <div className="mt-[7px] flex justify-between text-[13px] text-text-faint">
               <span>{alert.scent}</span>
               <b className="tabular font-semibold text-text-dim">
                 {alert.level}% · {alert.note}

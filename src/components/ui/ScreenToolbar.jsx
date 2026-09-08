@@ -25,7 +25,7 @@ export default function ScreenToolbar({
           onChange={(event) => onSearch(event.target.value)}
           placeholder={searchPlaceholder}
           className="w-full rounded-pill border border-black/[0.09] bg-ink-800 py-2.5 pe-10 ps-3.5
-                     text-[13.5px] text-text placeholder:text-text-faint
+                     text-[15px] text-text placeholder:text-text-faint
                      focus:border-gold-500/45 focus:outline-none"
         />
       </div>
@@ -37,7 +37,7 @@ export default function ScreenToolbar({
           onChange={(event) => filter.onChange(event.target.value)}
           options={filter.options}
           placeholder={filter.placeholder}
-          className="!w-auto min-w-[132px] !py-2.5 text-[13px]"
+          className="!w-auto min-w-[132px] !py-2.5 text-[14px]"
           aria-label={filter.placeholder}
         />
       ))}
@@ -45,7 +45,7 @@ export default function ScreenToolbar({
       {extra}
 
       {count != null && (
-        <span className="tabular hidden text-[12.5px] text-text-faint md:inline">
+        <span className="tabular hidden text-[14px] text-text-faint md:inline">
           {count.toLocaleString('he-IL')} {countLabel}
         </span>
       )}
@@ -55,7 +55,7 @@ export default function ScreenToolbar({
           type="button"
           onClick={onAction}
           className="ms-auto flex items-center gap-1.5 rounded-pill px-3.5 py-2.5
-                     text-[13.5px] font-semibold text-[#221B0C] transition-opacity hover:opacity-90"
+                     text-[15px] font-semibold text-[#221B0C] transition-opacity hover:opacity-90"
           style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
         >
           <PlusIcon className="h-4 w-4" />

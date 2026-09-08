@@ -77,7 +77,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
         <div className="mb-4 flex items-start gap-3">
           <div className="min-w-0">
             <h2 className="font-display text-[19px] font-bold leading-tight">{title}</h2>
-            {subtitle && <p className="mt-1 text-[13.5px] text-text-faint">{subtitle}</p>}
+            {subtitle && <p className="mt-1 text-[15px] text-text-faint">{subtitle}</p>}
           </div>
           <button
             type="button"

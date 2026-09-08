@@ -31,6 +31,10 @@ export default function RoutesScreen() {
 
   const routes = useQuery(listRoutes, []);
 
+  // סנכרון רוחבי מכרטיס הלקוח: כתובת חדשה/עיר שהשתנתה/מכשיר שנוסף —
+  // הספירה של כל קו מתעדכנת כאן חי, בלי לצאת ולחזור למסך.
+  useRealtime(['customers', 'customer_sites', 'devices'], routes.refetch);
+
   useEffect(() => {
     if (activeRoute === undefined && routes.data?.length) {
       setActiveRoute(routes.data[0].name);
@@ -51,7 +55,7 @@ export default function RoutesScreen() {
                 key={r.name ?? '__none__'}
                 type="button"
                 onClick={() => setActiveRoute(r.name)}
-                className={`flex items-center gap-2 rounded-pill border px-3.5 py-2 text-[13px] font-medium
+                className={`flex items-center gap-2 rounded-pill border px-3.5 py-2 text-[14px] font-medium
                             transition-colors ${
                   r.name === activeRoute
                     ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
@@ -60,7 +64,7 @@ export default function RoutesScreen() {
               >
                 <RouteIcon className="h-[15px] w-[15px] flex-none" />
                 {r.name ?? 'ללא שיוך לקו'}
-                <span className="tabular ms-1 font-mono text-[11.5px] text-text-faint">{r.customers}</span>
+                <span className="tabular ms-1 font-mono text-[13px] text-text-faint">{r.customers}</span>
               </button>
             ))}
           </div>
@@ -132,7 +136,7 @@ function RouteLoadPlanCard({ routeName }) {
       </div>
 
       {error && (
-        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
           {error}
         </div>
       )}
@@ -148,9 +152,9 @@ function RouteLoadPlanCard({ routeName }) {
           {(plan.data?.items ?? []).map((row) => (
             <div key={row.scent_name} className="inner-row flex items-center gap-3 px-3.5 py-2.5">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-medium">{row.scent_name}</div>
+                <div className="truncate text-[15px] font-medium">{row.scent_name}</div>
               </div>
-              <span className="tabular font-mono text-[13px] text-gold-600">{row.liters} ל׳</span>
+              <span className="tabular font-mono text-[14px] text-gold-600">{row.liters} ל׳</span>
               {done[row.scent_name] ? (
                 <StatusChip tone="ok">הוקצה</StatusChip>
               ) : (
@@ -167,7 +171,7 @@ function RouteLoadPlanCard({ routeName }) {
       </Async>
 
       {plan.data?.missing.length > 0 && (
-        <div className="mt-3.5 rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12px] text-warn">
+        <div className="mt-3.5 rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[13.5px] text-warn">
           {plan.data.missing.length} מכשירים לא נכנסו לחישוב — חסר להם ניחוח משויך או נפח מכל לדגם שלהם.
         </div>
       )}
@@ -181,7 +185,9 @@ function RouteStops({ routeName }) {
 
   // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
   // כבוצעה על הקו הזה, המסך הזה מתעדכן חי בלי רענון ידני.
-  useRealtime(['route_assignments'], stops.refetch);
+  // גם שינויים שמקורם בכרטיס הלקוח (כתובת/עיר/מכשיר/פרטי קשר) מרעננים
+  // את העצירות של הקו — הכתובת תופיע/תזוז לקו הנכון בלי רענון ידני.
+  useRealtime(['route_assignments', 'customers', 'customer_sites', 'devices'], stops.refetch);
   const deviceModels = useQuery(listAllDeviceModels, []);
   const scents = useQuery(listAllScents, []);
 
@@ -240,7 +246,7 @@ function RouteStops({ routeName }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <div className="font-display text-[17px] font-bold">{routeName ?? 'ללא שיוך לקו'}</div>
-          <div className="mt-0.5 text-[12.5px] text-text-faint">
+          <div className="mt-0.5 text-[14px] text-text-faint">
             {ordered.length} תחנות · {doneCount} בוצעו · {deviceTotal} מכשירים
           </div>
         </div>
@@ -249,7 +255,7 @@ function RouteStops({ routeName }) {
           type="date"
           value={visitDate}
           onChange={(e) => setVisitDate(e.target.value)}
-          className="rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-[13px]
+          className="rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-[14px]
                      text-text focus:border-gold-500/45 focus:outline-none"
           aria-label="תאריך ביקור"
         />
@@ -264,7 +270,7 @@ function RouteStops({ routeName }) {
       </div>
 
       {saveError && (
-        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
           השמירה נכשלה, השינוי בוטל: {saveError}
         </div>
       )}
@@ -320,7 +326,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           >
             ▲
           </button>
-          <span className="tabular font-mono text-[11px] text-text-faint">{index + 1}</span>
+          <span className="tabular font-mono text-[13px] text-text-faint">{index + 1}</span>
           <button
             type="button"
             onClick={onMoveDown}
@@ -338,7 +344,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           onClick={onToggleDone}
           aria-pressed={done}
           aria-label={done ? 'סמן כלא בוצע' : 'סמן כבוצע'}
-          className={`grid h-7 w-7 flex-none place-items-center rounded-full border text-[13px] transition-colors ${
+          className={`grid h-7 w-7 flex-none place-items-center rounded-full border text-[14px] transition-colors ${
             done
               ? 'border-ok/40 bg-ok/15 text-ok'
               : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
@@ -353,10 +359,10 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           className="min-w-0 flex-1 text-start"
           aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
         >
-          <div className={`truncate text-[14px] font-semibold transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
+          <div className={`truncate text-[15px] font-semibold transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
             {customer.name}
           </div>
-          <div className="truncate text-[12px] text-text-faint">{customer.address || '—'}</div>
+          <div className="truncate text-[13.5px] text-text-faint">{customer.address || '—'}</div>
         </button>
 
         {devices.length > 0 && (
@@ -364,7 +370,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
             type="button"
             onClick={() => setCardOpen(true)}
             className="flex flex-none items-center gap-1.5 rounded-[7px] border border-black/[0.075]
-                       px-[9px] py-[3px] text-[11px] font-semibold text-text-dim transition-colors
+                       px-[9px] py-[3px] text-[13px] font-semibold text-text-dim transition-colors
                        hover:border-gold-500/30 hover:text-gold-600"
           >
             {devices.length} מכשירים
@@ -466,18 +472,18 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
         </div>
 
         {stop.notes && (
-          <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3.5 py-2.5 text-[12.5px] text-text-dim">
+          <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3.5 py-2.5 text-[14px] text-text-dim">
             {stop.notes}
           </div>
         )}
 
         <div>
-          <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint">
+          <div className="mb-2 text-[13px] font-semibold tracking-wide text-text-faint">
             מכשירים ({devices.length})
           </div>
           <div className="flex flex-col gap-2">
             {devices.length === 0 && (
-              <div className="text-[12.5px] text-text-faint">אין מכשירים רשומים בעצירה זו.</div>
+              <div className="text-[14px] text-text-faint">אין מכשירים רשומים בעצירה זו.</div>
             )}
             {devices.map((device) => (
               <DeviceDetailRow
@@ -492,15 +498,15 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
         </div>
 
         <div>
-          <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint">
+          <div className="mb-2 text-[13px] font-semibold tracking-wide text-text-faint">
             היסטוריית שמן אחרונה
           </div>
           <Async loading={history.loading} error={history.error} onRetry={history.refetch}
                  isEmpty={(history.data?.length ?? 0) === 0}
-                 empty={<div className="text-[12.5px] text-text-faint">אין עדיין היסטוריה למכשירים האלה.</div>}>
+                 empty={<div className="text-[14px] text-text-faint">אין עדיין היסטוריה למכשירים האלה.</div>}>
             <div className="flex flex-col gap-1.5">
               {(history.data ?? []).map((entry) => (
-                <div key={entry.id} className="inner-row flex items-center gap-3 px-3 py-2 text-[12px]">
+                <div key={entry.id} className="inner-row flex items-center gap-3 px-3 py-2 text-[13.5px]">
                   <span className="tabular flex-none text-text-faint">{formatDateTime(entry.recorded_at)}</span>
                   <span className="flex-none text-text-dim">{OIL_EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
                   <span className="min-w-0 flex-1 truncate">
@@ -536,7 +542,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
 
   return (
     <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px]">
         <EditableField
           label="ניחוח"
           value={device.scent_name}
@@ -565,7 +571,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
           type="button"
           onClick={() => setOilModalOpen(true)}
           className="ms-auto flex-none rounded-[8px] border border-gold-500/30 bg-gold-500/[0.1]
-                     px-2.5 py-1 text-[11.5px] font-semibold text-gold-600 transition-colors
+                     px-2.5 py-1 text-[13px] font-semibold text-gold-600 transition-colors
                      hover:border-gold-500/50"
         >
           עדכון שמן / סיום ביקור
@@ -688,7 +694,7 @@ function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
         </Field>
 
         <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3">
-          <div className="mb-1.5 text-[11.5px] text-text-faint">המפלס שיישמר במכשיר</div>
+          <div className="mb-1.5 text-[13px] text-text-faint">המפלס שיישמר במכשיר</div>
           <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
         </div>
 
@@ -697,13 +703,13 @@ function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
         </Field>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}
 
         {noStockNotice && (
-          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-warn">
+          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
             הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה מלאי רשום שתואם. עדכן "מלאי נייד" כשתוכל.
           </div>
         )}
@@ -750,17 +756,17 @@ function EditableField({ label, value, options, field, device }) {
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          className="rounded-[8px] border border-gold-500/35 bg-ink-700 px-2 py-1 text-[12.5px] text-text
+          className="rounded-[8px] border border-gold-500/35 bg-ink-700 px-2 py-1 text-[14px] text-text
                      focus:outline-none"
         >
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
         <button type="button" onClick={submit} disabled={busy}
-                className="rounded-[7px] border border-ok/30 bg-ok/10 px-2 py-1 text-[11px] font-semibold text-ok">
+                className="rounded-[7px] border border-ok/30 bg-ok/10 px-2 py-1 text-[13px] font-semibold text-ok">
           {busy ? '…' : 'שלח'}
         </button>
         <button type="button" onClick={() => setEditing(false)}
-                className="text-[11px] text-text-faint hover:text-text-dim">
+                className="text-[13px] text-text-faint hover:text-text-dim">
           ביטול
         </button>
       </div>
@@ -783,7 +789,7 @@ function EditableField({ label, value, options, field, device }) {
           ✎
         </button>
       )}
-      {state === 'error' && <span className="text-[11px] text-crit-soft">השליחה נכשלה</span>}
+      {state === 'error' && <span className="text-[13px] text-crit-soft">השליחה נכשלה</span>}
     </div>
   );
 }
@@ -818,7 +824,7 @@ function PendingChangeRequestsCard() {
       <Async loading={requests.loading} error={requests.error} onRetry={requests.refetch}>
         <div className="flex flex-col gap-2">
           {(requests.data ?? []).map((r) => (
-            <div key={r.id} className="inner-row flex flex-wrap items-center gap-3 px-3.5 py-2.5 text-[12.5px]">
+            <div key={r.id} className="inner-row flex flex-wrap items-center gap-3 px-3.5 py-2.5 text-[14px]">
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">
                   {r.device?.customer?.name ?? '—'} · {r.device?.serial ?? ''}
@@ -836,7 +842,7 @@ function PendingChangeRequestsCard() {
                   type="button"
                   disabled={busyId === r.id}
                   onClick={() => review(r.id, true)}
-                  className="rounded-[8px] border border-ok/30 bg-ok/10 px-3 py-1.5 text-[12px] font-semibold text-ok"
+                  className="rounded-[8px] border border-ok/30 bg-ok/10 px-3 py-1.5 text-[13.5px] font-semibold text-ok"
                 >
                   אשר
                 </button>
@@ -844,7 +850,7 @@ function PendingChangeRequestsCard() {
                   type="button"
                   disabled={busyId === r.id}
                   onClick={() => review(r.id, false)}
-                  className="rounded-[8px] border border-crit/30 bg-crit/10 px-3 py-1.5 text-[12px] font-semibold text-crit-soft"
+                  className="rounded-[8px] border border-crit/30 bg-crit/10 px-3 py-1.5 text-[13.5px] font-semibold text-crit-soft"
                 >
                   דחה
                 </button>

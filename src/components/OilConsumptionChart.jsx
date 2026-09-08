@@ -93,7 +93,7 @@ export default function OilConsumptionChart({ delay, data }) {
 
       {!hasData ? (
         <p className="rounded-row border border-dashed border-black/[0.1] px-4 py-8 text-center
-                      text-[12.5px] text-text-faint">
+                      text-[14px] text-text-faint">
           עוד אין מספיק היסטוריה לגרף. כל רישום מילוי במסך "מעקב שמנים" מוסיף כאן נקודה.
         </p>
       ) : (
@@ -167,22 +167,22 @@ export default function OilConsumptionChart({ delay, data }) {
       </div>
 
       {/* ציר הזמן זורם משמאל לימין יחד עם ה-SVG, גם בממשק RTL */}
-      <div dir="ltr" className="mt-2.5 flex justify-between px-[2.5%] text-[11.5px] tracking-wide text-text-faint">
+      <div dir="ltr" className="mt-2.5 flex justify-between px-[2.5%] text-[13px] tracking-wide text-text-faint">
         {months.map((m) => (
           <span key={m}>{m}</span>
         ))}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-4 border-t border-black/[0.075] pt-[15px]">
-        <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
+        <span className="flex items-center gap-2 text-[14px] text-text-dim">
           <Swatch style={{ background: 'linear-gradient(90deg,#0F766E,#D4AF37)' }} />
           צריכה בפועל <b className="tabular font-semibold text-text">{summary.actualTotal}</b>
         </span>
-        <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
+        <span className="flex items-center gap-2 text-[14px] text-text-dim">
           <Swatch style={{ background: 'rgba(71,85,105,.85)' }} />
           ממוצע נגרר <b className="tabular font-semibold text-text">{summary.forecastTotal}</b>
         </span>
-        <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
+        <span className="flex items-center gap-2 text-[14px] text-text-dim">
           <Swatch style={{ background: '#15803D' }} />
           סטייה <b className="tabular font-semibold text-text">{summary.deviation}</b>
         </span>

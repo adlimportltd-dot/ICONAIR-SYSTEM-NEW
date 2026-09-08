@@ -79,7 +79,7 @@ export default function StockScreen() {
       label: 'כמות ברכב',
       width: '110px',
       render: (row) => (
-        <span className={`tabular font-mono text-[13px] font-semibold ${row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''}`}>
+        <span className={`tabular font-mono text-[14px] font-semibold ${row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''}`}>
           {formatQty(row.quantity, row.scent_name)}
         </span>
       ),
@@ -237,7 +237,7 @@ function StockFormModal({ open, editRow, technicianOptions, scentOptions, modelO
                     key={n}
                     type="button"
                     onClick={() => quickAdd(n)}
-                    className="ghost-btn !px-2.5 !py-2 tabular font-mono text-[12px]"
+                    className="ghost-btn !px-2.5 !py-2 tabular font-mono text-[13.5px]"
                   >
                     +{n}
                   </button>
@@ -245,7 +245,7 @@ function StockFormModal({ open, editRow, technicianOptions, scentOptions, modelO
                 <button
                   type="button"
                   onClick={() => quickAdd(-1)}
-                  className="ghost-btn !px-2.5 !py-2 tabular font-mono text-[12px]"
+                  className="ghost-btn !px-2.5 !py-2 tabular font-mono text-[13.5px]"
                   aria-label="הפחת יחידה אחת"
                 >
                   −1
@@ -256,7 +256,7 @@ function StockFormModal({ open, editRow, technicianOptions, scentOptions, modelO
         </Field>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}

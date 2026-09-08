@@ -49,7 +49,7 @@ export default function DevicesScreen() {
       key: 'serial',
       label: 'מס\' סידורי',
       width: '150px',
-      render: (row) => <span className="font-mono text-[12.5px] text-gold-600">{row.serial}</span>,
+      render: (row) => <span className="font-mono text-[14px] text-gold-600">{row.serial}</span>,
     },
     {
       key: 'model',
@@ -64,7 +64,7 @@ export default function DevicesScreen() {
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.customer?.name ?? '—'}</div>
-          <div className="truncate text-[11.5px] text-text-faint">{row.location_note || row.customer?.city}</div>
+          <div className="truncate text-[13px] text-text-faint">{row.location_note || row.customer?.city}</div>
         </div>
       ),
     },
@@ -85,7 +85,7 @@ export default function DevicesScreen() {
       key: 'seen',
       label: 'נראה לאחרונה',
       width: '110px',
-      render: (row) => <span className="tabular text-[12px] text-text-faint">{relativeTime(row.last_seen_at)}</span>,
+      render: (row) => <span className="tabular text-[13.5px] text-text-faint">{relativeTime(row.last_seen_at)}</span>,
     },
   ];
 

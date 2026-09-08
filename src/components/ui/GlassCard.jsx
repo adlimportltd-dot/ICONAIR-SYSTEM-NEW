@@ -21,16 +21,16 @@ export default function GlassCard({ children, className = '', delay = 0, as: Tag
  */
 export function CardHead({ icon: Icon, title, subtitle, action, onAction }) {
   return (
-    <div className="mb-5 flex items-start gap-3">
+    <div className="mb-5 flex items-start gap-3.5">
       {Icon && (
-        <div className="grid h-9 w-9 flex-none place-items-center rounded-xl border
-                        border-gold-300/[0.35] bg-gold-500/[0.14] text-gold-600 shadow-icon-glow">
-          <Icon className="h-[17px] w-[17px]" />
+        <div className="grid h-11 w-11 flex-none place-items-center rounded-xl border
+                        border-[#E2E8F0] bg-[#F8FAFC] text-gold-600 shadow-icon-glow">
+          <Icon className="h-5 w-5" />
         </div>
       )}
       <div className="min-w-0">
-        <h2 className="font-display text-[16.5px] font-bold leading-tight">{title}</h2>
-        {subtitle && <div className="mt-1 text-[13px] text-text-faint">{subtitle}</div>}
+        <h2 className="font-display text-[19px] font-bold leading-tight">{title}</h2>
+        {subtitle && <div className="mt-1 text-[14px] text-text-faint">{subtitle}</div>}
       </div>
       {action && (
         <button type="button" onClick={onAction} className="ghost-btn ms-auto">

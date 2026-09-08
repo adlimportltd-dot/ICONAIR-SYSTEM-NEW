@@ -45,7 +45,7 @@ function ItemTypeToggle({ value, onChange }) {
           key={opt.key}
           type="button"
           onClick={() => onChange(opt.key)}
-          className={`rounded-pill px-4 py-1.5 text-[13px] font-medium transition-colors ${
+          className={`rounded-pill px-4 py-1.5 text-[14px] font-medium transition-colors ${
             value === opt.key ? 'bg-gold-500/20 text-gold-600' : 'text-text-faint hover:text-text-dim'
           }`}
         >
@@ -206,7 +206,7 @@ function ReturnStockCard({ technicianOptions, modelOptions, scentOptions, onRetu
         )}
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}
@@ -302,7 +302,7 @@ function ReceiveStockCard({ modelOptions, scentOptions, onReceived }) {
         )}
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}
@@ -386,7 +386,7 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
       label: 'כמות במחסן',
       width: '120px',
       render: (row) => (
-        <span className={`tabular font-mono text-[13px] font-semibold ${row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''}`}>
+        <span className={`tabular font-mono text-[14px] font-semibold ${row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''}`}>
           {formatQty(row.quantity, row.scent_name)}
         </span>
       ),
@@ -408,7 +408,7 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
       </Async>
 
       <div className="mt-5 flex flex-col gap-3.5 border-t border-black/[0.07] pt-5">
-        <h3 className="text-[13.5px] font-semibold text-text-dim">הקצאה לטכנאי</h3>
+        <h3 className="text-[15px] font-semibold text-text-dim">הקצאה לטכנאי</h3>
 
         <form onSubmit={submit} className="flex flex-col gap-3.5">
           <Field label="טכנאי" required>
@@ -449,7 +449,7 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
           )}
 
           {error && (
-            <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+            <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
               {error}
             </div>
           )}

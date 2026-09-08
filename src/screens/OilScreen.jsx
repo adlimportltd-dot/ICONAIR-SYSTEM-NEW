@@ -69,7 +69,7 @@ export default function OilScreen() {
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.device?.customer?.name ?? '—'}</div>
-          <div className="truncate font-mono text-[11.5px] text-text-faint">
+          <div className="truncate font-mono text-[13px] text-text-faint">
             {row.device?.serial} · {row.device?.model}
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function OilScreen() {
       label: 'ליטרים',
       width: '86px',
       render: (row) => (
-        <span className="tabular font-mono text-[13px]">{formatNumber(row.liters_added, 3)}</span>
+        <span className="tabular font-mono text-[14px]">{formatNumber(row.liters_added, 3)}</span>
       ),
     },
     {
@@ -97,7 +97,7 @@ export default function OilScreen() {
       label: 'מפלס',
       width: '112px',
       render: (row) => (
-        <span dir="ltr" className="tabular font-mono text-[12.5px] text-text-dim">
+        <span dir="ltr" className="tabular font-mono text-[14px] text-text-dim">
           {row.level_before_pct ?? '—'}% → {row.level_after_pct}%
         </span>
       ),
@@ -107,7 +107,7 @@ export default function OilScreen() {
       key: 'at',
       label: 'מועד',
       width: '124px',
-      render: (row) => <span className="tabular text-[12px] text-text-faint">{formatDateTime(row.recorded_at)}</span>,
+      render: (row) => <span className="tabular text-[13.5px] text-text-faint">{formatDateTime(row.recorded_at)}</span>,
     },
   ];
 
@@ -148,14 +148,14 @@ export default function OilScreen() {
             <div className="flex flex-col gap-[15px]">
               {mapOilByScent(scentUsage.data ?? []).map((item) => (
                 <div key={item.scent}>
-                  <div className="flex items-baseline gap-2 text-[13.5px]">
+                  <div className="flex items-baseline gap-2 text-[15px]">
                     <b className="font-semibold">{item.scent}</b>
-                    <span className="tabular ms-auto font-mono text-xs text-text-dim">{item.level}%</span>
+                    <span className="tabular ms-auto font-mono text-[13.5px] text-text-dim">{item.level}%</span>
                   </div>
                   <div className="meter">
                     <span style={{ width: `${item.level}%`, background: STOCK_FILL[item.tone] }} />
                   </div>
-                  <div className="mt-1.5 text-[11.5px] text-text-faint">
+                  <div className="mt-1.5 text-[13px] text-text-faint">
                     {formatNumber(item.liters, 2)} ליטר החודש
                   </div>
                 </div>
@@ -291,7 +291,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
         </Field>
 
         <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3">
-          <div className="mb-1.5 text-[11.5px] text-text-faint">המפלס שיישמר במכשיר</div>
+          <div className="mb-1.5 text-[13px] text-text-faint">המפלס שיישמר במכשיר</div>
           <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
         </div>
 
@@ -300,13 +300,13 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
         </Field>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}
 
         {noStockNotice && (
-          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-warn">
+          <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
             הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה לך מלאי רשום שתואם לדגם/ניחוח הזה.
             תעדכן את "מלאי נייד" כשתוכל, כדי שהניכוי האוטומטי יעבוד בפעם הבאה.
           </div>

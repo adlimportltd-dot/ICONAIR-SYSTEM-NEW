@@ -53,30 +53,30 @@
      בקשה מפורשת של המשתמש, אל תחזיר לחם בלי בקשה חדשה. --- */
   .ambient-field {
     @apply fixed inset-0 z-0 pointer-events-none;
-    background:
-      radial-gradient(1000px 700px at 85% -10%, rgba(212, 175, 55, 0.1), transparent 60%),
-      radial-gradient(800px 600px at 5% 105%, rgba(197, 160, 89, 0.06), transparent 60%),
-      #f8fafc;
+    /* רקע נקי לחלוטין (slate-50) — בלי הילות זהב. הזהב נשאר לכפתורים
+       ראשיים ולמצב פעיל, לא לרקע. */
+    background: #f8fafc;
   }
 
   /* --- משטח הכרטיסים: לבן נקי, הילת זהב עדינה מהפינה, מסגרת פחם-עמוק דקה
      וחדה (לא עכורה) שמבדילה אותו מהרקע, צל "מרחף" עדין (shadow-lift) —
      2026-09-09 סבב שני: border הוחלף מאפרפר-חם (#E4DED0) לפחם קריר-עמוק
      (stone-800 בשקיפות 10%) לפי בקשה מפורשת. --- */
+  /* 2026-09-09 (Full Design Overhaul): לבן נקי, גבול slate-200 דק וחד,
+     צל עמוק ורך (shadow-lift = צורת shadow-xl בגוון slate-200/50).
+     בלי הילת זהב על משטחים — זהב שמור לכפתורים ראשיים ולמצב פעיל. */
   .glass {
-    background:
-      radial-gradient(140% 120% at 12% -12%, rgba(212, 175, 55, 0.05), transparent 55%),
-      #ffffff;
-    @apply border border-[#292524]/10 shadow-glass-hi;
+    background: #ffffff;
+    @apply border border-[#E2E8F0] shadow-glass-hi;
   }
 
   .glass-card {
     @apply glass rounded-card shadow-lift;
   }
 
-  /* --- שורה פנימית (קריאה, קו הפצה) — גוון זהב חמים ועדין, לא אפור ניטרלי --- */
+  /* --- שורה פנימית (קריאה, קו הפצה, מכשיר) — משטח ניטרלי, לא זהב --- */
   .inner-row {
-    @apply rounded-row border border-gold-300/[0.1] bg-gold-500/[0.05] transition-colors duration-200;
+    @apply rounded-row border border-[#E2E8F0] bg-[#F8FAFC] transition-colors duration-200;
   }
 
   /* --- מד התקדמות אופקי --- */
@@ -88,17 +88,17 @@
     @apply block h-full rounded-md;
   }
 
-  /* --- שבב סטטוס --- */
+  /* --- שבב סטטוס — קריא גם מהנייד, לא 11px --- */
   .chip {
-    @apply whitespace-nowrap rounded-[7px] border border-gold-300/[0.16] px-[10px] py-[4px]
-           text-[12px] font-semibold text-text-dim;
+    @apply whitespace-nowrap rounded-[8px] border border-[#E2E8F0] bg-white px-3 py-[5px]
+           text-[13.5px] font-semibold text-text-dim;
   }
 
-  /* --- כפתור פעולה משני בראש כרטיס --- */
+  /* --- כפתור פעולה משני — יעד לחיצה נוח לאצבע (≥40px גובה), גבול slate --- */
   .ghost-btn {
-    @apply whitespace-nowrap rounded-[10px] border border-gold-300/[0.16] px-3 py-1.5
-           text-[13.5px] font-medium text-text-dim transition-colors
-           hover:border-gold-300/50 hover:text-gold-600;
+    @apply whitespace-nowrap rounded-[11px] border border-[#CBD5E1] bg-white px-4 py-2.5
+           text-[15px] font-medium text-text transition-colors
+           hover:border-gold-500/60 hover:text-gold-600;
   }
 
   .tabular {

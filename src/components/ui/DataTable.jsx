@@ -14,7 +14,7 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
     <div className="flex flex-col gap-2.5">
       {/* כותרות — רק בתצוגת הרשת */}
       <div
-        className="hidden gap-3 px-4 pb-1.5 text-[12px] font-semibold uppercase tracking-[0.8px] text-text-faint sm:grid"
+        className="hidden gap-3 px-4 pb-1.5 text-[13.5px] font-semibold uppercase tracking-[0.8px] text-text-faint sm:grid"
         style={{ gridTemplateColumns: actions ? `${template} auto` : template }}
       >
         {columns.map((column) => (
@@ -38,7 +38,7 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
           >
             {/* --- רשת: מרוחב sm ומעלה --- */}
             <div
-              className="hidden items-center gap-3 text-[13.5px] sm:grid"
+              className="hidden items-center gap-3 text-[15px] sm:grid"
               style={{ gridTemplateColumns: actions ? `${template} auto` : template }}
             >
               {columns.map((column) => (
@@ -55,8 +55,8 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
                 <div
                   key={column.key}
                   className={index === 0
-                    ? 'text-[14px] font-semibold'
-                    : 'flex items-baseline justify-between gap-3 text-[13.5px]'}
+                    ? 'text-[15px] font-semibold'
+                    : 'flex items-baseline justify-between gap-3 text-[15px]'}
                 >
                   {index === 0 ? (
                     column.render(row)
@@ -107,7 +107,7 @@ export function MiniMeter({ value, tone = 'teal' }) {
       <div className="meter !mt-0 w-full max-w-[86px] flex-1">
         <span style={{ width: `${Math.max(value, 2)}%`, background: fills[tone] }} />
       </div>
-      <span className="tabular flex-none font-mono text-[12.5px] text-text-dim">{value}%</span>
+      <span className="tabular flex-none font-mono text-[14px] text-text-dim">{value}%</span>
     </div>
   );
 }

@@ -55,17 +55,17 @@ export default function FleetBreakdown({ delay, data = [] }) {
 
           <div className="absolute inset-0 grid place-content-center text-center">
             <div className="tabular font-display text-[34px] font-bold leading-none">{total}</div>
-            <div className="mt-[5px] text-[11.5px] tracking-wide text-text-faint">מכשירים</div>
+            <div className="mt-[5px] text-[13px] tracking-wide text-text-faint">מכשירים</div>
           </div>
         </div>
 
         <div className="flex flex-col gap-2.5">
           {arcs.map((arc) => (
-            <div key={arc.model} className="flex items-center gap-2.5 text-[13.5px]">
+            <div key={arc.model} className="flex items-center gap-2.5 text-[15px]">
               <Swatch style={{ background: TONE[arc.color] }} />
               <span className="font-semibold">{arc.model}</span>
-              <span className="tabular ms-auto font-mono text-[13px] text-text-dim">{arc.count}</span>
-              <span className="tabular w-[42px] text-start font-mono text-[11.5px] text-text-faint">
+              <span className="tabular ms-auto font-mono text-[14px] text-text-dim">{arc.count}</span>
+              <span className="tabular w-[42px] text-start font-mono text-[13px] text-text-faint">
                 {Math.round(arc.share * 100)}%
               </span>
             </div>

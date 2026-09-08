@@ -45,14 +45,14 @@ export default function ServiceCallsCard({ delay, calls = [], subtitle, onOpenAl
             />
 
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{call.client}</div>
-              <div className="mt-0.5 truncate text-[12.5px] text-text-faint">{call.description}</div>
+              <div className="truncate text-[15px] font-semibold">{call.client}</div>
+              <div className="mt-0.5 truncate text-[14px] text-text-faint">{call.description}</div>
             </div>
 
             <div className="mt-[5px] flex flex-row items-center gap-[9px]
                             sm:row-span-2 sm:mt-0 sm:flex-col sm:items-end sm:gap-[5px]">
               <span className={`chip ${SEVERITY_CHIP[call.severity]}`}>{call.statusLabel}</span>
-              <span className="tabular text-[11.5px] text-text-faint">
+              <span className="tabular text-[13px] text-text-faint">
                 {call.id} · {call.age}
               </span>
             </div>

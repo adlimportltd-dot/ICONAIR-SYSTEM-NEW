@@ -43,7 +43,7 @@ function BuiltInMark({ compact }) {
       </div>
       <div>
         <div className="font-display text-[19px] font-bold leading-none tracking-wide">ICON AIR</div>
-        <div className="mt-1 font-mono text-[11px] tracking-[1.6px] text-text-faint">FIELD OPS</div>
+        <div className="mt-1 font-mono text-[13px] tracking-[1.6px] text-text-faint">FIELD OPS</div>
       </div>
     </div>
   );
@@ -83,7 +83,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       {item.label}
       {badge > 0 && (
         <span className="tabular ms-auto rounded-full border border-crit/30 bg-crit/15 px-[7px] py-0.5
-                         font-mono text-[11px] text-crit-soft">
+                         font-mono text-[13px] text-crit-soft">
           {badge}
         </span>
       )}
@@ -112,7 +112,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
       <Brand />
 
       <nav className="flex flex-col gap-1">
-        <div className="px-2.5 pb-2 text-[10.5px] font-semibold tracking-[2px] text-text-faint">
+        <div className="px-2.5 pb-2 text-[12.5px] font-semibold tracking-[2px] text-text-faint">
           ניהול
         </div>
         {visibleNavItems.map((item) => (
@@ -142,10 +142,10 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
             {initials}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-[13.5px] font-semibold leading-tight">
+            <div className="truncate text-[15px] font-semibold leading-tight">
               {profile?.full_name ?? 'טוען…'}
             </div>
-            <div className="mt-0.5 text-[11.5px] text-text-faint">
+            <div className="mt-0.5 text-[13px] text-text-faint">
               {isAdmin ? 'מנהל תפעול' : 'טכנאי שטח'}
             </div>
           </div>

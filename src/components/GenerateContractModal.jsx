@@ -117,11 +117,11 @@ export default function GenerateContractModal({ open, customer, devices = [], on
     return (
       <Modal open={open} title="החוזה נשלח לחתימה" subtitle={customer?.name} onClose={onClose}>
         <div className="flex flex-col gap-3.5">
-          <div className="rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-3 text-[13px] text-ok">
+          <div className="rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-3 text-[14px] text-ok">
             הקישור נוצר בהצלחה. שלח אותו ללקוח — הוא לא צריך חשבון או התחברות כדי לצפות ולחתום.
           </div>
 
-          <div dir="ltr" className="break-all rounded-row border border-black/[0.09] bg-ink-800 px-3.5 py-2.5 font-mono text-[12px] text-text-dim">
+          <div dir="ltr" className="break-all rounded-row border border-black/[0.09] bg-ink-800 px-3.5 py-2.5 font-mono text-[13.5px] text-text-dim">
             {result.link}
           </div>
 
@@ -148,8 +148,8 @@ export default function GenerateContractModal({ open, customer, devices = [], on
 
         <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
           <div className="mb-2.5 flex items-center gap-2">
-            <div className="text-[12.5px] font-semibold text-text-dim">מערכות ותשלום חודשי (נספח א׳)</div>
-            <button type="button" onClick={addBlankRow} className="ghost-btn ms-auto !px-2.5 !py-1.5 text-[12px]">
+            <div className="text-[14px] font-semibold text-text-dim">מערכות ותשלום חודשי (נספח א׳)</div>
+            <button type="button" onClick={addBlankRow} className="ghost-btn ms-auto !px-2.5 !py-1.5 text-[13.5px]">
               + שורה
             </button>
           </div>
@@ -161,20 +161,20 @@ export default function GenerateContractModal({ open, customer, devices = [], on
                   placeholder="דגם (Icon 500)"
                   value={row.model}
                   onChange={(e) => updateModel(i, e.target.value)}
-                  className="!py-2 text-[12.5px]"
+                  className="!py-2 text-[14px]"
                 />
                 <TextInput
                   type="number" min={0} step={1}
                   value={row.quantity}
                   onChange={(e) => updateQuantity(i, e.target.value)}
-                  className="!py-2 text-[12.5px]"
+                  className="!py-2 text-[14px]"
                 />
                 <TextInput
                   type="number" min={0} step={1}
                   placeholder="מחיר חודשי ליחידה"
                   value={row.monthlyPrice}
                   onChange={(e) => updatePrice(i, e.target.value)}
-                  className="!py-2 text-[12.5px]"
+                  className="!py-2 text-[14px]"
                 />
                 <button
                   type="button"
@@ -190,14 +190,14 @@ export default function GenerateContractModal({ open, customer, devices = [], on
         </div>
 
         <div>
-          <div className="mb-1.5 text-[12.5px] font-medium text-text-dim">תצוגה מקדימה</div>
+          <div className="mb-1.5 text-[14px] font-medium text-text-dim">תצוגה מקדימה</div>
           <div className="max-h-[420px] overflow-y-auto rounded-row border border-black/[0.09]">
             <ContractDocument customer={customer} idNumber={idNumber} items={numericItems} contractDate={contractDate} />
           </div>
         </div>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}

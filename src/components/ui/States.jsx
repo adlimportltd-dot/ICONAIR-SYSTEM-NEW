@@ -27,8 +27,8 @@ export function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-start gap-3 rounded-row border border-crit/25 bg-crit/[0.07] p-4">
       <div>
-        <div className="text-[13.5px] font-semibold text-crit-soft">לא הצלחתי לטעון את הנתונים</div>
-        <p className="mt-1 max-w-prose text-[12.5px] leading-relaxed text-text-dim">{message}</p>
+        <div className="text-[15px] font-semibold text-crit-soft">לא הצלחתי לטעון את הנתונים</div>
+        <p className="mt-1 max-w-prose text-[14px] leading-relaxed text-text-dim">{message}</p>
       </div>
       {onRetry && (
         <button type="button" onClick={onRetry} className="ghost-btn">
@@ -42,8 +42,8 @@ export function ErrorState({ message, onRetry }) {
 export function EmptyState({ title, hint, action }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-row border border-dashed border-black/[0.1] px-4 py-8 text-center">
-      <div className="text-[13.5px] font-semibold text-text-dim">{title}</div>
-      {hint && <p className="max-w-xs text-[12.5px] leading-relaxed text-text-faint">{hint}</p>}
+      <div className="text-[15px] font-semibold text-text-dim">{title}</div>
+      {hint && <p className="max-w-xs text-[14px] leading-relaxed text-text-faint">{hint}</p>}
       {action}
     </div>
   );

@@ -16,9 +16,9 @@ export default function StockCard({ delay, stock = [], monthTotal }) {
       <div className="flex flex-col gap-[15px]">
         {stock.map((item) => (
           <div key={item.scent}>
-            <div className="flex items-baseline gap-2 text-[13.5px]">
+            <div className="flex items-baseline gap-2 text-[15px]">
               <b className="font-semibold">{item.scent}</b>
-              <span className="tabular ms-auto font-mono text-xs text-text-dim">{item.level}%</span>
+              <span className="tabular ms-auto font-mono text-[13.5px] text-text-dim">{item.level}%</span>
             </div>
             <div className="meter">
               <span style={{ width: `${item.level}%`, background: FILL[item.tone] }} />
@@ -27,7 +27,7 @@ export default function StockCard({ delay, stock = [], monthTotal }) {
         ))}
 
         {monthTotal && (
-          <div className="mt-0.5 flex justify-between text-[11.5px] text-text-faint">
+          <div className="mt-0.5 flex justify-between text-[13px] text-text-faint">
             <span>סה״כ נצרך החודש</span>
             <b className="tabular font-semibold text-text-dim">{monthTotal}</b>
           </div>

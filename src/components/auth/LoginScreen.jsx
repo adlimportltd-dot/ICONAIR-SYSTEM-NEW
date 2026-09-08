@@ -48,7 +48,7 @@ export default function LoginScreen() {
 
       <div className="relative z-[1] flex min-h-screen items-center justify-center p-5">
         <div
-          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-[#292524]/10
+          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-[#E2E8F0]
                      shadow-lift lg:grid-cols-[1.05fr_1fr]"
           style={{ background: 'linear-gradient(180deg, #FFFFFF, #FBFCFD)' }}
         >
@@ -70,7 +70,7 @@ export default function LoginScreen() {
                 <br />
                 מהמחסן עד הלקוח.
               </h2>
-              <p className="mt-3 max-w-[300px] text-[13.5px] leading-relaxed text-text-dim">
+              <p className="mt-3 max-w-[300px] text-[15px] leading-relaxed text-text-dim">
                 מערכת אחת לכל המסלולים, המכשירים, המלאי והקריאות של ICON AIR — בזמן אמת, בשטח.
               </p>
             </div>
@@ -86,7 +86,7 @@ export default function LoginScreen() {
                     >
                       {Icon ? <Icon className="h-4 w-4" /> : <AirMarkIcon className="h-4 w-4" />}
                     </div>
-                    <span className="text-[12.5px] leading-snug text-text-dim">{point.text}</span>
+                    <span className="text-[14px] leading-snug text-text-dim">{point.text}</span>
                   </div>
                 );
               })}
@@ -102,7 +102,7 @@ export default function LoginScreen() {
             <h1 className="font-display text-[22px] font-bold">
               {mode === 'signin' ? 'ברוכים השבים' : 'יצירת חשבון'}
             </h1>
-            <p className="mt-1.5 text-[12.5px] text-text-faint">
+            <p className="mt-1.5 text-[14px] text-text-faint">
               {mode === 'signin'
                 ? 'התחברו כדי להמשיך למערכת ניהול השטח'
                 : 'המשתמש הראשון שנרשם מקבל הרשאת מנהל'}
@@ -150,14 +150,14 @@ export default function LoginScreen() {
 
             {error && (
               <div className="mt-4 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5
-                              text-[12.5px] text-crit-soft">
+                              text-[14px] text-crit-soft">
                 {error}
               </div>
             )}
 
             {notice && (
               <div className="mt-4 rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-2.5
-                              text-[12.5px] text-ok">
+                              text-[14px] text-ok">
                 {notice}
               </div>
             )}
@@ -173,7 +173,7 @@ export default function LoginScreen() {
                 setError(null);
                 setNotice(null);
               }}
-              className="mt-4 w-full text-center text-[12.5px] text-text-dim transition-colors hover:text-gold-600"
+              className="mt-4 w-full text-center text-[14px] text-text-dim transition-colors hover:text-gold-600"
             >
               {mode === 'signin' ? 'אין לך חשבון? הירשם' : 'יש לך כבר חשבון? התחבר'}
             </button>

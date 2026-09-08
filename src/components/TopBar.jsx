@@ -57,24 +57,24 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
           className="glass absolute end-0 top-[calc(100%+8px)] z-30 max-h-[360px] w-[300px]
                      overflow-y-auto rounded-panel p-2 shadow-lift"
         >
-          <div className="px-2.5 py-2 text-[11px] font-semibold tracking-wide text-text-faint">
+          <div className="px-2.5 py-2 text-[13px] font-semibold tracking-wide text-text-faint">
             ביקורים שהושלמו לאחרונה
           </div>
 
           {loading && (
-            <div className="px-2.5 py-3 text-[12.5px] text-text-faint">טוען…</div>
+            <div className="px-2.5 py-3 text-[14px] text-text-faint">טוען…</div>
           )}
 
           {!loading && completedVisits.length === 0 && (
-            <div className="px-2.5 py-3 text-[12.5px] text-text-faint">אין עדיין ביקורים שהושלמו.</div>
+            <div className="px-2.5 py-3 text-[14px] text-text-faint">אין עדיין ביקורים שהושלמו.</div>
           )}
 
           {!loading && completedVisits.map((visit) => (
             <div key={visit.id} className="inner-row mb-1.5 flex items-center gap-2.5 px-3 py-2.5 last:mb-0">
               <span className="h-2 w-2 flex-none rounded-full bg-ok" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[12.5px] font-semibold">{stopLabel(visit)}</div>
-                <div className="mt-0.5 truncate text-[11px] text-text-faint">
+                <div className="truncate text-[14px] font-semibold">{stopLabel(visit)}</div>
+                <div className="mt-0.5 truncate text-[13px] text-text-faint">
                   {visit.route?.name ?? 'ללא קו'} · {relativeTime(visit.updated_at)}
                 </div>
               </div>
@@ -104,7 +104,7 @@ export default function TopBar({
 
       <div className="hidden min-w-0 flex-col lg:flex">
         <h1 className="font-display text-[22px] font-bold leading-tight">{title}</h1>
-        <div className="tabular mt-0.5 truncate text-[12.5px] text-text-faint">{meta}</div>
+        <div className="tabular mt-0.5 truncate text-[14px] text-text-faint">{meta}</div>
       </div>
 
       <button
@@ -112,7 +112,7 @@ export default function TopBar({
         onClick={onSearch}
         className="ms-auto hidden min-w-[230px] items-center gap-[9px] rounded-pill
                    border border-black/[0.075] bg-ink-800 px-3.5 py-[9px]
-                   text-[13.5px] text-text-faint transition-colors hover:text-text-dim md:flex"
+                   text-[15px] text-text-faint transition-colors hover:text-text-dim md:flex"
       >
         <SearchIcon className="h-4 w-4" />
         חיפוש לקוח, מכשיר או קריאה…
@@ -121,7 +121,7 @@ export default function TopBar({
       {isLive && (
         <div
           className="tabular hidden items-center gap-[6px] rounded-xl border border-gold-300/[0.35]
-                     bg-gold-500/[0.13] px-[11px] py-2 text-[11px] font-semibold uppercase
+                     bg-gold-500/[0.13] px-[11px] py-2 text-[13px] font-semibold uppercase
                      tracking-[0.6px] text-gold-600 wide:flex"
           title="חיבור בזמן אמת פעיל — הנתונים מתעדכנים אוטומטית"
         >
@@ -133,7 +133,7 @@ export default function TopBar({
       {total > 0 && (
         <div
           className={`tabular hidden items-center gap-[7px] rounded-xl border px-[13px] py-2
-                      text-xs font-semibold wide:flex
+                      text-[13.5px] font-semibold wide:flex
                       ${allOnline
                         ? 'border-ok/20 bg-ok/[0.07] text-ok'
                         : 'border-warn/25 bg-warn/[0.07] text-warn'}`}

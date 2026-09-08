@@ -16,24 +16,24 @@ export default function SetupScreen() {
           </div>
 
           <h1 className="text-center font-display text-[22px] font-bold">חיבור ל-Supabase לא הוגדר</h1>
-          <p className="mx-auto mt-2 max-w-prose text-center text-[13px] leading-relaxed text-text-dim">
+          <p className="mx-auto mt-2 max-w-prose text-center text-[14px] leading-relaxed text-text-dim">
             צור קובץ <code className="font-mono text-gold-600">.env.local</code> בתיקיית הפרויקט
             עם שני המפתחות האלה, ואז הפעל מחדש את <code className="font-mono text-gold-600">npm run dev</code>.
           </p>
 
           <pre dir="ltr" className="mt-5 overflow-x-auto rounded-row border border-black/[0.09]
-                                    bg-ink-700 p-4 text-start font-mono text-[12.5px] leading-relaxed text-text-dim">
+                                    bg-ink-700 p-4 text-start font-mono text-[14px] leading-relaxed text-text-dim">
 {`VITE_SUPABASE_URL=https://xxxxxxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOi...`}
           </pre>
 
-          <ol className="mt-5 flex list-inside list-decimal flex-col gap-2 text-[12.5px] leading-relaxed text-text-faint">
+          <ol className="mt-5 flex list-inside list-decimal flex-col gap-2 text-[14px] leading-relaxed text-text-faint">
             <li>בפרויקט שלך ב-Supabase: Project Settings → API</li>
             <li>העתק את <span className="text-text-dim">Project URL</span> ואת המפתח <span className="text-text-dim">anon public</span></li>
             <li>הרץ את שלושת קבצי ה-SQL מתיקיית <span className="font-mono text-gold-600">supabase/</span> לפי הסדר</li>
           </ol>
 
-          <p className="mt-5 text-center text-[11.5px] text-text-faint">
+          <p className="mt-5 text-center text-[13px] text-text-faint">
             ה-anon key נועד לרוץ בדפדפן והוא מוגן ב-RLS. את מפתח ה-service_role
             אין לשים בקוד הפרונטאנד לעולם.
           </p>

@@ -1,21 +1,23 @@
 import { ChevronDownIcon } from './Icons';
 
+// 2026-09-09 (Full Design Overhaul): שדות בגובה ≥46px וטקסט 15px — נוחים
+// לאצבע בנייד, בלי להתאמץ לקרוא. גבול slate-200, רקע slate-50.
 const controlClass =
-  'w-full rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2.5 text-[14px] ' +
+  'w-full rounded-pill border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-[15px] ' +
   'text-text placeholder:text-text-faint transition-colors ' +
-  'focus:border-gold-500/45 focus:outline-none';
+  'focus:border-gold-500/60 focus:bg-white focus:outline-none';
 
 export function Field({ label, hint, error, children, required }) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-[14px] font-medium text-text-dim">
+      <span className="text-[15px] font-medium text-text-dim">
         {label}
         {required && <span className="ms-1 text-gold-600">*</span>}
       </span>
       {children}
       {error
-        ? <span className="text-[13px] text-crit-soft">{error}</span>
-        : hint && <span className="text-[13px] text-text-faint">{hint}</span>}
+        ? <span className="text-[14px] text-crit-soft">{error}</span>
+        : hint && <span className="text-[14px] leading-relaxed text-text-faint">{hint}</span>}
     </label>
   );
 }
@@ -63,7 +65,7 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
     <button
       type="button"
       disabled={loading || props.disabled}
-      className={`rounded-pill px-4 py-2.5 text-[14px] font-semibold text-[#221B0C]
+      className={`rounded-pill px-5 py-3 text-[15px] font-semibold text-[#221B0C] shadow-lift
                   transition-opacity disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
       style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
       {...props}
@@ -75,7 +77,7 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
 
 export function SecondaryButton({ className = '', children, ...props }) {
   return (
-    <button type="button" className={`ghost-btn px-4 py-2.5 text-[14px] ${className}`} {...props}>
+    <button type="button" className={`ghost-btn px-4 py-3 text-[15px] ${className}`} {...props}>
       {children}
     </button>
   );

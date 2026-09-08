@@ -91,14 +91,14 @@ function RouteConsumptionSection() {
               />
             }
           >
-            <div className="mb-3 text-[12.5px] text-text-faint">
+            <div className="mb-3 text-[14px] text-text-faint">
               סה״כ {formatNumber(consumption.data?.totalLiters, 1)} ליטר · {formatNumber(consumption.data?.visitCount)} ביקורים
             </div>
             <div className="flex flex-col gap-2">
               {(consumption.data?.items ?? []).map((row) => (
-                <div key={row.scent_name} className="flex items-baseline gap-2 text-[13.5px]">
+                <div key={row.scent_name} className="flex items-baseline gap-2 text-[15px]">
                   <span className="font-semibold">{row.scent_name}</span>
-                  <span className="tabular ms-auto font-mono text-[12.5px] text-text-dim">{row.liters} ל׳</span>
+                  <span className="tabular ms-auto font-mono text-[14px] text-text-dim">{row.liters} ל׳</span>
                 </div>
               ))}
             </div>
@@ -118,8 +118,8 @@ function RouteConsumptionSection() {
           <div className="flex flex-col gap-2">
             {(movements.data ?? []).map((row) => (
               <div key={row.label} className="rounded-row border border-black/[0.07] bg-black/[0.02] px-3.5 py-2.5">
-                <div className="mb-1 flex items-center gap-2 text-[13.5px] font-semibold">{row.label}</div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                <div className="mb-1 flex items-center gap-2 text-[15px] font-semibold">{row.label}</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13.5px]">
                   <span className="text-text-faint">יצא: <span className="tabular font-mono text-text-dim">{row.allocated}</span></span>
                   <span className="text-text-faint">חזר: <span className="tabular font-mono text-text-dim">{row.returned}</span></span>
                   <span className="text-text-faint">
@@ -174,20 +174,20 @@ function Report({ data }) {
       key: 'actual',
       label: 'בפועל (ל׳)',
       width: '110px',
-      render: (row) => <span className="tabular font-mono text-[13px]">{formatNumber(row.actual, 1)}</span>,
+      render: (row) => <span className="tabular font-mono text-[14px]">{formatNumber(row.actual, 1)}</span>,
     },
     {
       key: 'target',
       label: 'ממוצע נגרר (ל׳)',
       width: '110px',
-      render: (row) => <span className="tabular font-mono text-[13px] text-text-dim">{formatNumber(row.target, 1)}</span>,
+      render: (row) => <span className="tabular font-mono text-[14px] text-text-dim">{formatNumber(row.target, 1)}</span>,
     },
     {
       key: 'delta',
       label: 'סטייה',
       width: '96px',
       render: (row) => (
-        <span className={`tabular font-mono text-[13px] ${row.delta >= 0 ? 'text-ok' : 'text-crit-soft'}`}>
+        <span className={`tabular font-mono text-[14px] ${row.delta >= 0 ? 'text-ok' : 'text-crit-soft'}`}>
           {row.delta >= 0 ? '+' : '−'}{formatNumber(Math.abs(row.delta), 1)}%
         </span>
       ),
@@ -199,7 +199,7 @@ function Report({ data }) {
       <section className="mb-3.5 grid grid-cols-2 gap-3.5 xs:grid-cols-3 xl:grid-cols-6">
         {summaryTiles.map((tile) => (
           <GlassCard key={tile.label} className="!p-4">
-            <div className="text-[11.5px] leading-snug text-text-faint">{tile.label}</div>
+            <div className="text-[13px] leading-snug text-text-faint">{tile.label}</div>
             <div className="tabular mt-2 font-display text-[26px] font-bold leading-none">{tile.value}</div>
           </GlassCard>
         ))}
@@ -224,11 +224,11 @@ function Report({ data }) {
             <CardHead title="פילוח הצי" subtitle="מכשירים לפי דגם" />
             <div className="flex flex-col gap-3">
               {fleet.map((row) => (
-                <div key={row.model} className="flex items-center gap-2.5 text-[13.5px]">
+                <div key={row.model} className="flex items-center gap-2.5 text-[15px]">
                   <Swatch style={{ background: TONE_HEX[modelTone(row.model)] }} />
                   <span className="font-semibold">{row.model}</span>
-                  <span className="tabular ms-auto font-mono text-[13px] text-text-dim">{row.device_count}</span>
-                  <span className="tabular w-[74px] text-start font-mono text-[11.5px] text-text-faint">
+                  <span className="tabular ms-auto font-mono text-[14px] text-text-dim">{row.device_count}</span>
+                  <span className="tabular w-[74px] text-start font-mono text-[13px] text-text-faint">
                     {formatNumber(row.avg_oil_pct, 1)}% שמן
                   </span>
                 </div>
@@ -240,9 +240,9 @@ function Report({ data }) {
             <CardHead title="תצרוכת שמן לפי ניחוח" subtitle="ליטרים שהוזרמו החודש" />
             <div className="flex flex-col gap-2.5">
               {scentUsage.map((row) => (
-                <div key={row.name} className="flex items-baseline gap-2 text-[13.5px]">
+                <div key={row.name} className="flex items-baseline gap-2 text-[15px]">
                   <span className="font-semibold">{row.name}</span>
-                  <span className="tabular ms-auto font-mono text-[12.5px] text-text-dim">
+                  <span className="tabular ms-auto font-mono text-[14px] text-text-dim">
                     {formatNumber(row.liters, 1)} ל׳
                   </span>
                 </div>

@@ -32,7 +32,7 @@ function ProgressRing({ percent }) {
           strokeDasharray={`${((percent / 100) * RING_C).toFixed(1)} ${RING_C.toFixed(1)}`}
         />
       </svg>
-      <span className="tabular absolute inset-0 grid place-items-center text-[11.5px] font-semibold">
+      <span className="tabular absolute inset-0 grid place-items-center text-[13px] font-semibold">
         {Math.round(percent)}%
       </span>
     </div>
@@ -58,15 +58,15 @@ export default function RoutesCard({ delay, routes = [], onOpenMap }) {
             <ProgressRing percent={route.avgOil} />
 
             <div className="min-w-0">
-              <div className="text-sm font-semibold">{route.name}</div>
-              <div className="mt-0.5 truncate text-xs text-text-faint">
+              <div className="text-[15px] font-semibold">{route.name}</div>
+              <div className="mt-0.5 truncate text-[13.5px] text-text-faint">
                 {route.active}/{route.total} מכשירים פעילים
               </div>
             </div>
 
             <div className="ms-auto text-start">
-              <b className="tabular font-mono text-sm font-medium">{Math.round(route.avgOil)}%</b>
-              <i className="mt-0.5 block text-[11px] not-italic text-text-faint">שמן ממוצע</i>
+              <b className="tabular font-mono text-[15px] font-medium">{Math.round(route.avgOil)}%</b>
+              <i className="mt-0.5 block text-[13px] not-italic text-text-faint">שמן ממוצע</i>
             </div>
           </div>
         ))}

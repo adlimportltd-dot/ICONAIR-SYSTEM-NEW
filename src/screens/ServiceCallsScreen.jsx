@@ -85,7 +85,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       key: 'code',
       label: 'קוד',
       width: '96px',
-      render: (row) => <span className="font-mono text-[12.5px] text-gold-600">{row.code}</span>,
+      render: (row) => <span className="font-mono text-[14px] text-gold-600">{row.code}</span>,
     },
     {
       key: 'customer',
@@ -94,7 +94,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.customer?.name ?? '—'}</div>
-          <div className="truncate text-[11.5px] text-text-faint">{row.title}</div>
+          <div className="truncate text-[13px] text-text-faint">{row.title}</div>
         </div>
       ),
     },
@@ -130,7 +130,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       label: 'נפתח',
       width: '104px',
       render: (row) => (
-        <span className="tabular text-[12px] text-text-faint" title={formatDateTime(row.opened_at)}>
+        <span className="tabular text-[13.5px] text-text-faint" title={formatDateTime(row.opened_at)}>
           {relativeTime(row.opened_at)}
         </span>
       ),
@@ -316,7 +316,7 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
         </div>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}
@@ -365,7 +365,7 @@ function ResolveModal({ call, onClose, onResolved }) {
         </Field>
 
         {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
             {error}
           </div>
         )}

@@ -35,7 +35,7 @@ export default function BottomNav({ activeId, onSelect, criticalCalls = 0 }) {
             onClick={() => onSelect(item.id)}
             aria-current={isActive ? 'page' : undefined}
             className={`relative flex flex-1 flex-col items-center gap-[5px] rounded-[15px] px-0.5 py-2
-                        text-[10.5px] font-semibold transition-colors
+                        text-[12.5px] font-semibold transition-colors
                         ${isActive ? 'bg-gold-500/[0.14] text-gold-600' : 'text-text-faint'}`}
           >
             <Icon className="h-5 w-5" />

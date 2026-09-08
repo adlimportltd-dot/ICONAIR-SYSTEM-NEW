@@ -89,10 +89,13 @@ export default {
         // 2026-09-09 (סבב שני) — צורת `shadow-lg` של Tailwind, בגוון
         // stone-900 בשקיפות 5% בלבד (לא שחור טהור): צל "מרחף" עדין ויקר,
         // רחב אבל כמעט לא מורגש כמשקל — + שכבה צמודה דקה ליישור פינה חד.
-        lift: '0 1px 2px rgba(28,25,23,.04), 0 10px 15px -3px rgba(28,25,23,.05), 0 4px 6px -4px rgba(28,25,23,.05)',
-        'glass-hi': 'inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 22px rgba(212,175,55,.035)',
+        // 2026-09-09 (Full Design Overhaul): צורת shadow-xl של Tailwind,
+        // בגוון slate-200 בשקיפות 50% — צל עמוק ורך שמרים כרטיס לבן מעל
+        // רקע slate-50 בלי להיראות אפור-מלוכלך. + שכבה צמודה דקה לחדות הקצה.
+        lift: '0 1px 2px rgba(15,23,42,.04), 0 20px 25px -5px rgba(226,232,240,.5), 0 8px 10px -6px rgba(226,232,240,.5)',
+        'glass-hi': 'inset 0 1px 0 rgba(255,255,255,1)',
         'gold-glow': '0 0 14px 1px rgba(212,175,55,.4)',
-        'icon-glow': '0 6px 16px -10px rgba(193,147,12,.45), inset 0 1px 0 rgba(255,255,255,.7)',
+        'icon-glow': '0 4px 10px -6px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.9)',
       },
       keyframes: {
         rise: {

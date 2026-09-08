@@ -1,18 +1,17 @@
 import { useState } from 'react';
-import GlassCard from '../components/ui/GlassCard';
+import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
-import Modal from '../components/ui/Modal';
-import CustomerDevicesModal from '../components/CustomerDevicesModal';
-import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
+import CustomerProfile from '../components/CustomerProfile';
+import CustomerDetailsForm from '../components/CustomerDetailsForm';
 import { Async, EmptyState } from '../components/ui/States';
-import { PrinterIcon } from '../components/ui/Icons';
+import { PrinterIcon, UsersIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
-import { listCustomers, createCustomer, updateCustomer, setCustomerPaid, deleteCustomerCascade } from '../lib/queries';
-import { describeError } from '../lib/supabase';
+import { useRealtime } from '../hooks/useRealtime';
+import { listCustomers, setCustomerPaid } from '../lib/queries';
 import {
-  CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, PAYMENT_TYPE_ICON, VAT_MODE_LABEL,
+  CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, PAYMENT_TYPE_ICON,
   formatCurrency, formatDate, summarizeDevicesByModel, computeVat, isOverdue,
 } from '../lib/mappers';
 
@@ -53,15 +52,9 @@ function summarizeCollection(rows) {
   };
 }
 
-const EMPTY_FORM = {
-  name: '', contact_name: '', phone: '', email: '',
-  city: '', address: '', route_name: '', status: 'active', notes: '',
-  payment_type: 'deferred', amount_due: '0', is_paid: false, vat_mode: 'included', payment_due_date: '',
-};
-
 function VatBreakdownStrip({ preVat, vatAmount }) {
   return (
-    <div className="mt-2.5 flex items-center gap-3 border-t border-black/[0.06] pt-2 text-[11px] text-text-faint">
+    <div className="mt-2.5 flex items-center gap-3 border-t border-black/[0.06] pt-2 text-[13px] text-text-faint">
       <span>🔹 לפני מע״מ: <span className="tabular font-mono text-text-dim">{formatCurrency(preVat)}</span></span>
       <span>🔹 מע״מ (18%): <span className="tabular font-mono text-text-dim">{formatCurrency(vatAmount)}</span></span>
     </div>
@@ -74,9 +67,11 @@ export default function CustomersScreen() {
   const [status, setStatus] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
   const [paymentType, setPaymentType] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
-  const [editCustomer, setEditCustomer] = useState(null);
+  // creating — פאנל "לקוח חדש" מוטבע מעל הרשימה (לא חלון קופץ).
+  // openCustomer — כרטיס הלקוח המאוחד תופס את המסך במקום הרשימה.
+  const [creating, setCreating] = useState(false);
   const [openCustomer, setOpenCustomer] = useState(null);
+  const [openEditing, setOpenEditing] = useState(false);
 
   const customers = useQuery(
     () => listCustomers({ search, status, paymentStatus, paymentType }),
@@ -94,6 +89,10 @@ export default function CustomersScreen() {
     customers.refetch();
     allCustomers.refetch();
   }
+
+  // סנכרון רוחבי: שינוי בכרטיס לקוח (גם ממכשיר/משתמש אחר) מרענן את
+  // הרשימה והסיכומים הכספיים חי.
+  useRealtime(['customers', 'devices', 'customer_sites'], refetchAll);
 
   async function togglePaid(row, event) {
     event.stopPropagation();
@@ -113,7 +112,7 @@ export default function CustomersScreen() {
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.name}</div>
-          <div className="truncate text-[11.5px] text-text-faint">{row.address}</div>
+          <div className="truncate text-[13px] text-text-faint">{row.address}</div>
         </div>
       ),
     },
@@ -126,7 +125,7 @@ export default function CustomersScreen() {
           href={'tel:' + row.phone}
           dir="ltr"
           onClick={(event) => event.stopPropagation()}
-          className="tabular font-mono text-[12.5px] text-text-dim hover:text-gold-600"
+          className="tabular font-mono text-[14px] text-text-dim hover:text-gold-600"
         >
           {row.phone || '—'}
         </a>
@@ -138,7 +137,7 @@ export default function CustomersScreen() {
       label: 'מכשירים בשטח',
       width: 'minmax(0,1.1fr)',
       render: (row) => (
-        <span className="truncate text-[12.5px] text-gold-600">{summarizeDevicesByModel(row.devices)}</span>
+        <span className="truncate text-[14px] text-gold-600">{summarizeDevicesByModel(row.devices)}</span>
       ),
     },
   ];
@@ -152,8 +151,8 @@ export default function CustomersScreen() {
         const { total, vatAmount } = computeVat(row.amount_due, row.vat_mode);
         return (
           <div className="min-w-0">
-            <div className="truncate text-[12.5px]">{PAYMENT_TYPE_LABEL[row.payment_type]}</div>
-            <div className="tabular font-mono text-[12px] text-text-dim">
+            <div className="truncate text-[14px]">{PAYMENT_TYPE_LABEL[row.payment_type]}</div>
+            <div className="tabular font-mono text-[13.5px] text-text-dim">
               {formatCurrency(total)}
               <span className="text-text-faint"> · מע״מ {formatCurrency(vatAmount)}</span>
             </div>
@@ -186,7 +185,7 @@ export default function CustomersScreen() {
       width: '112px',
       render: (row) => (row.payment_due_date
         ? (
-          <span className={'tabular font-mono text-[12px] ' + (
+          <span className={'tabular font-mono text-[13.5px] ' + (
             isOverdue(row.payment_due_date, row.is_paid) ? 'font-semibold text-crit-soft' : 'text-text-dim'
           )}>
             {formatDate(row.payment_due_date)}
@@ -210,13 +209,27 @@ export default function CustomersScreen() {
     ? [...baseColumns, ...financialColumns, statusColumn]
     : [...baseColumns, statusColumn];
 
+  // כרטיס לקוח = מסך שלם, לא חלון קופץ: תופס את מקום הרשימה עם "חזרה".
+  if (openCustomer) {
+    return (
+      <CustomerProfile
+        key={openCustomer.id}
+        customer={openCustomer}
+        startEditing={openEditing}
+        onBack={() => setOpenCustomer(null)}
+        onChanged={refetchAll}
+        onDeleted={() => { setOpenCustomer(null); refetchAll(); }}
+      />
+    );
+  }
+
   return (
     <>
     <div className="print:hidden">
       {isAdmin && (
         <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <GlassCard className="!py-[18px]">
-            <div className="text-[13px] font-medium text-text-dim">סך הכל הכנסות הקו</div>
+            <div className="text-[14px] font-medium text-text-dim">סך הכל הכנסות הקו</div>
             <div className="tabular mt-1.5 font-display text-[28px] font-bold leading-tight text-gold-600">
               💰 {formatCurrency(revenueBreakdown.total)}
             </div>
@@ -229,7 +242,7 @@ export default function CustomersScreen() {
                 🟢
               </div>
               <div className="min-w-0">
-                <div className="text-[13px] font-medium text-text-dim">שולם בפועל</div>
+                <div className="text-[14px] font-medium text-text-dim">שולם בפועל</div>
                 <div className="tabular font-display text-[22px] font-bold leading-tight text-ok">
                   {formatCurrency(paidBreakdown.total)}
                 </div>
@@ -244,7 +257,7 @@ export default function CustomersScreen() {
                 🔴
               </div>
               <div className="min-w-0">
-                <div className="text-[13px] font-medium text-text-dim">ממתין לגבייה / חובות פתוחים</div>
+                <div className="text-[14px] font-medium text-text-dim">ממתין לגבייה / חובות פתוחים</div>
                 <div className="tabular font-display text-[22px] font-bold leading-tight text-crit-soft">
                   {formatCurrency(unpaidBreakdown.total)}
                 </div>
@@ -257,16 +270,16 @@ export default function CustomersScreen() {
 
       {isAdmin && methodBreakdown.length > 0 && (
         <GlassCard className="mb-3.5 !py-[18px]">
-          <div className="mb-3 text-[13px] font-medium text-text-dim">פילוח לפי אמצעי תשלום</div>
+          <div className="mb-3 text-[14px] font-medium text-text-dim">פילוח לפי אמצעי תשלום</div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {methodBreakdown.map(([type, amount]) => (
               <div key={type} className="rounded-row border border-black/[0.07] bg-black/[0.02] px-3 py-2.5">
-                <div className="flex items-center gap-1.5 text-[12px] text-text-faint">
+                <div className="flex items-center gap-1.5 text-[13.5px] text-text-faint">
                   <span>{PAYMENT_TYPE_ICON[type] ?? '💰'}</span>
                   <span className="truncate">{PAYMENT_TYPE_LABEL[type] ?? type}</span>
                 </div>
-                <div className="tabular mt-1 font-mono text-[14px] font-semibold">{formatCurrency(amount)}</div>
-                <div className="tabular text-[11px] text-text-faint">
+                <div className="tabular mt-1 font-mono text-[15px] font-semibold">{formatCurrency(amount)}</div>
+                <div className="tabular text-[13px] text-text-faint">
                   {totalRevenue > 0 ? Math.round((amount / totalRevenue) * 100) : 0}% מהקופה
                 </div>
               </div>
@@ -286,7 +299,7 @@ export default function CustomersScreen() {
               key={opt.key || 'all'}
               type="button"
               onClick={() => setPaymentStatus(opt.key)}
-              className={'rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ' + (
+              className={'rounded-pill border px-3.5 py-2 text-[14px] font-medium transition-colors ' + (
                 paymentStatus === opt.key
                   ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
                   : 'border-black/[0.09] text-text-dim hover:border-black/[0.2]'
@@ -305,7 +318,7 @@ export default function CustomersScreen() {
         count={customers.data?.length}
         countLabel="לקוחות"
         actionLabel="לקוח חדש"
-        onAction={() => { setEditCustomer(null); setFormOpen(true); }}
+        onAction={() => setCreating((v) => !v)}
         extra={isAdmin ? (
           <button
             type="button"
@@ -335,6 +348,25 @@ export default function CustomersScreen() {
         ]}
       />
 
+      {creating && (
+        <GlassCard className="mb-5 border-gold-300/[0.35]">
+          <CardHead
+            icon={UsersIcon}
+            title="לקוח חדש"
+            subtitle="הלקוח ייווצר מיד ויופיע ברשימה — ואז ייפתח כרטיס הלקוח שלו להוספת כתובות ומכשירים"
+          />
+          <CustomerDetailsForm
+            isAdmin={isAdmin}
+            onSaved={(saved) => {
+              setCreating(false);
+              refetchAll();
+              if (saved?.id) { setOpenEditing(false); setOpenCustomer(saved); }
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        </GlassCard>
+      )}
+
       <GlassCard>
         <Async
           loading={customers.loading}
@@ -354,12 +386,12 @@ export default function CustomersScreen() {
             columns={columns}
             rows={customers.data ?? []}
             rowKey={(row) => row.id}
-            onRowClick={setOpenCustomer}
+            onRowClick={(row) => { setOpenEditing(false); setOpenCustomer(row); }}
             actions={(row) => (
               <button
                 type="button"
-                onClick={(event) => { event.stopPropagation(); setEditCustomer(row); setFormOpen(true); }}
-                className="ghost-btn !px-2.5 !py-1.5 text-[12px]"
+                onClick={(event) => { event.stopPropagation(); setOpenEditing(true); setOpenCustomer(row); }}
+                className="ghost-btn !px-3.5 !py-2 text-[15px]"
               >
                 עריכה
               </button>
@@ -368,28 +400,6 @@ export default function CustomersScreen() {
         </Async>
       </GlassCard>
 
-      <CustomerFormModal
-        key={formOpen ? (editCustomer?.id ?? 'new') : 'closed'}
-        open={formOpen}
-        editCustomer={editCustomer}
-        isAdmin={isAdmin}
-        onClose={() => setFormOpen(false)}
-        onSaved={() => {
-          setFormOpen(false);
-          refetchAll();
-        }}
-        onDeleted={() => {
-          setFormOpen(false);
-          if (openCustomer?.id === editCustomer?.id) setOpenCustomer(null);
-          refetchAll();
-        }}
-      />
-
-      <CustomerDevicesModal
-        customer={openCustomer}
-        onClose={() => setOpenCustomer(null)}
-        onDevicesChanged={refetchAll}
-      />
     </div>
 
       {isAdmin && <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} />}
@@ -468,210 +478,5 @@ function SummaryBox({ label, value, accent = '#222' }) {
       <div style={{ fontSize: 11, color: '#666' }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color: accent, marginTop: 2 }}>{value}</div>
     </div>
-  );
-}
-
-function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved, onDeleted }) {
-  const [form, setForm] = useState(() => editCustomer
-    ? {
-        name: editCustomer.name ?? '',
-        contact_name: editCustomer.contact_name ?? '',
-        phone: editCustomer.phone ?? '',
-        email: editCustomer.email ?? '',
-        city: editCustomer.city ?? '',
-        address: editCustomer.address ?? '',
-        route_name: editCustomer.route_name ?? '',
-        status: editCustomer.status ?? 'active',
-        notes: editCustomer.notes ?? '',
-        payment_type: editCustomer.payment_type ?? 'deferred',
-        amount_due: String(editCustomer.amount_due ?? 0),
-        is_paid: Boolean(editCustomer.is_paid),
-        vat_mode: editCustomer.vat_mode ?? 'included',
-        payment_due_date: editCustomer.payment_due_date ?? '',
-      }
-    : EMPTY_FORM);
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-
-  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-  const vat = computeVat(form.amount_due, form.vat_mode);
-
-  async function submit(event) {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-
-    const payload = {
-      ...form,
-      route_name: form.route_name || null,
-      email: form.email || null,
-      amount_due: Number(form.amount_due || 0),
-      is_paid: form.is_paid === true || form.is_paid === 'true',
-      payment_due_date: form.payment_due_date || null,
-    };
-
-    try {
-      if (editCustomer) {
-        await updateCustomer(editCustomer.id, payload);
-      } else {
-        await createCustomer(payload);
-      }
-      onSaved();
-    } catch (caught) {
-      setError(describeError(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    setError(null);
-    setDeleteBusy(true);
-    try {
-      await deleteCustomerCascade(editCustomer.id);
-      onDeleted();
-    } catch (caught) {
-      setError(describeError(caught));
-      setConfirmDelete(false);
-    } finally {
-      setDeleteBusy(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      title={editCustomer ? ('עריכת ' + editCustomer.name) : 'לקוח חדש'}
-      subtitle={editCustomer ? 'השינויים נשמרים מיד' : 'הלקוח ייווצר מיד ויופיע ברשימה'}
-      onClose={onClose}
-    >
-      <form onSubmit={submit} className="flex flex-col gap-3.5">
-        <Field label="שם הלקוח" required>
-          <TextInput value={form.name} onChange={set('name')} placeholder="מלון דן · תל אביב" required />
-        </Field>
-
-        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
-          <Field label="איש קשר">
-            <TextInput value={form.contact_name} onChange={set('contact_name')} />
-          </Field>
-          <Field label="טלפון">
-            <TextInput dir="ltr" className="text-start" value={form.phone} onChange={set('phone')} placeholder="03-5202525" />
-          </Field>
-          <Field label="עיר">
-            <TextInput value={form.city} onChange={set('city')} />
-          </Field>
-          <Field label="כתובת">
-            <TextInput value={form.address} onChange={set('address')} />
-          </Field>
-          <Field label="קו הפצה">
-            <TextInput value={form.route_name} onChange={set('route_name')} placeholder="קו מרכז, קו צפון…" />
-          </Field>
-          <Field label="סטטוס">
-            <Select
-              value={form.status}
-              onChange={set('status')}
-              options={Object.entries(CUSTOMER_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
-            />
-          </Field>
-        </div>
-
-        {isAdmin && (
-          <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
-            <div className="mb-3 text-[12.5px] font-semibold text-text-dim">חיוב וגבייה</div>
-            <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
-              <Field label="סוג תשלום">
-                <Select
-                  value={form.payment_type}
-                  onChange={set('payment_type')}
-                  options={Object.entries(PAYMENT_TYPE_LABEL).map(([value, label]) => ({ value, label }))}
-                />
-              </Field>
-              <Field label="סטטוס גבייה">
-                <Select
-                  value={String(form.is_paid)}
-                  onChange={(event) => setForm((prev) => ({ ...prev, is_paid: event.target.value === 'true' }))}
-                  options={[
-                    { value: 'false', label: 'ממתין לגבייה' },
-                    { value: 'true', label: 'שולם' },
-                  ]}
-                />
-              </Field>
-              <Field label="אופן חישוב מע״מ" hint="קובע איך הסכום שתזין מתפרש">
-                <Select
-                  value={form.vat_mode}
-                  onChange={set('vat_mode')}
-                  options={Object.entries(VAT_MODE_LABEL).map(([value, label]) => ({ value, label }))}
-                />
-              </Field>
-              <Field label={form.vat_mode === 'excluded' ? 'מחיר בסיס (לפני מע״מ)' : 'סה״כ לתשלום (כולל מע״מ)'}>
-                <TextInput type="number" min={0} step="0.01" value={form.amount_due} onChange={set('amount_due')} />
-              </Field>
-              <Field label="תאריך פירעון" hint="מתי אמור להיכנס התשלום">
-                <TextInput type="date" value={form.payment_due_date} onChange={set('payment_due_date')} />
-              </Field>
-            </div>
-
-            <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-black/[0.06] bg-ink-800 px-3.5 py-3 text-center">
-              <div>
-                <div className="text-[10.5px] text-text-faint">לפני מע״מ</div>
-                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(vat.preVat)}</div>
-              </div>
-              <div>
-                <div className="text-[10.5px] text-text-faint">מע״מ (18%)</div>
-                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-text-dim">{formatCurrency(vat.vatAmount)}</div>
-              </div>
-              <div>
-                <div className="text-[10.5px] text-text-faint">סה״כ לתשלום</div>
-                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-600">{formatCurrency(vat.total)}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <Field label="הערות">
-          <TextArea value={form.notes} onChange={set('notes')} rows={2} />
-        </Field>
-
-        {error && (
-          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-1 flex gap-2.5">
-          <PrimaryButton type="submit" loading={busy}>{editCustomer ? 'שמור שינויים' : 'שמור לקוח'}</PrimaryButton>
-          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
-        </div>
-      </form>
-
-      {isAdmin && editCustomer && (
-        <div className="mt-5 rounded-row border border-crit/25 bg-crit/[0.04] p-3.5">
-          <div className="text-[13px] font-semibold text-crit-soft">אזור מסוכן</div>
-          <p className="mt-1 text-[12px] leading-relaxed text-text-faint">
-            מחיקת הלקוח מוחקת לצמיתות גם את {editCustomer.devices?.length ?? 0} המכשירים שלו
-            (כולל כל היסטוריית השמן), את קריאות השירות, החוזים ושיוכי המסלול שלו. אי אפשר לשחזר.
-          </p>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleteBusy}
-            className={`mt-3 rounded-pill border px-3.5 py-1.5 text-[12.5px] font-semibold
-                        transition-colors disabled:opacity-50 ${
-              confirmDelete
-                ? 'border-crit bg-crit text-white hover:bg-crit/90'
-                : 'border-crit/40 text-crit-soft hover:border-crit/60'
-            }`}
-          >
-            {deleteBusy ? 'מוחק…' : confirmDelete ? 'לחץ שוב כדי למחוק לצמיתות' : 'מחק לקוח לצמיתות'}
-          </button>
-        </div>
-      )}
-    </Modal>
   );
 }

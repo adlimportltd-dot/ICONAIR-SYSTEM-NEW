@@ -576,6 +576,21 @@ export const createCustomer = (payload) =>
 export const updateCustomer = (id, patch) =>
   supabase.from('customers').update(patch).eq('id', id).then(unwrap);
 
+/**
+ * לקוח בודד, טרי מה-DB — כרטיס הלקוח המאוחד (CustomerProfileModal) טוען
+ * את עצמו דרך זה במקום להסתמך על השורה שהגיעה מרשימת הלקוחות, כדי
+ * שעריכת פרטים בתוך הכרטיס תשתקף מייד בלי לחכות שהרשימה תרענן.
+ * customers_secure ולא customers — כדי שנתונים כספיים יחזרו רק למי
+ * שמורשה לראות אותם, בדיוק כמו ברשימה.
+ */
+export const getCustomer = (id) =>
+  supabase
+    .from('customers_secure')
+    .select('*, devices(model, status)')
+    .eq('id', id)
+    .single()
+    .then(unwrap);
+
 /** טוגל מהיר לסטטוס גבייה — ישירות משורת הטבלה, בלי לפתוח טופס עריכה. לא מחזיר נתונים בכוונה — אין צורך, וכך אין סיכון שמידע כספי יחזור בתשובה למי שלא אמור לראות אותו. */
 export const setCustomerPaid = (id, is_paid) =>
   supabase.from('customers').update({ is_paid }).eq('id', id).then(unwrap);
@@ -631,9 +646,9 @@ export const listCustomerDevices = (customerId) =>
  * ששייכים אליה (site_id, לא customer_id) ומחירי הדגמים שהוגדרו לה
  * (customer_site_model_prices, ר' phase17 — מחיר ליחידה לכל דגם,
  * לפני מע"מ; הסכום לכתובת נסכם בצד הלקוח מכמות המכשירים × המחיר
- * לדגם שלהם). ללקוח חד-כתובתי הרגיל תמיד תחזור רשימה ריקה — זה מה
- * ש-CustomerDevicesModal בודק כדי להחליט אם להציג פילוח לפי כתובת
- * או את הרשימה השטוחה הרגילה.
+ * לדגם שלהם, עם דריסה ידנית למכשיר ב-devices.unit_price, phase18).
+ * ללקוח חד-כתובתי הרגיל תמיד תחזור רשימה ריקה — כרטיס הלקוח
+ * (CustomerProfile) מציג אז את המכשירים כקבוצה אחת בלי פילוח לכתובות.
  */
 export const listCustomerSites = (customerId) =>
   supabase
@@ -644,13 +659,26 @@ export const listCustomerSites = (customerId) =>
     .then(unwrap);
 
 /** יצירת כתובת/אתר חדש ללקוח קיים — עוד לא משויכים אליה מכשירים, זה קורה דרך DeviceFormModal (lockedSite) */
-export const createCustomerSite = (customerId, { label, city }) =>
+export const createCustomerSite = (customerId, { label, city, building_code }) =>
   supabase
     .from('customer_sites')
-    .insert({ customer_id: customerId, label, city: city || null })
+    .insert({ customer_id: customerId, label, city: city || null, building_code: building_code || null })
     .select()
     .single()
     .then(unwrap);
+
+/** עריכת כתובת: שם, עיר, קוד בניין. שינוי עיר מזיז את הכתובת אוטומטית לקו ההפצה של העיר החדשה (ר' loadCityRoutesMap). */
+export const updateCustomerSite = (siteId, patch) =>
+  supabase.from('customer_sites').update(patch).eq('id', siteId).then(unwrap);
+
+/**
+ * מחיקת כתובת. המכשירים שלה לא נמחקים — devices.site_id הוא on delete
+ * set null, אז הם פשוט חוזרים ל"ללא כתובת משוייכת" בכרטיס הלקוח (ומשם
+ * אפשר לשייך אותם מחדש). מחירי-הדגם ושיוכי-המסלול של הכתובת נמחקים
+ * איתה (cascade).
+ */
+export const deleteCustomerSite = (siteId) =>
+  supabase.from('customer_sites').delete().eq('id', siteId).then(unwrap);
 
 /**
  * קביעת מחיר ליחידה לדגם מסוים בכתובת מסוימת — upsert לפי (site_id, model),
@@ -672,6 +700,10 @@ export const upsertSiteModelPrice = (siteId, model, unit_price) =>
  */
 export const deleteDevice = (deviceId) =>
   supabase.from('devices').delete().eq('id', deviceId).then(unwrap);
+
+// עריכת מכשיר (דגם/ניחוח/מיקום/סטטוס/כתובת/מחיר-ליחידה): updateDevice
+// למטה, ליד createDevice. unit_price = null מחזיר את המכשיר לתמחור לפי
+// מחיר-הדגם של הכתובת שלו (ר' phase18).
 
 const createDeviceRemote = (payload) =>
   supabase

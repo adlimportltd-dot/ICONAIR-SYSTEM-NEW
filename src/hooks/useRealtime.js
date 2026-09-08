@@ -35,17 +35,29 @@ export function useRealtime(tables, onChange, { enabled = true, onStatusChange }
 
     const channel = supabase.channel(`icon-air:${key}:${instanceId.current}`);
 
+    // איחוד פרצי אירועים: ייבוא/סנכרון של עשרות מכשירים, או טכנאי שמסמן
+    // 12 מכשירים בזה אחר זה, שולחים עשרות אירועים בשנייה. בלי זה כל
+    // אירוע הפעיל refetch נפרד — עשרות שאילתות מקבילות שהרגישו כמו
+    // "תקיעה". עכשיו כל הפרץ מתקפל ל-refetch אחד, 250ms אחרי האירוע האחרון.
+    let timer = null;
+    let lastPayload = null;
+    const fire = (payload) => {
+      lastPayload = payload;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        handler.current?.(lastPayload);
+      }, 250);
+    };
+
     key.split(',').forEach((table) => {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
-        (payload) => handler.current?.(payload)
-      );
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, fire);
     });
 
     channel.subscribe((status) => statusHandler.current?.(status));
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [key, enabled]);
