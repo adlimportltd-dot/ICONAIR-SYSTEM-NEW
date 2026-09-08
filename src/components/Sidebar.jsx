@@ -64,18 +64,18 @@ function NavItem({ item, isActive, badge, onSelect }) {
       onClick={() => onSelect(item.id)}
       aria-current={isActive ? 'page' : undefined}
       className={`relative flex w-full items-center gap-3 rounded-pill px-3 py-[11px]
-                  text-[14.5px] font-medium transition-colors
-                  ${isActive ? 'text-gold-600' : 'text-text-dim hover:bg-gold-500/[0.07] hover:text-text'}`}
+                  text-[14.5px] transition-colors
+                  ${isActive ? 'font-semibold text-gold-600' : 'font-medium text-text-dim hover:bg-gold-500/[0.08] hover:text-text'}`}
       style={
         isActive
-          ? { background: 'linear-gradient(270deg, rgba(212,175,55,.14), rgba(212,175,55,.02))' }
+          ? { background: 'linear-gradient(270deg, rgba(212,147,12,.18), rgba(212,147,12,.03))' }
           : undefined
       }
     >
       {isActive && (
         <span
           aria-hidden
-          className="absolute -start-4 top-1/2 h-[22px] w-[3px] -translate-y-1/2 rounded-[3px]
+          className="absolute -start-4 top-1/2 h-[22px] w-[3.5px] -translate-y-1/2 rounded-[3px]
                      bg-gold-500 shadow-gold-glow"
         />
       )}

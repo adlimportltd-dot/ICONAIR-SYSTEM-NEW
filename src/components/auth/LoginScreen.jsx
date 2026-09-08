@@ -48,9 +48,9 @@ export default function LoginScreen() {
 
       <div className="relative z-[1] flex min-h-screen items-center justify-center p-5">
         <div
-          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-[#E4DED0]/90
+          className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-[#292524]/10
                      shadow-lift lg:grid-cols-[1.05fr_1fr]"
-          style={{ background: 'linear-gradient(180deg, #FFFFFF, #FCFAF5)' }}
+          style={{ background: 'linear-gradient(180deg, #FFFFFF, #FBFCFD)' }}
         >
           {/* --- פאנל מותג: רק במסכים רחבים --- */}
           <div
