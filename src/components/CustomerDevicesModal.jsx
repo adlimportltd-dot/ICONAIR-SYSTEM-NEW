@@ -11,6 +11,8 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import {
   listCustomerDevices,
+  listCustomerSites,
+  updateCustomerSiteAmount,
   listScents,
   listDeviceModels,
   listContracts,
@@ -20,7 +22,10 @@ import {
   deleteDevice,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { DEVICE_STATUS_LABEL, modelTone, relativeTime, formatDate, formatDateTime } from '../lib/mappers';
+import {
+  DEVICE_STATUS_LABEL, modelTone, relativeTime, formatDate, formatDateTime,
+  summarizeDevicesByModel, computeVat, formatCurrency,
+} from '../lib/mappers';
 import { whatsappLink } from '../lib/navLinks';
 
 const STATUS_TONE = { active: 'ok', offline: 'crit', maintenance: 'warn', uninstalled: 'slate' };
@@ -68,6 +73,16 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
     [customerId],
     { enabled: Boolean(customerId) }
   );
+
+  // רק ללקוח רב-כתובתי (כמו אוורסט) יש שורות ב-customer_sites בכלל —
+  // לרוב הלקוחות (חד-כתובתיים) זו תמיד רשימה ריקה, וה-UI נשאר ברשימה
+  // השטוחה הרגילה בלי שינוי.
+  const sites = useQuery(
+    () => listCustomerSites(customerId),
+    [customerId],
+    { enabled: Boolean(customerId) }
+  );
+
   const scents = useQuery(listScents, []);
   const scentOptions = useMemo(
     () => (scents.data ?? []).map((s) => ({ value: s.name, label: s.name })),
@@ -85,6 +100,21 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
   useRealtime(['devices'], devices.refetch, { enabled: Boolean(customerId) });
 
   const rows = devices.data ?? [];
+  const siteRows = sites.data ?? [];
+  const hasSites = siteRows.length > 0;
+
+  // מכשיר עם site_id מקובץ תחת הכתובת שלו; מכשיר בלי site_id (למשל
+  // לפני שהכתובות יובאו, או נרשם ידנית בלי לבחור כתובת) נופל ל"ללא
+  // כתובת משוייכת" כדי שאף מכשיר לא ייעלם מהתצוגה בשקט.
+  const devicesBySite = useMemo(() => {
+    const map = new Map();
+    for (const device of rows) {
+      const key = device.site_id ?? '__none__';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(device);
+    }
+    return map;
+  }, [rows]);
 
   function handleCreated() {
     devices.refetch();
@@ -133,69 +163,44 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
           </div>
         )}
 
-        <Async
-          loading={devices.loading}
-          error={devices.error}
-          onRetry={devices.refetch}
-          isEmpty={rows.length === 0}
-          empty={
-            <EmptyState
-              title="ללקוח הזה עוד אין מכשירים"
-              hint="לחץ על ״הוסף מכשיר״ כדי לרשום את הראשון. אפשר לרשום כמה שצריך באותה פתיחה."
-            />
-          }
-        >
-          <div className="flex flex-col gap-[9px]">
-            {rows.map((device) => (
-              <div key={device.id} className="inner-row px-3.5 py-3">
-                <div className="flex items-start gap-2.5">
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-                    <span dir="ltr" className="font-mono text-[12.5px] text-gold-600">{device.serial}</span>
-                    <StatusChip tone={modelTone(device.model)}>{device.model}</StatusChip>
-                    <StatusChip tone={STATUS_TONE[device.status]}>
-                      {DEVICE_STATUS_LABEL[device.status]}
-                    </StatusChip>
-                  </div>
-
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteDevice(device)}
-                      disabled={deletingId === device.id}
-                      aria-label={confirmDeleteDeviceId === device.id ? `לאשר מחיקת מכשיר ${device.serial}` : `מחק מכשיר ${device.serial}`}
-                      title={confirmDeleteDeviceId === device.id ? 'לחץ שוב לאישור סופי' : 'הסרת מכשיר מהמערכת'}
-                      className={`flex flex-none items-center gap-1.5 rounded-[8px] border px-2 py-1
-                                  text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
-                        confirmDeleteDeviceId === device.id
-                          ? 'border-crit/50 bg-crit/10 text-crit-soft'
-                          : 'border-black/[0.09] text-text-faint hover:border-crit/35 hover:text-crit-soft'
-                      }`}
-                    >
-                      <TrashIcon className="h-[13px] w-[13px]" />
-                      {confirmDeleteDeviceId === device.id ? 'לאשר מחיקה' : 'מחיקה'}
-                    </button>
-                  )}
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12.5px]">
-                  <span className="text-text-faint">
-                    מיקום: <span className="text-text">{device.location_note || 'לא צוין'}</span>
-                  </span>
-                  <span className="text-text-faint">
-                    ניחוח: <span className="text-text">{device.scent_name || 'לא משויך'}</span>
-                  </span>
-                  <span className="tabular text-text-faint">
-                    נראה {relativeTime(device.last_seen_at)}
-                  </span>
-                </div>
-
-                <div className="mt-2.5 max-w-[220px]">
-                  <MiniMeter value={device.oil_level_pct} tone={oilTone(device.oil_level_pct)} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Async>
+        {hasSites ? (
+          <SitesSection
+            sites={siteRows}
+            devicesBySite={devicesBySite}
+            isAdmin={isAdmin}
+            confirmDeleteDeviceId={confirmDeleteDeviceId}
+            deletingId={deletingId}
+            onDeleteDevice={handleDeleteDevice}
+            vatMode={customer?.vat_mode}
+            onAmountSaved={sites.refetch}
+          />
+        ) : (
+          <Async
+            loading={devices.loading}
+            error={devices.error}
+            onRetry={devices.refetch}
+            isEmpty={rows.length === 0}
+            empty={
+              <EmptyState
+                title="ללקוח הזה עוד אין מכשירים"
+                hint="לחץ על ״הוסף מכשיר״ כדי לרשום את הראשון. אפשר לרשום כמה שצריך באותה פתיחה."
+              />
+            }
+          >
+            <div className="flex flex-col gap-[9px]">
+              {rows.map((device) => (
+                <DeviceRow
+                  key={device.id}
+                  device={device}
+                  isAdmin={isAdmin}
+                  confirmDeleteDeviceId={confirmDeleteDeviceId}
+                  deletingId={deletingId}
+                  onDelete={handleDeleteDevice}
+                />
+              ))}
+            </div>
+          </Async>
+        )}
 
         {isAdmin && <ContractsSection customer={customer} devices={rows} />}
       </Modal>
@@ -209,6 +214,202 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
         onCreated={handleCreated}
       />
     </>
+  );
+}
+
+/** שורת מכשיר בודדת — משמשת גם ברשימה השטוחה (לקוח חד-כתובתי) וגם בתוך כל כרטיס כתובת */
+function DeviceRow({ device, isAdmin, confirmDeleteDeviceId, deletingId, onDelete }) {
+  return (
+    <div className="inner-row px-3.5 py-3">
+      <div className="flex items-start gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+          <span dir="ltr" className="font-mono text-[12.5px] text-gold-600">{device.serial}</span>
+          <StatusChip tone={modelTone(device.model)}>{device.model}</StatusChip>
+          <StatusChip tone={STATUS_TONE[device.status]}>
+            {DEVICE_STATUS_LABEL[device.status]}
+          </StatusChip>
+        </div>
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => onDelete(device)}
+            disabled={deletingId === device.id}
+            aria-label={confirmDeleteDeviceId === device.id ? `לאשר מחיקת מכשיר ${device.serial}` : `מחק מכשיר ${device.serial}`}
+            title={confirmDeleteDeviceId === device.id ? 'לחץ שוב לאישור סופי' : 'הסרת מכשיר מהמערכת'}
+            className={`flex flex-none items-center gap-1.5 rounded-[8px] border px-2 py-1
+                        text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
+              confirmDeleteDeviceId === device.id
+                ? 'border-crit/50 bg-crit/10 text-crit-soft'
+                : 'border-black/[0.09] text-text-faint hover:border-crit/35 hover:text-crit-soft'
+            }`}
+          >
+            <TrashIcon className="h-[13px] w-[13px]" />
+            {confirmDeleteDeviceId === device.id ? 'לאשר מחיקה' : 'מחיקה'}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12.5px]">
+        <span className="text-text-faint">
+          מיקום: <span className="text-text">{device.location_note || 'לא צוין'}</span>
+        </span>
+        <span className="text-text-faint">
+          ניחוח: <span className="text-text">{device.scent_name || 'לא משויך'}</span>
+        </span>
+        <span className="tabular text-text-faint">
+          נראה {relativeTime(device.last_seen_at)}
+        </span>
+      </div>
+
+      <div className="mt-2.5 max-w-[220px]">
+        <MiniMeter value={device.oil_level_pct} tone={oilTone(device.oil_level_pct)} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * פילוח לפי כתובת — ללקוח רב-כתובתי (כמו אוורסט) יש עשרות אתרים
+ * (customer_sites), כל אחד עם המכשירים והעלות הידנית שלו. במקום סכום
+ * גלובלי אחד לכל הלקוח, כל כתובת היא כרטיסייה נפרדת עם פילוח דגמים
+ * ועלות משלה — בדיוק מה שביקש המשתמש.
+ */
+function SitesSection({
+  sites, devicesBySite, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, vatMode, onAmountSaved,
+}) {
+  const unassigned = devicesBySite.get('__none__') ?? [];
+  const grandTotal = sites.reduce((sum, s) => sum + computeVat(s.amount_due, vatMode).total, 0);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between rounded-row border border-gold-300/[0.2] bg-gold-500/[0.06] px-3.5 py-2.5">
+        <span className="text-[12.5px] font-medium text-text-dim">{sites.length} כתובות · סה״כ לכל הכתובות</span>
+        <span className="tabular font-mono text-[15px] font-bold text-gold-600">{formatCurrency(grandTotal)}</span>
+      </div>
+
+      {sites.map((site) => (
+        <SiteCard
+          key={site.id}
+          site={site}
+          devices={devicesBySite.get(site.id) ?? []}
+          isAdmin={isAdmin}
+          confirmDeleteDeviceId={confirmDeleteDeviceId}
+          deletingId={deletingId}
+          onDeleteDevice={onDeleteDevice}
+          vatMode={vatMode}
+          onAmountSaved={onAmountSaved}
+        />
+      ))}
+
+      {unassigned.length > 0 && (
+        <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
+          <div className="mb-2.5 text-[13px] font-semibold text-text-dim">ללא כתובת משוייכת</div>
+          <div className="flex flex-col gap-[9px]">
+            {unassigned.map((device) => (
+              <DeviceRow
+                key={device.id}
+                device={device}
+                isAdmin={isAdmin}
+                confirmDeleteDeviceId={confirmDeleteDeviceId}
+                deletingId={deletingId}
+                onDelete={onDeleteDevice}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** כרטיסיית כתובת בודדת: כותרת + פילוח דגמים + רשימת מכשירים + עלות ניתנת לעריכה */
+function SiteCard({ site, devices, isAdmin, confirmDeleteDeviceId, deletingId, onDeleteDevice, vatMode, onAmountSaved }) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(site.amount_due ?? 0));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  const vat = computeVat(site.amount_due, vatMode);
+
+  async function saveAmount() {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await updateCustomerSiteAmount(site.id, Number(amount || 0));
+      onAmountSaved?.();
+    } catch (caught) {
+      setSaveError(describeError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 text-start">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-semibold">{site.label}</div>
+          <div className="mt-0.5 truncate text-[12px] text-text-faint">
+            {site.city ? `${site.city} · ` : ''}{summarizeDevicesByModel(devices)}
+          </div>
+        </div>
+        <div className="flex-none text-end">
+          <div className="tabular font-mono text-[14px] font-semibold text-gold-600">{formatCurrency(vat.total)}</div>
+          <div className="text-[10.5px] text-text-faint">{devices.length} מכשירים</div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="mt-3 border-t border-black/[0.06] pt-3">
+          {isAdmin && (
+            <div className="mb-3 flex flex-wrap items-end gap-2.5">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11.5px] text-text-faint">סכום לכתובת זו (₪, כולל/לפני מע״מ לפי הגדרת הלקוח)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-[140px] rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-1.5 text-[13px] text-text
+                             focus:border-gold-500/45 focus:outline-none"
+                />
+              </label>
+              <SecondaryButton onClick={saveAmount} disabled={saving}>
+                {saving ? 'שומר…' : 'שמירת סכום'}
+              </SecondaryButton>
+              <span className="text-[11px] text-text-faint">
+                לפני מע״מ {formatCurrency(vat.preVat)} · מע״מ {formatCurrency(vat.vatAmount)}
+              </span>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mb-3 rounded-row border border-crit/25 bg-crit/[0.07] px-3 py-2 text-[12px] text-crit-soft">
+              {saveError}
+            </div>
+          )}
+
+          {devices.length === 0 ? (
+            <div className="text-[12.5px] text-text-faint">אין מכשירים בכתובת הזו</div>
+          ) : (
+            <div className="flex flex-col gap-[9px]">
+              {devices.map((device) => (
+                <DeviceRow
+                  key={device.id}
+                  device={device}
+                  isAdmin={isAdmin}
+                  confirmDeleteDeviceId={confirmDeleteDeviceId}
+                  deletingId={deletingId}
+                  onDelete={onDeleteDevice}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

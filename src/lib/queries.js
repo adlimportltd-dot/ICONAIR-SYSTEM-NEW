@@ -627,6 +627,25 @@ export const listCustomerDevices = (customerId) =>
     .then(unwrap);
 
 /**
+ * הכתובות (אתרים) של לקוח רב-כתובתי כמו אוורסט — כל כתובת עם המכשירים
+ * ששייכים אליה (site_id, לא customer_id) והעלות הידנית שלה (amount_due,
+ * ר' phase16). ללקוח חד-כתובתי הרגיל תמיד תחזור רשימה ריקה — זה מה
+ * ש-CustomerDevicesModal בודק כדי להחליט אם להציג פילוח לפי כתובת
+ * או את הרשימה השטוחה הרגילה.
+ */
+export const listCustomerSites = (customerId) =>
+  supabase
+    .from('customer_sites')
+    .select('*, devices(id, model, status)')
+    .eq('customer_id', customerId)
+    .order('label')
+    .then(unwrap);
+
+/** עדכון הסכום הידני לכתובת בודדת — ר' listCustomerSites */
+export const updateCustomerSiteAmount = (siteId, amount_due) =>
+  supabase.from('customer_sites').update({ amount_due }).eq('id', siteId).then(unwrap);
+
+/**
  * מחיקת מכשיר לגמרי מהמערכת (לא רק "ניתוק" מהלקוח — customer_id הוא
  * NOT NULL בסכימה, אין מצב "מכשיר בלי לקוח"). ה-RLS על devices_delete
  * מגביל את זה למנהלים בלבד; היסטוריית השמן (oil_tracking) וכל בקשות
