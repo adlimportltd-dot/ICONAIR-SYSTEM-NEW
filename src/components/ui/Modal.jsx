@@ -13,6 +13,20 @@ const openModals = [];
 export default function Modal({ open, title, subtitle, onClose, children, footer }) {
   const panel = useRef(null);
 
+  // onClose מגיע כמעט תמיד כ-arrow function מוטבע אצל הקורא
+  // (onClose={() => setX(null)}), שמקבל זהות חדשה בכל רינדור של
+  // ההורה — כולל רינדורים שלא קשורים בכלל לחלון הזה (למשל App.jsx
+  // מרענן כל 5 שניות בשביל תור ה-offline, ורילטיים על devices/
+  // service_calls/route_assignments יורד לכל מסך). כשה-effect הזה
+  // היה תלוי ב-onClose, כל רינדור כזה גרם לו לרוץ מחדש: לנקות
+  // ולהירשם שוב למאזין ה-Escape, ובעיקר — **לגנוב פוקוס בחזרה לשדה
+  // הראשון של הטופס בכל פעם**, מה שגרם לחלון להרגיש כאילו הוא
+  // "נסגר ומשהו קורה" גם כשה-open עצמו לא השתנה בכלל. הפתרון: onClose
+  // נקרא דרך ref שתמיד מעודכן, וה-effect תלוי רק ב-open — רץ פעם
+  // אחת בפתיחה ופעם אחת בסגירה, לא בכל רינדור-הורה מקרי.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return undefined;
 
@@ -20,7 +34,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
     openModals.push(token);
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && openModals[openModals.length - 1] === token) onClose();
+      if (event.key === 'Escape' && openModals[openModals.length - 1] === token) onCloseRef.current();
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -37,7 +51,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
       const index = openModals.indexOf(token);
       if (index !== -1) openModals.splice(index, 1);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
