@@ -7,7 +7,7 @@ import { useQuery } from '../hooks/useQuery';
 import { getReportSummary, listRoutes, getRouteConsumptionReport, getStockMovementsSummary } from '../lib/queries';
 import { HEBREW_MONTHS, modelTone, formatNumber } from '../lib/mappers';
 
-const TONE_HEX = { slate: '#6E86A8', teal: '#4CC9C0', gold: '#C5A059' };
+const TONE_HEX = { slate: '#475569', teal: '#0F766E', gold: '#C5A059' };
 
 /** ייצוא CSV עם BOM — בלעדיו Excel בעברית פותח ג'יבריש */
 function downloadCsv(filename, rows) {
@@ -117,14 +117,14 @@ function RouteConsumptionSection() {
         >
           <div className="flex flex-col gap-2">
             {(movements.data ?? []).map((row) => (
-              <div key={row.label} className="rounded-row border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5">
+              <div key={row.label} className="rounded-row border border-black/[0.07] bg-black/[0.02] px-3.5 py-2.5">
                 <div className="mb-1 flex items-center gap-2 text-[13.5px] font-semibold">{row.label}</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
                   <span className="text-text-faint">יצא: <span className="tabular font-mono text-text-dim">{row.allocated}</span></span>
                   <span className="text-text-faint">חזר: <span className="tabular font-mono text-text-dim">{row.returned}</span></span>
                   <span className="text-text-faint">
                     יתרה בשטח:{' '}
-                    <span className={`tabular font-mono ${row.net > 0 ? 'text-gold-300' : 'text-text-dim'}`}>{row.net}</span>
+                    <span className={`tabular font-mono ${row.net > 0 ? 'text-gold-600' : 'text-text-dim'}`}>{row.net}</span>
                   </span>
                 </div>
               </div>

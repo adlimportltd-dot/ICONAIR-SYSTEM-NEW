@@ -10,9 +10,9 @@ const RING_R = 19;
 const RING_C = 2 * Math.PI * RING_R;
 
 function oilRingColor(percent) {
-  if (percent >= 55) return '#4CC9C0';
+  if (percent >= 55) return '#0F766E';
   if (percent >= 35) return '#C5A059';
-  return '#F0555C';
+  return '#B91C1C';
 }
 
 function ProgressRing({ percent }) {
@@ -20,7 +20,7 @@ function ProgressRing({ percent }) {
   return (
     <div className="relative h-[46px] w-[46px] flex-none">
       <svg width="46" height="46" viewBox="0 0 46 46" className="-rotate-90" aria-hidden>
-        <circle cx="23" cy="23" r={RING_R} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="4" />
+        <circle cx="23" cy="23" r={RING_R} fill="none" stroke="rgba(44,42,41,.08)" strokeWidth="4" />
         <circle
           cx="23"
           cy="23"

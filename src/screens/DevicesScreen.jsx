@@ -49,7 +49,7 @@ export default function DevicesScreen() {
       key: 'serial',
       label: 'מס\' סידורי',
       width: '150px',
-      render: (row) => <span className="font-mono text-[12.5px] text-gold-300">{row.serial}</span>,
+      render: (row) => <span className="font-mono text-[12.5px] text-gold-600">{row.serial}</span>,
     },
     {
       key: 'model',

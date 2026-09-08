@@ -24,7 +24,7 @@ export default function ScreenToolbar({
           value={search}
           onChange={(event) => onSearch(event.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full rounded-pill border border-white/[0.09] bg-black/30 py-2.5 pe-10 ps-3.5
+          className="w-full rounded-pill border border-black/[0.09] bg-ink-800 py-2.5 pe-10 ps-3.5
                      text-[13.5px] text-text placeholder:text-text-faint
                      focus:border-gold-500/45 focus:outline-none"
         />

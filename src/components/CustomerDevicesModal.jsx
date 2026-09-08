@@ -112,7 +112,7 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
             {rows.map((device) => (
               <div key={device.id} className="inner-row px-3.5 py-3">
                 <div className="flex items-center gap-2.5">
-                  <span dir="ltr" className="font-mono text-[12.5px] text-gold-300">{device.serial}</span>
+                  <span dir="ltr" className="font-mono text-[12.5px] text-gold-600">{device.serial}</span>
                   <StatusChip tone={modelTone(device.model)}>{device.model}</StatusChip>
                   <StatusChip tone={STATUS_TONE[device.status]}>
                     {DEVICE_STATUS_LABEL[device.status]}
@@ -234,7 +234,7 @@ function ContractsSection({ customer, devices = [] }) {
   }
 
   return (
-    <div className="mt-5 border-t border-white/[0.07] pt-4">
+    <div className="mt-5 border-t border-black/[0.07] pt-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h3 className="text-[14px] font-semibold">חוזים</h3>
         <input

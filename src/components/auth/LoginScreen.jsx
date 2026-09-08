@@ -50,7 +50,7 @@ export default function LoginScreen() {
         <div
           className="grid w-full max-w-[880px] overflow-hidden rounded-card border border-gold-300/[0.14]
                      shadow-lift lg:grid-cols-[1.05fr_1fr]"
-          style={{ background: 'linear-gradient(180deg, #141414, #101010)' }}
+          style={{ background: 'linear-gradient(180deg, #FFFFFF, #FDFBF7)' }}
         >
           {/* --- פאנל מותג: רק במסכים רחבים --- */}
           <div
@@ -58,9 +58,9 @@ export default function LoginScreen() {
                        border-gold-300/[0.1] p-9 lg:flex"
             style={{
               background:
-                'radial-gradient(120% 140% at 0% 0%, rgba(212,175,55,.1), transparent 60%),' +
-                'radial-gradient(120% 140% at 100% 100%, rgba(197,160,89,.05), transparent 55%),' +
-                '#0d0d0d',
+                'radial-gradient(120% 140% at 0% 0%, rgba(212,175,55,.13), transparent 60%),' +
+                'radial-gradient(120% 140% at 100% 100%, rgba(197,160,89,.07), transparent 55%),' +
+                '#FBF8F1',
             }}
           >
             <div>
@@ -82,7 +82,7 @@ export default function LoginScreen() {
                   <div key={point.text} className="flex items-center gap-3">
                     <div
                       className="grid h-9 w-9 flex-none place-items-center rounded-xl border
-                                 border-gold-500/25 bg-gold-500/[0.09] text-gold-300"
+                                 border-gold-500/25 bg-gold-500/[0.09] text-gold-600"
                     >
                       {Icon ? <Icon className="h-4 w-4" /> : <AirMarkIcon className="h-4 w-4" />}
                     </div>
@@ -173,7 +173,7 @@ export default function LoginScreen() {
                 setError(null);
                 setNotice(null);
               }}
-              className="mt-4 w-full text-center text-[12.5px] text-text-dim transition-colors hover:text-gold-300"
+              className="mt-4 w-full text-center text-[12.5px] text-text-dim transition-colors hover:text-gold-600"
             >
               {mode === 'signin' ? 'אין לך חשבון? הירשם' : 'יש לך כבר חשבון? התחבר'}
             </button>

@@ -24,7 +24,7 @@ export function CardHead({ icon: Icon, title, subtitle, action, onAction }) {
     <div className="mb-5 flex items-start gap-3">
       {Icon && (
         <div className="grid h-9 w-9 flex-none place-items-center rounded-xl border
-                        border-gold-300/[0.16] bg-gold-500/[0.07] text-gold-300 shadow-icon-glow">
+                        border-gold-300/[0.16] bg-gold-500/[0.07] text-gold-600 shadow-icon-glow">
           <Icon className="h-[17px] w-[17px]" />
         </div>
       )}

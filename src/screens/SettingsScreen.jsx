@@ -147,7 +147,7 @@ function BrandingCard() {
     <GlassCard>
       <CardHead title="מיתוג — לוגו המערכת" subtitle="מוצג בסרגל הצד, במסך הכניסה ובראש המסך בנייד" />
 
-      <div className="mb-4 flex items-center justify-center rounded-row border border-white/[0.07] bg-white/[0.02] p-5">
+      <div className="mb-4 flex items-center justify-center rounded-row border border-black/[0.07] bg-black/[0.02] p-5">
         <Brand overrideSrc={previewUrl ?? undefined} />
       </div>
 
@@ -159,7 +159,7 @@ function BrandingCard() {
         onDragLeave={() => setDragOver(false)}
         className={`flex cursor-pointer flex-col items-center gap-2 rounded-row border border-dashed
                     px-4 py-8 text-center transition-colors focus:outline-none focus:ring-2
-                    focus:ring-gold-500 ${dragOver ? 'border-gold-500/60 bg-gold-500/[0.06]' : 'border-white/[0.14]'}`}
+                    focus:ring-gold-500 ${dragOver ? 'border-gold-500/60 bg-gold-500/[0.06]' : 'border-black/[0.14]'}`}
       >
         <span className="text-[13.5px] font-medium text-text-dim">
           {busy ? 'מעלה…' : 'לחצו כדי לבחור קובץ, גררו לכאן, או פשוט הדביקו (Ctrl+V)'}
@@ -258,8 +258,8 @@ function DeviceModelsCard({ deviceModels }) {
               title={m.active ? 'לחץ להשבית' : 'לחץ להפעיל מחדש'}
               className={`rounded-pill border px-3 py-1.5 text-[12.5px] transition-colors ${
                 m.active
-                  ? 'border-white/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
-                  : 'border-white/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'
+                  ? 'border-black/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
+                  : 'border-black/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'
               }`}
             >
               {m.name}
@@ -338,8 +338,8 @@ function ScentsCard({ scents }) {
               title={s.active ? 'לחץ להשבית' : 'לחץ להפעיל מחדש'}
               className={`rounded-pill border px-3 py-1.5 text-[12.5px] transition-colors ${
                 s.active
-                  ? 'border-white/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
-                  : 'border-white/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'
+                  ? 'border-black/[0.09] text-text-dim hover:border-crit/35 hover:text-crit-soft'
+                  : 'border-black/[0.06] text-text-faint/60 line-through hover:border-ok/35 hover:text-ok'
               }`}
             >
               {s.name}

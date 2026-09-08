@@ -4,14 +4,14 @@ import { iconMap, ArrowUpIcon, ArrowDownIcon } from './ui/Icons';
 const iconTone = {
   slate: 'text-slate-500',
   teal: 'text-teal-500',
-  gold: 'text-gold-500',
+  gold: 'text-gold-600',
   crit: 'text-crit',
 };
 
 const trendTone = {
   up: 'text-ok bg-ok/10 border-ok/20',
   down: 'text-crit bg-crit/10 border-crit/20',
-  flat: 'text-gold-300 bg-gold-500/[0.14] border-gold-500/25',
+  flat: 'text-gold-600 bg-gold-500/[0.14] border-gold-500/25',
 };
 
 /** שבב מגמה: כיוון + ערך. hideArrow למקרים שהמספר הוא ספירה ולא שינוי. */

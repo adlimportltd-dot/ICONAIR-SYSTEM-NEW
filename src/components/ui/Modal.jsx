@@ -58,7 +58,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
       <div
         ref={panel}
         className="glass relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-card
-                   border-white/[0.09] p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
+                   border-black/[0.09] p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
       >
         <div className="mb-4 flex items-start gap-3">
           <div className="min-w-0">
@@ -70,8 +70,8 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
             onClick={onClose}
             aria-label="סגור"
             className="ms-auto grid h-9 w-9 flex-none place-items-center rounded-pill
-                       border border-white/[0.075] text-text-dim transition-colors
-                       hover:border-gold-500/35 hover:text-gold-300"
+                       border border-black/[0.075] text-text-dim transition-colors
+                       hover:border-gold-500/35 hover:text-gold-600"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
                  strokeLinecap="round" className="h-4 w-4">

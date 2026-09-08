@@ -1,6 +1,6 @@
 /**
  * סט אייקונים פנימי — SVG בקו דק, בלי תלות בספרייה חיצונית.
- * כל אייקון יורש currentColor, כך שצביעה נעשית דרך Tailwind (text-gold-300 וכו').
+ * כל אייקון יורש currentColor, כך שצביעה נעשית דרך Tailwind (text-gold-600 וכו').
  */
 
 const base = {

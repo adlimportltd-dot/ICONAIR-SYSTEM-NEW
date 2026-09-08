@@ -3,9 +3,9 @@ import { BoxIcon } from './ui/Icons';
 
 const FILL = {
   gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
-  teal: 'linear-gradient(90deg,#4CC9C0,#8FE3DC)',
-  slate: 'linear-gradient(90deg,#6E86A8,#A3B6CE)',
-  crit: 'linear-gradient(90deg,#F0555C,#F0A43A)',
+  teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
+  slate: 'linear-gradient(90deg,#475569,#5B6B82)',
+  crit: 'linear-gradient(90deg,#B91C1C,#B45309)',
 };
 
 export default function StockCard({ delay, stock = [], monthTotal }) {

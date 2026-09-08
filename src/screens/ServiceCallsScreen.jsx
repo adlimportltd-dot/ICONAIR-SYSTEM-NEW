@@ -85,7 +85,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       key: 'code',
       label: 'קוד',
       width: '96px',
-      render: (row) => <span className="font-mono text-[12.5px] text-gold-300">{row.code}</span>,
+      render: (row) => <span className="font-mono text-[12.5px] text-gold-600">{row.code}</span>,
     },
     {
       key: 'customer',

@@ -75,9 +75,9 @@ function Gate() {
             <h1 className="font-display text-[19px] font-bold">לא נמצא פרופיל למשתמש</h1>
             <p className="mt-2 text-[13px] leading-relaxed text-text-dim">
               המשתמש קיים ב-Authentication אבל אין לו שורה בטבלת
-              <span className="font-mono text-gold-300"> profiles</span>.
-              ודא שהרצת את <span className="font-mono text-gold-300">iconair_schema.sql</span> —
-              הוא יוצר את הטריגר (<span className="font-mono text-gold-300">on_auth_user_created</span>)
+              <span className="font-mono text-gold-600"> profiles</span>.
+              ודא שהרצת את <span className="font-mono text-gold-600">iconair_schema.sql</span> —
+              הוא יוצר את הטריגר (<span className="font-mono text-gold-600">on_auth_user_created</span>)
               שמשלים פרופיל לכל משתמש חדש.
             </p>
           </div>

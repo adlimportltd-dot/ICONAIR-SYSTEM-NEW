@@ -42,8 +42,8 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
         aria-expanded={open}
         aria-label={alerts > 0 ? `${alerts} התראות פתוחות` : 'התראות'}
         className="relative grid h-10 w-10 flex-none place-items-center rounded-pill
-                   border border-white/[0.075] bg-white/[0.03] text-text-dim
-                   transition-colors hover:border-gold-500/35 hover:text-gold-300"
+                   border border-black/[0.075] bg-black/[0.03] text-text-dim
+                   transition-colors hover:border-gold-500/35 hover:text-gold-600"
       >
         <BellIcon className="h-[18px] w-[18px]" />
         {alerts > 0 && (
@@ -111,7 +111,7 @@ export default function TopBar({
         type="button"
         onClick={onSearch}
         className="ms-auto hidden min-w-[230px] items-center gap-[9px] rounded-pill
-                   border border-white/[0.075] bg-black/25 px-3.5 py-[9px]
+                   border border-black/[0.075] bg-ink-800 px-3.5 py-[9px]
                    text-[13.5px] text-text-faint transition-colors hover:text-text-dim md:flex"
       >
         <SearchIcon className="h-4 w-4" />
@@ -122,7 +122,7 @@ export default function TopBar({
         <div
           className="tabular hidden items-center gap-[6px] rounded-xl border border-gold-300/[0.18]
                      bg-gold-500/[0.06] px-[11px] py-2 text-[11px] font-semibold uppercase
-                     tracking-[0.6px] text-gold-300 wide:flex"
+                     tracking-[0.6px] text-gold-600 wide:flex"
           title="חיבור בזמן אמת פעיל — הנתונים מתעדכנים אוטומטית"
         >
           <span className="h-[6px] w-[6px] rounded-full bg-gold-300 animate-pulse-dot" />
@@ -155,8 +155,8 @@ export default function TopBar({
         aria-label="קריאת שירות חדשה"
         onClick={onNewCall}
         className="grid h-10 w-10 flex-none place-items-center rounded-pill
-                   border border-white/[0.075] bg-white/[0.03] text-text-dim
-                   transition-colors hover:border-gold-500/35 hover:text-gold-300"
+                   border border-black/[0.075] bg-black/[0.03] text-text-dim
+                   transition-colors hover:border-gold-500/35 hover:text-gold-600"
       >
         <PlusIcon className="h-[18px] w-[18px]" />
       </button>

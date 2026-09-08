@@ -33,7 +33,7 @@ function BuiltInMark({ compact }) {
   return (
     <div className={`flex items-center gap-3 ${compact ? '' : 'px-1.5 pt-0.5'}`}>
       <div
-        className="grid h-10 w-10 flex-none place-items-center rounded-pill border border-gold-500/35 text-gold-300"
+        className="grid h-10 w-10 flex-none place-items-center rounded-pill border border-gold-500/35 text-gold-600"
         style={{
           background: 'linear-gradient(150deg, rgba(212,175,55,.30), rgba(212,175,55,.05))',
           boxShadow: '0 8px 22px -12px rgba(212,175,55,.6), inset 0 1px 0 rgba(255,255,255,.16)',
@@ -65,7 +65,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       aria-current={isActive ? 'page' : undefined}
       className={`relative flex w-full items-center gap-3 rounded-pill px-3 py-[11px]
                   text-[14.5px] font-medium transition-colors
-                  ${isActive ? 'text-gold-300' : 'text-text-dim hover:bg-white/[0.045] hover:text-text'}`}
+                  ${isActive ? 'text-gold-600' : 'text-text-dim hover:bg-gold-500/[0.07] hover:text-text'}`}
       style={
         isActive
           ? { background: 'linear-gradient(270deg, rgba(212,175,55,.14), rgba(212,175,55,.02))' }
@@ -133,7 +133,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
           onSelect={onSelect}
         />
 
-        <div className="inner-row flex items-center gap-[11px] rounded-[15px] bg-white/[0.03] p-[11px]">
+        <div className="inner-row flex items-center gap-[11px] rounded-[15px] bg-black/[0.03] p-[11px]">
           <div
             className="grid h-9 w-9 flex-none place-items-center rounded-[11px]
                        font-display text-[15px] font-bold text-[#221B0C]"

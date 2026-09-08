@@ -33,7 +33,7 @@ export default function DataTable({ columns, rows, rowKey, onRowClick, actions }
             key={key}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             className={`inner-row px-4 py-[15px] ${
-              onRowClick ? 'cursor-pointer hover:border-gold-300/30 hover:bg-white/[0.045]' : ''
+              onRowClick ? 'cursor-pointer hover:border-gold-300/30 hover:bg-gold-500/[0.07]' : ''
             }`}
           >
             {/* --- רשת: מרוחב sm ומעלה --- */}
@@ -84,7 +84,7 @@ export function StatusChip({ tone = 'neutral', children }) {
     ok: 'text-ok border-ok/25 bg-ok/10',
     warn: 'text-warn border-warn/30 bg-warn/[0.09]',
     crit: 'text-crit-soft border-crit/30 bg-crit/10',
-    gold: 'text-gold-300 border-gold-500/30 bg-gold-500/[0.14]',
+    gold: 'text-gold-600 border-gold-500/30 bg-gold-500/[0.14]',
     teal: 'text-teal-500 border-teal-500/25 bg-teal-500/10',
     slate: 'text-slate-300 border-slate-500/30 bg-slate-500/10',
   };
@@ -95,11 +95,11 @@ export function StatusChip({ tone = 'neutral', children }) {
 /** מד אופקי קטן לתוך תא טבלה */
 export function MiniMeter({ value, tone = 'teal' }) {
   const fills = {
-    teal: 'linear-gradient(90deg,#4CC9C0,#8FE3DC)',
+    teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
     gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
-    slate: 'linear-gradient(90deg,#6E86A8,#A3B6CE)',
-    warn: 'linear-gradient(90deg,#F0A43A,#F5C078)',
-    crit: 'linear-gradient(90deg,#F0555C,#F0A43A)',
+    slate: 'linear-gradient(90deg,#475569,#5B6B82)',
+    warn: 'linear-gradient(90deg,#B45309,#D89B4A)',
+    crit: 'linear-gradient(90deg,#B91C1C,#B45309)',
   };
 
   return (

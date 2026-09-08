@@ -1,7 +1,7 @@
 import { ChevronDownIcon } from './Icons';
 
 const controlClass =
-  'w-full rounded-pill border border-white/[0.09] bg-black/30 px-3.5 py-2.5 text-[14px] ' +
+  'w-full rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2.5 text-[14px] ' +
   'text-text placeholder:text-text-faint transition-colors ' +
   'focus:border-gold-500/45 focus:outline-none';
 
@@ -10,7 +10,7 @@ export function Field({ label, hint, error, children, required }) {
     <label className="flex flex-col gap-2">
       <span className="text-[14px] font-medium text-text-dim">
         {label}
-        {required && <span className="ms-1 text-gold-500">*</span>}
+        {required && <span className="ms-1 text-gold-600">*</span>}
       </span>
       {children}
       {error
@@ -29,12 +29,11 @@ export function TextArea({ className = '', rows = 3, ...props }) {
 }
 
 /**
- * ה-<select> הסגור כבר עוצב כהה כמו שאר השדות — appearance-none מסיר
- * רק את החץ ואת הרקע הבהיר שדפדפנים מציירים סביבו. הרשימה הפתוחה
- * (תפריט ה-options) היא רכיב UI של מערכת ההפעלה, לא של הדף — CSS לא
- * יכול לצייר אותה מחדש בעקביות בין דפדפנים. color-scheme: dark
- * ב-index.css אומר לדפדפן לצייר את הרשימה בגרסה הכהה שלו במקום
- * בברירת המחדל הבהירה — זה מה שמחליף את "האפור של פעם".
+ * ה-<select> הסגור כבר עוצב כמו שאר השדות — appearance-none מסיר רק
+ * את החץ המובנה. הרשימה הפתוחה (תפריט ה-options) היא רכיב UI של
+ * מערכת ההפעלה, לא של הדף — CSS לא יכול לצייר אותה מחדש בעקביות בין
+ * דפדפנים. color-scheme: light ב-index.css, יחד עם select option
+ * הכתוב שם, אומרים לדפדפן לצייר את הרשימה בגוונים התואמים למותג.
  */
 export function Select({ className = '', options = [], placeholder, ...props }) {
   return (

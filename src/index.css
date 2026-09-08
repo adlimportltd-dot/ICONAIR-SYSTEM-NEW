@@ -11,10 +11,10 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* המערכת כהה תמיד (אין מצב בהיר) — זה אומר לדפדפן לצייר את כל
-       ה-UI הילידי (תפריט select פתוח, סקרולבר, בורר תאריך) בגרסה
-       הכהה שלו, תואמת לפחם העמוק של המותג. */
-    color-scheme: dark;
+    /* 2026-09-08 — המערכת עברה לעיצוב בהיר (Cream & Gold) כברירת מחדל
+       הקבועה החדשה. זה אומר לדפדפן לצייר את כל ה-UI הילידי (תפריט select
+       פתוח, סקרולבר, בורר תאריך) בגרסה הבהירה שלו. */
+    color-scheme: light;
   }
 
   body {
@@ -29,47 +29,39 @@
 
   /* --- תפריט select פתוח ---
      הרשימה עצמה מצוירת ע"י מערכת ההפעלה, לא ע"י הדף — CSS לא שולט
-     בה במלואה בכל דפדפן. השורות הבאות נותנות רקע/טקסט כהים תואמים
+     בה במלואה בכל דפדפן. השורות הבאות נותנות רקע/טקסט בהירים תואמים
      למותג בדפדפנים שכן מכבדים אותן (כרום/אדג'). */
   select {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   select option {
-    background-color: #121212;
-    color: #ffffff;
+    background-color: #ffffff;
+    color: #2c2a29;
   }
 
   select option:checked,
   select option:hover {
     background-color: #d4af37;
-    color: #0a0a0a;
+    color: #2c2a29;
   }
 }
 
 @layer components {
-  /* --- הרקע המרחף: פחם עמוק + הילת זהב מרוסנת אחת --- */
+  /* --- הרקע המרחף: שמנת רכה + הילת זהב מרוסנת אחת (2026-09-08, Cream & Gold) --- */
   .ambient-field {
     @apply fixed inset-0 z-0 pointer-events-none;
     background:
-      radial-gradient(1000px 700px at 85% -10%, rgba(212, 175, 55, 0.07), transparent 60%),
-      radial-gradient(800px 600px at 5% 105%, rgba(197, 160, 89, 0.04), transparent 60%),
-      #0a0a0a;
+      radial-gradient(1000px 700px at 85% -10%, rgba(212, 175, 55, 0.1), transparent 60%),
+      radial-gradient(800px 600px at 5% 105%, rgba(197, 160, 89, 0.06), transparent 60%),
+      #fdfbf7;
   }
 
-  .ambient-field::after {
-    content: '';
-    @apply absolute inset-0;
-    opacity: 0.18;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.42'/></svg>");
-  }
-
-  /* --- משטח הכרטיסים: פחם, הילת אור עדינה מהפינה, מסגרת זהב דקה, הצללה עמוקה --- */
+  /* --- משטח הכרטיסים: לבן נקי, הילת זהב עדינה מהפינה, מסגרת זהב-אפרפר דקה, צל רך --- */
   .glass {
     background:
-      radial-gradient(140% 120% at 12% -12%, rgba(212, 175, 55, 0.05), transparent 55%),
-      linear-gradient(165deg, #161616, #0e0e0e);
+      radial-gradient(140% 120% at 12% -12%, rgba(212, 175, 55, 0.06), transparent 55%),
+      #ffffff;
     @apply border border-gold-300/[0.14] shadow-glass-hi;
   }
 
@@ -77,14 +69,14 @@
     @apply glass rounded-card shadow-lift;
   }
 
-  /* --- שורה פנימית (קריאה, קו הפצה) --- */
+  /* --- שורה פנימית (קריאה, קו הפצה) — גוון זהב חמים ועדין, לא אפור ניטרלי --- */
   .inner-row {
-    @apply rounded-row border border-gold-300/[0.1] bg-white/[0.02] transition-colors duration-200;
+    @apply rounded-row border border-gold-300/[0.1] bg-gold-500/[0.05] transition-colors duration-200;
   }
 
   /* --- מד התקדמות אופקי --- */
   .meter {
-    @apply mt-2 h-[7px] overflow-hidden rounded-md bg-white/[0.07];
+    @apply mt-2 h-[7px] overflow-hidden rounded-md bg-black/[0.06];
   }
 
   .meter > span {
@@ -101,7 +93,7 @@
   .ghost-btn {
     @apply whitespace-nowrap rounded-[10px] border border-gold-300/[0.16] px-3 py-1.5
            text-[13.5px] font-medium text-text-dim transition-colors
-           hover:border-gold-300/50 hover:text-gold-300;
+           hover:border-gold-300/50 hover:text-gold-600;
   }
 
   .tabular {
@@ -121,9 +113,8 @@
 
 /* ==================================================================
    הדפסה — דוחות (כרגע: סיכום נתוני קו במסך לקוחות).
-   האפליקציה כהה תמיד, אבל דוח מודפס על נייר לבן עם רקע כהה מבזבז
-   דיו ונראה לא מקצועי — לכן הדוח בנוי מראש בצבעים בהירים משלו
-   (ר' .print-report ב-JSX), וכאן רק דואגים שהוא לבד על העמוד:
+   הדוח בנוי מראש בצבעים בהירים משלו (ר' .print-report ב-JSX) ללא תלות
+   בעיצוב הכללי של האפליקציה, וכאן רק דואגים שהוא לבד על העמוד:
    שאר האפליקציה (סיידבר, טפסים, טבלה החיה) מוסתרת לגמרי בהדפסה
    דרך print:hidden על העטיפה שלה ב-CustomersScreen.
    ================================================================== */

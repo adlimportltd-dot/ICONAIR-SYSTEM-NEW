@@ -6,14 +6,14 @@ const SEVERITY_BAR = {
   crit: 'bg-crit shadow-[0_0_12px_rgba(240,85,92,.55)]',
   warn: 'bg-warn shadow-[0_0_12px_rgba(240,164,58,.4)]',
   norm: 'bg-slate-500',
-  sched: 'bg-white/[0.2]',
+  sched: 'bg-black/[0.2]',
 };
 
 const SEVERITY_CHIP = {
   crit: 'text-crit-soft border-crit/30 bg-crit/10',
   warn: 'text-warn border-warn/30 bg-warn/[0.09]',
   norm: '',
-  sched: 'text-gold-300 border-gold-500/30 bg-gold-500/[0.14]',
+  sched: 'text-gold-600 border-gold-500/30 bg-gold-500/[0.14]',
 };
 
 export default function ServiceCallsCard({ delay, calls = [], subtitle, onOpenAll, onSelect }) {
@@ -35,7 +35,7 @@ export default function ServiceCallsCard({ delay, calls = [], subtitle, onOpenAl
             onClick={onSelect ? () => onSelect(call) : undefined}
             className="inner-row group grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1
                        px-3.5 py-[13px] text-start transition-all
-                       hover:-translate-x-[3px] hover:border-white/[0.13] hover:bg-white/[0.05]
+                       hover:-translate-x-[3px] hover:border-gold-300/30 hover:bg-gold-500/[0.08]
                        sm:grid-cols-[auto_minmax(0,1fr)_auto]"
           >
             <i

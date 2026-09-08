@@ -54,8 +54,8 @@ export default function RoutesScreen() {
                 className={`flex items-center gap-2 rounded-pill border px-3.5 py-2 text-[13px] font-medium
                             transition-colors ${
                   r.name === activeRoute
-                    ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
-                    : 'border-white/[0.09] text-text-dim hover:border-white/[0.18] hover:text-text'
+                    ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
+                    : 'border-black/[0.09] text-text-dim hover:border-black/[0.18] hover:text-text'
                 }`}
               >
                 <RouteIcon className="h-[15px] w-[15px] flex-none" />
@@ -150,7 +150,7 @@ function RouteLoadPlanCard({ routeName }) {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13.5px] font-medium">{row.scent_name}</div>
               </div>
-              <span className="tabular font-mono text-[13px] text-gold-300">{row.liters} ל׳</span>
+              <span className="tabular font-mono text-[13px] text-gold-600">{row.liters} ל׳</span>
               {done[row.scent_name] ? (
                 <StatusChip tone="ok">הוקצה</StatusChip>
               ) : (
@@ -249,7 +249,7 @@ function RouteStops({ routeName }) {
           type="date"
           value={visitDate}
           onChange={(e) => setVisitDate(e.target.value)}
-          className="rounded-pill border border-white/[0.09] bg-black/30 px-3 py-2 text-[13px]
+          className="rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-[13px]
                      text-text focus:border-gold-500/45 focus:outline-none"
           aria-label="תאריך ביקור"
         />
@@ -316,7 +316,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
             disabled={disableUp}
             aria-label="הזז למעלה"
             className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                       hover:text-gold-300 disabled:opacity-25 disabled:hover:text-text-faint"
+                       hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
           >
             ▲
           </button>
@@ -327,7 +327,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
             disabled={disableDown}
             aria-label="הזז למטה"
             className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                       hover:text-gold-300 disabled:opacity-25 disabled:hover:text-text-faint"
+                       hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
           >
             ▼
           </button>
@@ -341,7 +341,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           className={`grid h-7 w-7 flex-none place-items-center rounded-full border text-[13px] transition-colors ${
             done
               ? 'border-ok/40 bg-ok/15 text-ok'
-              : 'border-white/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-300'
+              : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
           }`}
         >
           ✓
@@ -353,7 +353,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           className="min-w-0 flex-1 text-start"
           aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
         >
-          <div className={`truncate text-[14px] font-semibold transition-colors hover:text-gold-300 ${done ? 'line-through' : ''}`}>
+          <div className={`truncate text-[14px] font-semibold transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
             {customer.name}
           </div>
           <div className="truncate text-[12px] text-text-faint">{customer.address || '—'}</div>
@@ -363,9 +363,9 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
           <button
             type="button"
             onClick={() => setCardOpen(true)}
-            className="flex flex-none items-center gap-1.5 rounded-[7px] border border-white/[0.075]
+            className="flex flex-none items-center gap-1.5 rounded-[7px] border border-black/[0.075]
                        px-[9px] py-[3px] text-[11px] font-semibold text-text-dim transition-colors
-                       hover:border-gold-500/30 hover:text-gold-300"
+                       hover:border-gold-500/30 hover:text-gold-600"
           >
             {devices.length} מכשירים
           </button>
@@ -466,7 +466,7 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
         </div>
 
         {stop.notes && (
-          <div className="rounded-row border border-white/[0.06] bg-white/[0.015] px-3.5 py-2.5 text-[12.5px] text-text-dim">
+          <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3.5 py-2.5 text-[12.5px] text-text-dim">
             {stop.notes}
           </div>
         )}
@@ -535,7 +535,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
     : null;
 
   return (
-    <div className="rounded-row border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
+    <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px]">
         <EditableField
           label="ניחוח"
@@ -557,7 +557,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
         </div>
         {fillMl != null && (
           <span className="flex-none text-text-faint">
-            למילוי: <b className="tabular font-semibold text-gold-300">{fillMl} מ״ל</b>
+            למילוי: <b className="tabular font-semibold text-gold-600">{fillMl} מ״ל</b>
           </span>
         )}
 
@@ -565,7 +565,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
           type="button"
           onClick={() => setOilModalOpen(true)}
           className="ms-auto flex-none rounded-[8px] border border-gold-500/30 bg-gold-500/[0.1]
-                     px-2.5 py-1 text-[11.5px] font-semibold text-gold-300 transition-colors
+                     px-2.5 py-1 text-[11.5px] font-semibold text-gold-600 transition-colors
                      hover:border-gold-500/50"
         >
           עדכון שמן / סיום ביקור
@@ -687,7 +687,7 @@ function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
           <TextInput type="number" min={0} max={100} value={form.level_after_pct} onChange={set('level_after_pct')} required />
         </Field>
 
-        <div className="rounded-row border border-white/[0.075] bg-white/[0.022] px-3.5 py-3">
+        <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3">
           <div className="mb-1.5 text-[11.5px] text-text-faint">המפלס שיישמר במכשיר</div>
           <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
         </div>
@@ -750,7 +750,7 @@ function EditableField({ label, value, options, field, device }) {
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          className="rounded-[8px] border border-gold-500/35 bg-black/40 px-2 py-1 text-[12.5px] text-text
+          className="rounded-[8px] border border-gold-500/35 bg-ink-700 px-2 py-1 text-[12.5px] text-text
                      focus:outline-none"
         >
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -778,7 +778,7 @@ function EditableField({ label, value, options, field, device }) {
           type="button"
           onClick={() => { setDraft(value ?? ''); setEditing(true); setState(null); }}
           aria-label={`שנה ${label}`}
-          className="text-text-faint transition-colors hover:text-gold-300"
+          className="text-text-faint transition-colors hover:text-gold-600"
         >
           ✎
         </button>
@@ -826,7 +826,7 @@ function PendingChangeRequestsCard() {
                 <div className="mt-0.5 text-text-faint">
                   {fieldLabel[r.field] ?? r.field}: <span className="text-text-dim">{r.old_value || '—'}</span>
                   {' ← '}
-                  <b className="text-gold-300">{r.new_value}</b>
+                  <b className="text-gold-600">{r.new_value}</b>
                   {' · '}
                   {r.requester?.full_name ?? 'טכנאי'}
                 </div>

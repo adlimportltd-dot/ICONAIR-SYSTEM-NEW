@@ -36,7 +36,7 @@ function formatQty(quantity, scentName) {
  */
 function ItemTypeToggle({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-pill border border-white/[0.09] p-1">
+    <div className="inline-flex rounded-pill border border-black/[0.09] p-1">
       {[
         { key: 'device', label: 'מכשירים' },
         { key: 'scent', label: 'שמן / ניחוח' },
@@ -46,7 +46,7 @@ function ItemTypeToggle({ value, onChange }) {
           type="button"
           onClick={() => onChange(opt.key)}
           className={`rounded-pill px-4 py-1.5 text-[13px] font-medium transition-colors ${
-            value === opt.key ? 'bg-gold-500/20 text-gold-300' : 'text-text-faint hover:text-text-dim'
+            value === opt.key ? 'bg-gold-500/20 text-gold-600' : 'text-text-faint hover:text-text-dim'
           }`}
         >
           {opt.label}
@@ -407,7 +407,7 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
         <DataTable columns={columns} rows={warehouse.data ?? []} rowKey={(row) => row.id} />
       </Async>
 
-      <div className="mt-5 flex flex-col gap-3.5 border-t border-white/[0.07] pt-5">
+      <div className="mt-5 flex flex-col gap-3.5 border-t border-black/[0.07] pt-5">
         <h3 className="text-[13.5px] font-semibold text-text-dim">הקצאה לטכנאי</h3>
 
         <form onSubmit={submit} className="flex flex-col gap-3.5">

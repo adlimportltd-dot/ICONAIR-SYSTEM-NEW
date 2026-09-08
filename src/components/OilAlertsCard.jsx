@@ -3,10 +3,10 @@ import { DropIcon } from './ui/Icons';
 
 /** ככל שהמכל ריק יותר, המד אדום יותר — הצבע נגזר מהמספר, לא מוגדר ידנית */
 function levelFill(level) {
-  if (level <= 10) return 'linear-gradient(90deg,#F0555C,#FF8B90)';
-  if (level <= 13) return 'linear-gradient(90deg,#F0555C,#F0A43A)';
-  if (level <= 16) return 'linear-gradient(90deg,#F0A43A,#F5C078)';
-  return 'linear-gradient(90deg,#F0A43A,#C5A059)';
+  if (level <= 10) return 'linear-gradient(90deg,#B91C1C,#D6534F)';
+  if (level <= 13) return 'linear-gradient(90deg,#B91C1C,#B45309)';
+  if (level <= 16) return 'linear-gradient(90deg,#B45309,#D89B4A)';
+  return 'linear-gradient(90deg,#B45309,#C5A059)';
 }
 
 export default function OilAlertsCard({ delay, alerts = [], onAssignAll }) {

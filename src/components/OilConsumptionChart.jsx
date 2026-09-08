@@ -92,7 +92,7 @@ export default function OilConsumptionChart({ delay, data }) {
       />
 
       {!hasData ? (
-        <p className="rounded-row border border-dashed border-white/[0.1] px-4 py-8 text-center
+        <p className="rounded-row border border-dashed border-black/[0.1] px-4 py-8 text-center
                       text-[12.5px] text-text-faint">
           עוד אין מספיק היסטוריה לגרף. כל רישום מילוי במסך "מעקב שמנים" מוסיף כאן נקודה.
         </p>
@@ -112,12 +112,12 @@ export default function OilConsumptionChart({ delay, data }) {
               <stop offset="100%" stopColor="#C5A059" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="oilLine" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#4CC9C0" />
+              <stop offset="0%" stopColor="#0F766E" />
               <stop offset="100%" stopColor="#D4AF37" />
             </linearGradient>
           </defs>
 
-          <g stroke="rgba(255,255,255,.06)" strokeWidth="1" vectorEffect="non-scaling-stroke">
+          <g stroke="rgba(44,42,41,.08)" strokeWidth="1" vectorEffect="non-scaling-stroke">
             {GRID_LINES.map((y) => (
               <line key={y} x1="0" y1={y} x2={W} y2={y} />
             ))}
@@ -126,7 +126,7 @@ export default function OilConsumptionChart({ delay, data }) {
           <path
             d={forecastLine}
             fill="none"
-            stroke="rgba(110,134,168,.75)"
+            stroke="rgba(71,85,105,.85)"
             strokeWidth="1.6"
             strokeDasharray="5 6"
             strokeLinecap="round"
@@ -147,9 +147,9 @@ export default function OilConsumptionChart({ delay, data }) {
           {/* נקודת הסיום: קו באורך אפס עם קצה עגול — נשאר עיגול מושלם
               גם כשה-SVG נמתח בצורה לא-אחידה, בניגוד ל-circle */}
           {[
-            { stroke: 'rgba(212,175,55,.16)', width: 22 },
+            { stroke: 'rgba(212,175,55,.22)', width: 22 },
             { stroke: '#D4AF37', width: 8 },
-            { stroke: '#121212', width: 3 },
+            { stroke: '#FFFFFF', width: 3 },
           ].map((dot) => (
             <line
               key={dot.width}
@@ -173,17 +173,17 @@ export default function OilConsumptionChart({ delay, data }) {
         ))}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-4 border-t border-white/[0.075] pt-[15px]">
+      <div className="mt-4 flex flex-wrap gap-4 border-t border-black/[0.075] pt-[15px]">
         <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
-          <Swatch style={{ background: 'linear-gradient(90deg,#4CC9C0,#D4AF37)' }} />
+          <Swatch style={{ background: 'linear-gradient(90deg,#0F766E,#D4AF37)' }} />
           צריכה בפועל <b className="tabular font-semibold text-text">{summary.actualTotal}</b>
         </span>
         <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
-          <Swatch style={{ background: 'rgba(110,134,168,.75)' }} />
+          <Swatch style={{ background: 'rgba(71,85,105,.85)' }} />
           ממוצע נגרר <b className="tabular font-semibold text-text">{summary.forecastTotal}</b>
         </span>
         <span className="flex items-center gap-2 text-[12.5px] text-text-dim">
-          <Swatch style={{ background: '#4ED9A4' }} />
+          <Swatch style={{ background: '#15803D' }} />
           סטייה <b className="tabular font-semibold text-text">{summary.deviation}</b>
         </span>
       </div>

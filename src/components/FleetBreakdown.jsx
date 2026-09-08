@@ -3,8 +3,8 @@ import { DeviceIcon } from './ui/Icons';
 
 /* הזהב שמור לדגם הדגל (Icon 700) — הצבע מסמן היררכיה, לא רק קטגוריה */
 const TONE = {
-  slate: '#6E86A8',
-  teal: '#4CC9C0',
+  slate: '#475569',
+  teal: '#0F766E',
   gold: '#C5A059',
 };
 
@@ -36,7 +36,7 @@ export default function FleetBreakdown({ delay, data = [] }) {
       <div className="flex flex-col gap-[18px]">
         <div className="relative mx-auto mt-0.5 h-[180px] w-[180px]">
           <svg viewBox="0 0 140 140" className="h-[180px] w-[180px] -rotate-90" aria-hidden>
-            <circle cx="70" cy="70" r={R} fill="none" stroke="rgba(255,255,255,.05)" strokeWidth="15" />
+            <circle cx="70" cy="70" r={R} fill="none" stroke="rgba(44,42,41,.07)" strokeWidth="15" />
             {arcs.map((arc) => (
               <circle
                 key={arc.model}

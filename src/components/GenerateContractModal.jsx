@@ -121,7 +121,7 @@ export default function GenerateContractModal({ open, customer, devices = [], on
             הקישור נוצר בהצלחה. שלח אותו ללקוח — הוא לא צריך חשבון או התחברות כדי לצפות ולחתום.
           </div>
 
-          <div dir="ltr" className="break-all rounded-row border border-white/[0.09] bg-black/30 px-3.5 py-2.5 font-mono text-[12px] text-text-dim">
+          <div dir="ltr" className="break-all rounded-row border border-black/[0.09] bg-ink-800 px-3.5 py-2.5 font-mono text-[12px] text-text-dim">
             {result.link}
           </div>
 
@@ -146,7 +146,7 @@ export default function GenerateContractModal({ open, customer, devices = [], on
           <TextInput value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
         </Field>
 
-        <div className="rounded-row border border-white/[0.07] bg-white/[0.02] p-3.5">
+        <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
           <div className="mb-2.5 flex items-center gap-2">
             <div className="text-[12.5px] font-semibold text-text-dim">מערכות ותשלום חודשי (נספח א׳)</div>
             <button type="button" onClick={addBlankRow} className="ghost-btn ms-auto !px-2.5 !py-1.5 text-[12px]">
@@ -191,7 +191,7 @@ export default function GenerateContractModal({ open, customer, devices = [], on
 
         <div>
           <div className="mb-1.5 text-[12.5px] font-medium text-text-dim">תצוגה מקדימה</div>
-          <div className="max-h-[420px] overflow-y-auto rounded-row border border-white/[0.09]">
+          <div className="max-h-[420px] overflow-y-auto rounded-row border border-black/[0.09]">
             <ContractDocument customer={customer} idNumber={idNumber} items={numericItems} contractDate={contractDate} />
           </div>
         </div>

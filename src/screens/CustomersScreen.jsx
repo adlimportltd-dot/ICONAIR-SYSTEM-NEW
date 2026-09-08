@@ -61,7 +61,7 @@ const EMPTY_FORM = {
 
 function VatBreakdownStrip({ preVat, vatAmount }) {
   return (
-    <div className="mt-2.5 flex items-center gap-3 border-t border-white/[0.06] pt-2 text-[11px] text-text-faint">
+    <div className="mt-2.5 flex items-center gap-3 border-t border-black/[0.06] pt-2 text-[11px] text-text-faint">
       <span>🔹 לפני מע״מ: <span className="tabular font-mono text-text-dim">{formatCurrency(preVat)}</span></span>
       <span>🔹 מע״מ (18%): <span className="tabular font-mono text-text-dim">{formatCurrency(vatAmount)}</span></span>
     </div>
@@ -126,7 +126,7 @@ export default function CustomersScreen() {
           href={'tel:' + row.phone}
           dir="ltr"
           onClick={(event) => event.stopPropagation()}
-          className="tabular font-mono text-[12.5px] text-text-dim hover:text-gold-300"
+          className="tabular font-mono text-[12.5px] text-text-dim hover:text-gold-600"
         >
           {row.phone || '—'}
         </a>
@@ -138,7 +138,7 @@ export default function CustomersScreen() {
       label: 'מכשירים בשטח',
       width: 'minmax(0,1.1fr)',
       render: (row) => (
-        <span className="truncate text-[12.5px] text-gold-300">{summarizeDevicesByModel(row.devices)}</span>
+        <span className="truncate text-[12.5px] text-gold-600">{summarizeDevicesByModel(row.devices)}</span>
       ),
     },
   ];
@@ -217,7 +217,7 @@ export default function CustomersScreen() {
         <div className="mb-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <GlassCard className="!py-[18px]">
             <div className="text-[13px] font-medium text-text-dim">סך הכל הכנסות הקו</div>
-            <div className="tabular mt-1.5 font-display text-[28px] font-bold leading-tight text-gold-300">
+            <div className="tabular mt-1.5 font-display text-[28px] font-bold leading-tight text-gold-600">
               💰 {formatCurrency(revenueBreakdown.total)}
             </div>
             <VatBreakdownStrip preVat={revenueBreakdown.preVat} vatAmount={revenueBreakdown.vatAmount} />
@@ -260,7 +260,7 @@ export default function CustomersScreen() {
           <div className="mb-3 text-[13px] font-medium text-text-dim">פילוח לפי אמצעי תשלום</div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {methodBreakdown.map(([type, amount]) => (
-              <div key={type} className="rounded-row border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
+              <div key={type} className="rounded-row border border-black/[0.07] bg-black/[0.02] px-3 py-2.5">
                 <div className="flex items-center gap-1.5 text-[12px] text-text-faint">
                   <span>{PAYMENT_TYPE_ICON[type] ?? '💰'}</span>
                   <span className="truncate">{PAYMENT_TYPE_LABEL[type] ?? type}</span>
@@ -288,8 +288,8 @@ export default function CustomersScreen() {
               onClick={() => setPaymentStatus(opt.key)}
               className={'rounded-pill border px-3.5 py-2 text-[13px] font-medium transition-colors ' + (
                 paymentStatus === opt.key
-                  ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-300'
-                  : 'border-white/[0.09] text-text-dim hover:border-white/[0.2]'
+                  ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
+                  : 'border-black/[0.09] text-text-dim hover:border-black/[0.2]'
               )}
             >
               {opt.label}
@@ -557,7 +557,7 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
         </div>
 
         {isAdmin && (
-          <div className="rounded-row border border-white/[0.07] bg-white/[0.02] p-3.5">
+          <div className="rounded-row border border-black/[0.07] bg-black/[0.02] p-3.5">
             <div className="mb-3 text-[12.5px] font-semibold text-text-dim">חיוב וגבייה</div>
             <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
               <Field label="סוג תשלום">
@@ -592,7 +592,7 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
               </Field>
             </div>
 
-            <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-white/[0.06] bg-black/20 px-3.5 py-3 text-center">
+            <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-black/[0.06] bg-ink-800 px-3.5 py-3 text-center">
               <div>
                 <div className="text-[10.5px] text-text-faint">לפני מע״מ</div>
                 <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(vat.preVat)}</div>
@@ -603,7 +603,7 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
               </div>
               <div>
                 <div className="text-[10.5px] text-text-faint">סה״כ לתשלום</div>
-                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-300">{formatCurrency(vat.total)}</div>
+                <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-600">{formatCurrency(vat.total)}</div>
               </div>
             </div>
           </div>

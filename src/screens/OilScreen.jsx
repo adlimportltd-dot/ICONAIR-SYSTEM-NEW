@@ -15,10 +15,10 @@ import { OIL_EVENT_LABEL, formatDateTime, formatNumber, mapOilByScent } from '..
 const EVENT_TONE = { refill: 'teal', replacement: 'gold', reading: 'slate' };
 
 const STOCK_FILL = {
-  teal: 'linear-gradient(90deg,#4CC9C0,#8FE3DC)',
+  teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
   gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
-  slate: 'linear-gradient(90deg,#6E86A8,#A3B6CE)',
-  crit: 'linear-gradient(90deg,#F0555C,#F0A43A)',
+  slate: 'linear-gradient(90deg,#475569,#5B6B82)',
+  crit: 'linear-gradient(90deg,#B91C1C,#B45309)',
 };
 
 const emptyForm = () => ({
@@ -290,7 +290,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
                      onChange={set('level_after_pct')} required />
         </Field>
 
-        <div className="rounded-row border border-white/[0.075] bg-white/[0.022] px-3.5 py-3">
+        <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3">
           <div className="mb-1.5 text-[11.5px] text-text-faint">המפלס שיישמר במכשיר</div>
           <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
         </div>

@@ -7,7 +7,7 @@
 export function Skeleton({ className = '' }) {
   return (
     <div
-      className={`animate-pulse rounded-lg bg-white/[0.055] ${className}`}
+      className={`animate-pulse rounded-lg bg-black/[0.055] ${className}`}
       style={{ animationDuration: '1.6s' }}
     />
   );
@@ -41,7 +41,7 @@ export function ErrorState({ message, onRetry }) {
 
 export function EmptyState({ title, hint, action }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-row border border-dashed border-white/[0.1] px-4 py-8 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-row border border-dashed border-black/[0.1] px-4 py-8 text-center">
       <div className="text-[13.5px] font-semibold text-text-dim">{title}</div>
       {hint && <p className="max-w-xs text-[12.5px] leading-relaxed text-text-faint">{hint}</p>}
       {action}
