@@ -54,15 +54,18 @@
     background:
       radial-gradient(1000px 700px at 85% -10%, rgba(212, 175, 55, 0.1), transparent 60%),
       radial-gradient(800px 600px at 5% 105%, rgba(197, 160, 89, 0.06), transparent 60%),
-      #fdfbf7;
+      #f7f5f0;
   }
 
-  /* --- משטח הכרטיסים: לבן נקי, הילת זהב עדינה מהפינה, מסגרת זהב-אפרפר דקה, צל רך --- */
+  /* --- משטח הכרטיסים: לבן נקי, הילת זהב עדינה מהפינה, מסגרת אפרפר-חמה דקה
+     שמבדילה אותו מהשמנת מתחתיו, צל ממוקד (לא הילה רחבה) —
+     2026-09-09: הוחלף מגבול-זהב ל-border ניטרלי אחרי שהמערכת נתפסה
+     "לבן על גבי לבן". ר' CLAUDE.md לסיבה המלאה. --- */
   .glass {
     background:
-      radial-gradient(140% 120% at 12% -12%, rgba(212, 175, 55, 0.06), transparent 55%),
+      radial-gradient(140% 120% at 12% -12%, rgba(212, 175, 55, 0.05), transparent 55%),
       #ffffff;
-    @apply border border-gold-300/[0.14] shadow-glass-hi;
+    @apply border border-[#E4DED0]/90 shadow-glass-hi;
   }
 
   .glass-card {

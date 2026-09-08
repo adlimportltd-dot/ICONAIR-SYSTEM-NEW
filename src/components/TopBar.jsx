@@ -120,8 +120,8 @@ export default function TopBar({
 
       {isLive && (
         <div
-          className="tabular hidden items-center gap-[6px] rounded-xl border border-gold-300/[0.18]
-                     bg-gold-500/[0.06] px-[11px] py-2 text-[11px] font-semibold uppercase
+          className="tabular hidden items-center gap-[6px] rounded-xl border border-gold-300/[0.35]
+                     bg-gold-500/[0.13] px-[11px] py-2 text-[11px] font-semibold uppercase
                      tracking-[0.6px] text-gold-600 wide:flex"
           title="חיבור בזמן אמת פעיל — הנתונים מתעדכנים אוטומטית"
         >

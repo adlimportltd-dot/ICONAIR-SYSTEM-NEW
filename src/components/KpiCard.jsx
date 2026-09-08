@@ -37,7 +37,7 @@ export default function KpiCard({ kpi, delay }) {
     <GlassCard delay={delay} className="!px-6 !py-6">
       <div className="mb-5 flex items-center gap-3">
         <div className="grid h-10 w-10 flex-none place-items-center rounded-xl
-                        border border-gold-300/[0.16] bg-gold-500/[0.07] shadow-icon-glow">
+                        border border-gold-300/[0.35] bg-gold-500/[0.14] shadow-icon-glow">
           <Icon className={`h-[18px] w-[18px] ${iconTone[kpi.iconColor]}`} />
         </div>
         <div className="text-[12.5px] font-semibold uppercase tracking-[1.1px] text-text-faint">{kpi.label}</div>
