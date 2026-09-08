@@ -580,6 +580,19 @@ export const updateCustomer = (id, patch) =>
 export const setCustomerPaid = (id, is_paid) =>
   supabase.from('customers').update({ is_paid }).eq('id', id).then(unwrap);
 
+/**
+ * מחיקת לקוח לגמרי — כולל כל המכשירים שלו וקריאות השירות (חוזים,
+ * אתרי-לקוח ושיוכי מסלול נמחקים אוטומטית ב-DB, on delete cascade).
+ * devices.customer_id ו-service_calls.customer_id הם on delete restrict
+ * בכוונה, אז מחיקה ישירה של שורת הלקוח הייתה נכשלת אם יש לו מכשירים —
+ * זה בדיוק למה יש RPC ולא .delete() רגיל: הפונקציה בצד ה-DB
+ * (delete_customer_cascade, ר' iconair_schema_phase15) מוחקת קודם
+ * מכשירים+קריאות שירות ורק אז את הלקוח, הכול בטרנזקציה אחת. מוגבל
+ * למנהלים גם ב-RLS על כל טבלה בנפרד וגם בבדיקה מפורשת בפונקציה עצמה.
+ */
+export const deleteCustomerCascade = (customerId) =>
+  supabase.rpc('delete_customer_cascade', { p_customer_id: customerId }).then(unwrap);
+
 /* =====================================================================
    מכשירים
    ===================================================================== */
@@ -612,6 +625,17 @@ export const listCustomerDevices = (customerId) =>
     .order('location_note', { nullsFirst: false })
     .order('serial')
     .then(unwrap);
+
+/**
+ * מחיקת מכשיר לגמרי מהמערכת (לא רק "ניתוק" מהלקוח — customer_id הוא
+ * NOT NULL בסכימה, אין מצב "מכשיר בלי לקוח"). ה-RLS על devices_delete
+ * מגביל את זה למנהלים בלבד; היסטוריית השמן (oil_tracking) וכל בקשות
+ * השינוי הממתינות למכשיר הזה נמחקות אוטומטית איתו (on delete cascade
+ * ב-DB), וקריאות שירות שהצביעו עליו נשארות אבל מאבדות את השיוך
+ * (on delete set null) — לא נעלמות.
+ */
+export const deleteDevice = (deviceId) =>
+  supabase.from('devices').delete().eq('id', deviceId).then(unwrap);
 
 const createDeviceRemote = (payload) =>
   supabase

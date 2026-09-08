@@ -9,7 +9,7 @@ import { Async, EmptyState } from '../components/ui/States';
 import { PrinterIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
-import { listCustomers, createCustomer, updateCustomer, setCustomerPaid } from '../lib/queries';
+import { listCustomers, createCustomer, updateCustomer, setCustomerPaid, deleteCustomerCascade } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import {
   CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, PAYMENT_TYPE_ICON, VAT_MODE_LABEL,
@@ -378,6 +378,11 @@ export default function CustomersScreen() {
           setFormOpen(false);
           refetchAll();
         }}
+        onDeleted={() => {
+          setFormOpen(false);
+          if (openCustomer?.id === editCustomer?.id) setOpenCustomer(null);
+          refetchAll();
+        }}
       />
 
       <CustomerDevicesModal
@@ -466,7 +471,7 @@ function SummaryBox({ label, value, accent = '#222' }) {
   );
 }
 
-function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
+function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved, onDeleted }) {
   const [form, setForm] = useState(() => editCustomer
     ? {
         name: editCustomer.name ?? '',
@@ -487,6 +492,8 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
     : EMPTY_FORM);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const vat = computeVat(form.amount_due, form.vat_mode);
@@ -516,6 +523,24 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
       setError(describeError(caught));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setError(null);
+    setDeleteBusy(true);
+    try {
+      await deleteCustomerCascade(editCustomer.id);
+      onDeleted();
+    } catch (caught) {
+      setError(describeError(caught));
+      setConfirmDelete(false);
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -624,6 +649,29 @@ function CustomerFormModal({ open, editCustomer, isAdmin, onClose, onSaved }) {
           <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
         </div>
       </form>
+
+      {isAdmin && editCustomer && (
+        <div className="mt-5 rounded-row border border-crit/25 bg-crit/[0.04] p-3.5">
+          <div className="text-[13px] font-semibold text-crit-soft">אזור מסוכן</div>
+          <p className="mt-1 text-[12px] leading-relaxed text-text-faint">
+            מחיקת הלקוח מוחקת לצמיתות גם את {editCustomer.devices?.length ?? 0} המכשירים שלו
+            (כולל כל היסטוריית השמן), את קריאות השירות, החוזים ושיוכי המסלול שלו. אי אפשר לשחזר.
+          </p>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleteBusy}
+            className={`mt-3 rounded-pill border px-3.5 py-1.5 text-[12.5px] font-semibold
+                        transition-colors disabled:opacity-50 ${
+              confirmDelete
+                ? 'border-crit bg-crit text-white hover:bg-crit/90'
+                : 'border-crit/40 text-crit-soft hover:border-crit/60'
+            }`}
+          >
+            {deleteBusy ? 'מוחק…' : confirmDelete ? 'לחץ שוב כדי למחוק לצמיתות' : 'מחק לקוח לצמיתות'}
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

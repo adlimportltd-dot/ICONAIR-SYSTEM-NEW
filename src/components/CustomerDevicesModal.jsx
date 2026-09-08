@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './ui/Modal';
 import DeviceFormModal from './DeviceFormModal';
 import GenerateContractModal from './GenerateContractModal';
 import { StatusChip, MiniMeter, oilTone } from './ui/DataTable';
 import { Async, EmptyState } from './ui/States';
 import { PrimaryButton, SecondaryButton } from './ui/Field';
+import { TrashIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
@@ -16,6 +17,7 @@ import {
   uploadContract,
   getContractUrl,
   deleteContract,
+  deleteDevice,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { DEVICE_STATUS_LABEL, modelTone, relativeTime, formatDate, formatDateTime } from '../lib/mappers';
@@ -48,8 +50,18 @@ const CONTRACT_STATUS_TONE = {
 export default function CustomerDevicesModal({ customer, onClose, onDevicesChanged }) {
   const { isAdmin } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
+  const [confirmDeleteDeviceId, setConfirmDeleteDeviceId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const customerId = customer?.id ?? null;
+
+  // איפוס מצב "אישור מחיקה" כשעוברים ללקוח אחר — בלי זה, אישור שנשאר
+  // "דלוק" מכרטיס קודם עלול למחוק בטעות מכשיר של הלקוח החדש בלחיצה אחת.
+  useEffect(() => {
+    setConfirmDeleteDeviceId(null);
+    setDeleteError(null);
+  }, [customerId]);
 
   const devices = useQuery(
     () => listCustomerDevices(customerId),
@@ -79,6 +91,25 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
     onDevicesChanged?.();
   }
 
+  async function handleDeleteDevice(device) {
+    if (confirmDeleteDeviceId !== device.id) {
+      setConfirmDeleteDeviceId(device.id);
+      return;
+    }
+    setConfirmDeleteDeviceId(null);
+    setDeleteError(null);
+    setDeletingId(device.id);
+    try {
+      await deleteDevice(device.id);
+      devices.refetch();
+      onDevicesChanged?.();
+    } catch (caught) {
+      setDeleteError(describeError(caught));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
       <Modal
@@ -96,6 +127,12 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
           </PrimaryButton>
         </div>
 
+        {deleteError && (
+          <div className="mb-3 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
+            {deleteError}
+          </div>
+        )}
+
         <Async
           loading={devices.loading}
           error={devices.error}
@@ -111,12 +148,33 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
           <div className="flex flex-col gap-[9px]">
             {rows.map((device) => (
               <div key={device.id} className="inner-row px-3.5 py-3">
-                <div className="flex items-center gap-2.5">
-                  <span dir="ltr" className="font-mono text-[12.5px] text-gold-600">{device.serial}</span>
-                  <StatusChip tone={modelTone(device.model)}>{device.model}</StatusChip>
-                  <StatusChip tone={STATUS_TONE[device.status]}>
-                    {DEVICE_STATUS_LABEL[device.status]}
-                  </StatusChip>
+                <div className="flex items-start gap-2.5">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+                    <span dir="ltr" className="font-mono text-[12.5px] text-gold-600">{device.serial}</span>
+                    <StatusChip tone={modelTone(device.model)}>{device.model}</StatusChip>
+                    <StatusChip tone={STATUS_TONE[device.status]}>
+                      {DEVICE_STATUS_LABEL[device.status]}
+                    </StatusChip>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDevice(device)}
+                      disabled={deletingId === device.id}
+                      aria-label={confirmDeleteDeviceId === device.id ? `לאשר מחיקת מכשיר ${device.serial}` : `מחק מכשיר ${device.serial}`}
+                      title={confirmDeleteDeviceId === device.id ? 'לחץ שוב לאישור סופי' : 'הסרת מכשיר מהמערכת'}
+                      className={`flex flex-none items-center gap-1.5 rounded-[8px] border px-2 py-1
+                                  text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
+                        confirmDeleteDeviceId === device.id
+                          ? 'border-crit/50 bg-crit/10 text-crit-soft'
+                          : 'border-black/[0.09] text-text-faint hover:border-crit/35 hover:text-crit-soft'
+                      }`}
+                    >
+                      <TrashIcon className="h-[13px] w-[13px]" />
+                      {confirmDeleteDeviceId === device.id ? 'לאשר מחיקה' : 'מחיקה'}
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12.5px]">
