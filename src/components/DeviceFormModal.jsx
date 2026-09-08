@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from './ui/Modal';
 import { Field, TextInput, Select, PrimaryButton, SecondaryButton } from './ui/Field';
-import { createDevice } from '../lib/queries';
+import { createDevice, createCustomerSite } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { DEVICE_STATUS_LABEL } from '../lib/mappers';
 
@@ -9,6 +9,12 @@ const EMPTY_FORM = {
   model: 'Icon 500', customer_id: '', site_id: '', scent_name: '',
   oil_level_pct: 100, location_note: '', status: 'active',
 };
+
+// ערך-סנטינל בבורר הכתובת: לא id אמיתי, רק דגל "פתח טופס כתובת חדשה
+// כאן במקום". זה מה שמאחד את שתי הפעולות שהיו קודם מנותקות (כתובת
+// חדשה / מכשיר חדש) לזרימה אחת — בוחרים "+ הוספת כתובת חדשה", ממלאים
+// שם ועיר באותו טופס, והמכשיר הראשון משתייך אליה בלחיצה אחת על שמירה.
+const NEW_SITE_VALUE = '__new_site__';
 
 /**
  * טופס "מכשיר חדש".
@@ -38,6 +44,8 @@ export default function DeviceFormModal({
   onCreated,
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [newSiteLabel, setNewSiteLabel] = useState('');
+  const [newSiteCity, setNewSiteCity] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState([]);
@@ -52,6 +60,8 @@ export default function DeviceFormModal({
   useEffect(() => {
     if (!open) return;
     setForm({ ...EMPTY_FORM, customer_id: customerId, site_id: siteId });
+    setNewSiteLabel('');
+    setNewSiteCity('');
     setError(null);
     setAdded([]);
   }, [open, customerId, siteId]);
@@ -66,11 +76,23 @@ export default function DeviceFormModal({
     setBusy(true);
 
     try {
+      // אם נבחר "+ הוספת כתובת חדשה" — פותחים אותה קודם, ומשייכים את
+      // המכשיר אליה מייד. זו הזרימה המאוחדת: לא שני כפתורים מנותקים,
+      // אלא צעד אחד בתוך אותו טופס.
+      let resolvedSiteId = form.site_id || null;
+      if (resolvedSiteId === NEW_SITE_VALUE) {
+        const site = await createCustomerSite(form.customer_id, {
+          label: newSiteLabel.trim(),
+          city: newSiteCity.trim(),
+        });
+        resolvedSiteId = site.id;
+      }
+
       // serial לא נשלח — טריגר בבסיס הנתונים מייצר אותו לפי הדגם
       const device = await createDevice({
         model: form.model,
         customer_id: form.customer_id,
-        site_id: form.site_id || null,
+        site_id: resolvedSiteId,
         scent_name: form.scent_name || null,
         status: form.status,
         oil_level_pct: Number(form.oil_level_pct),
@@ -81,7 +103,11 @@ export default function DeviceFormModal({
 
       if (again) {
         setAdded((prev) => [...prev, device.serial]);
-        setForm((prev) => ({ ...prev, scent_name: '', location_note: '' }));
+        // הכתובת (אם נוצרה כרגע) והלקוח נשארים — רק מה שמשתנה בין מכשיר
+        // למכשיר מתאפס. מכשיר הבא באותה פעימה כבר לא יוצר את הכתובת שוב.
+        setForm((prev) => ({ ...prev, site_id: resolvedSiteId, scent_name: '', location_note: '' }));
+        setNewSiteLabel('');
+        setNewSiteCity('');
       } else {
         onClose();
       }
@@ -125,11 +151,41 @@ export default function DeviceFormModal({
               <span className="ms-auto flex-none text-[11.5px] text-text-faint">קבוע לכרטיסייה זו</span>
             </div>
           </Field>
-        ) : siteOptions.length > 0 && (
-          <Field label="כתובת" hint="ללקוח הזה יש כמה כתובות — לאיזו שייך המכשיר?">
-            <Select value={form.site_id} onChange={set('site_id')} options={siteOptions}
-                    placeholder="בחר כתובת" />
-          </Field>
+        ) : lockedCustomer && (
+          <>
+            <Field
+              label="כתובת"
+              hint={siteOptions.length > 0
+                ? 'ללקוח הזה כמה כתובות — לאיזו שייך המכשיר? אפשר גם לפתוח כתובת חדשה'
+                : 'אופציונלי — אם ללקוח יש כמה סניפים/בניינים, אפשר לפתוח כתובת חדשה ולשייך אליה ישר'}
+            >
+              <Select
+                value={form.site_id}
+                onChange={set('site_id')}
+                options={[...siteOptions, { value: NEW_SITE_VALUE, label: '+ הוספת כתובת חדשה' }]}
+                placeholder="ללא כתובת ספציפית"
+              />
+            </Field>
+
+            {form.site_id === NEW_SITE_VALUE && (
+              <div className="rounded-row border border-gold-300/[0.2] bg-gold-500/[0.05] p-3.5">
+                <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+                  <Field label="שם הכתובת" required>
+                    <TextInput
+                      autoFocus
+                      value={newSiteLabel}
+                      onChange={(e) => setNewSiteLabel(e.target.value)}
+                      placeholder="לדוגמה: אהוד מנור 9"
+                      required
+                    />
+                  </Field>
+                  <Field label="עיר">
+                    <TextInput value={newSiteCity} onChange={(e) => setNewSiteCity(e.target.value)} />
+                  </Field>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">

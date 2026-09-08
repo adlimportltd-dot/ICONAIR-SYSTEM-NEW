@@ -12,7 +12,6 @@ import { useRealtime } from '../hooks/useRealtime';
 import {
   listCustomerDevices,
   listCustomerSites,
-  createCustomerSite,
   upsertSiteModelPrice,
   listScents,
   listDeviceModels,
@@ -60,7 +59,6 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
   const [confirmDeleteDeviceId, setConfirmDeleteDeviceId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [addSiteOpen, setAddSiteOpen] = useState(false);
 
   const customerId = customer?.id ?? null;
 
@@ -165,28 +163,13 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
           <div className="text-[12.5px] text-text-dim">
             {devices.loading ? 'טוען מכשירים…' : `${rows.length} מכשירים רשומים`}
           </div>
-          <div className="ms-auto flex flex-wrap gap-2">
-            {isAdmin && (
-              <SecondaryButton onClick={() => setAddSiteOpen((v) => !v)}>
-                הוסף כתובת
-              </SecondaryButton>
-            )}
-            <PrimaryButton onClick={() => openAddDevice(null)}>
-              הוסף מכשיר
-            </PrimaryButton>
-          </div>
+          {/* כפתור אחד, לא שניים מנותקים: פתיחת כתובת חדשה קורית בתוך
+              טופס המכשיר עצמו (בורר "כתובת" → "+ הוספת כתובת חדשה"),
+              כדי שהמכשיר הראשון שם ישויך אליה מייד באותה פעולה. */}
+          <PrimaryButton className="ms-auto" onClick={() => openAddDevice(null)}>
+            הוסף מכשיר
+          </PrimaryButton>
         </div>
-
-        {addSiteOpen && (
-          <AddSiteForm
-            customerId={customerId}
-            onCancel={() => setAddSiteOpen(false)}
-            onCreated={() => {
-              setAddSiteOpen(false);
-              sites.refetch();
-            }}
-          />
-        )}
 
         {deleteError && (
           <div className="mb-3 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[12.5px] text-crit-soft">
@@ -247,60 +230,6 @@ export default function CustomerDevicesModal({ customer, onClose, onDevicesChang
         onCreated={handleCreated}
       />
     </>
-  );
-}
-
-/** טופס קטן ומוטבע להוספת כתובת חדשה ללקוח — לא מודאל נפרד, כדי שיהיה ברור שזה חלק מאותו כרטיס לקוח */
-function AddSiteForm({ customerId, onCancel, onCreated }) {
-  const [label, setLabel] = useState('');
-  const [city, setCity] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function submit(event) {
-    event.preventDefault();
-    if (!label.trim()) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await createCustomerSite(customerId, { label: label.trim(), city: city.trim() });
-      onCreated();
-    } catch (caught) {
-      setError(describeError(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="mb-3.5 rounded-row border border-gold-300/[0.2] bg-gold-500/[0.05] p-3.5">
-      <div className="flex flex-wrap items-end gap-2.5">
-        <label className="flex min-w-[160px] flex-1 flex-col gap-1">
-          <span className="text-[11.5px] text-text-faint">שם הכתובת *</span>
-          <input
-            autoFocus
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="לדוגמה: אהוד מנור 9"
-            required
-            className="rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2 text-[13px] text-text
-                       focus:border-gold-500/45 focus:outline-none"
-          />
-        </label>
-        <label className="flex min-w-[120px] flex-1 flex-col gap-1">
-          <span className="text-[11.5px] text-text-faint">עיר</span>
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            className="rounded-pill border border-black/[0.09] bg-ink-800 px-3.5 py-2 text-[13px] text-text
-                       focus:border-gold-500/45 focus:outline-none"
-          />
-        </label>
-        <PrimaryButton type="submit" loading={busy}>שמירת כתובת</PrimaryButton>
-        <SecondaryButton type="button" onClick={onCancel}>ביטול</SecondaryButton>
-      </div>
-      {error && <div className="mt-2.5 text-[12px] text-crit-soft">{error}</div>}
-    </form>
   );
 }
 
