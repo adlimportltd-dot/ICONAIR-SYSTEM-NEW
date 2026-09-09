@@ -1,16 +1,21 @@
 /**
  * מבנה הניווט. התוויות והאייקונים בלבד —
  * המספרים שמופיעים לצדן (18 קריאות, 4 דחופות) מגיעים מהנתונים החיים.
+ *
+ * `tabBarOrder` שולט על הסדר בניווט התחתון (`BottomNav`) **בנפרד** מסדר
+ * ההופעה בסרגל הצד — 2026-09-09, בעקבות דרישה מפורשת: בשטח, בטלפון,
+ * מותר להיות רק 4 כפתורים (מסלולים ← לקוחות ← הכנה לקו ← קריאות שירות),
+ * בלי לגעת בסדר/בתפריט המלא שמוצג לאדמין בדסקטופ. `inTabBar` בלי
+ * `tabBarOrder` לא מופיע ב-BottomNav בכלל.
  */
-
 export const navItems = [
-  { id: 'dashboard', label: 'דשבורד',         shortLabel: 'דשבורד',  icon: 'grid',   inTabBar: true },
-  { id: 'devices',   label: 'מכשירים בשטח',   shortLabel: 'מכשירים', icon: 'device', inTabBar: true },
-  { id: 'customers', label: 'לקוחות',          shortLabel: 'לקוחות',  icon: 'users',  inTabBar: true },
-  { id: 'oils',      label: 'מעקב שמנים',      shortLabel: 'שמנים',   icon: 'drop',   inTabBar: true },
-  { id: 'service',   label: 'קריאות שירות',    shortLabel: 'קריאות',  icon: 'wrench', inTabBar: true },
-  { id: 'routes',    label: 'מסלולים',         shortLabel: 'מסלולים', icon: 'route', inTabBar: true },
-  { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'מלאי',   icon: 'box',   inTabBar: true },
+  { id: 'dashboard', label: 'דשבורד',         shortLabel: 'דשבורד',  icon: 'grid' },
+  { id: 'devices',   label: 'מכשירים בשטח',   shortLabel: 'מכשירים', icon: 'device' },
+  { id: 'customers', label: 'לקוחות',          shortLabel: 'לקוחות',  icon: 'users',  inTabBar: true, tabBarOrder: 2 },
+  { id: 'oils',      label: 'מעקב שמנים',      shortLabel: 'שמנים',   icon: 'drop' },
+  { id: 'service',   label: 'קריאות שירות',    shortLabel: 'קריאות שירות', icon: 'wrench', inTabBar: true, tabBarOrder: 4 },
+  { id: 'routes',    label: 'מסלולים',         shortLabel: 'מסלולים', icon: 'route', inTabBar: true, tabBarOrder: 1 },
+  { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'הכנה לקו', icon: 'box', inTabBar: true, tabBarOrder: 3 },
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
 ];
