@@ -400,12 +400,24 @@ async function loadCityRoutesMap() {
  * מכשיר בלי ניחוח משויך או בלי capacity_ml לדגם שלו מוצא בנפרד
  * ב-missing, כדי שהמנהל יראה בדיוק למה החישוב לא מלא — לא רק מספר
  * חסר בשקט.
+ *
+ * לא מסונן לפי תאריך בכוונה: בעסק הזה קו מבוקר במלואו כל יום (אין
+ * "תת-קבוצת לקוחות להיום") — route_assignments מוסיף רק סדר/סטטוס-
+ * ביקור, לא קובע אילו לקוחות בכלל בקו. "היום" = "כל הקו", תמיד.
+ *
+ * newDevices (2026-09-09, ל"הכנה לקו"): מכשירים בקו שאף פעם לא קיבלו
+ * רישום ב-oil_tracking — סימן שהם נוספו למערכת אבל עדיין לא הותקנו
+ * בפועל בשטח. הטכנאי צריך לקחת אותם פיזית מהמחסן/מהמדף לפני שיוצא.
  */
 export async function getRouteLoadPlan(routeName) {
   const [devicesRows, models, cityRoutes] = await Promise.all([
     supabase
       .from('devices')
-      .select('model, oil_level_pct, scent_name, serial, city, customer:customers(route_name)')
+      .select(`
+        id, model, oil_level_pct, scent_name, serial, city, location_note, created_at,
+        customer:customers(name, route_name),
+        site:customer_sites(label, city)
+      `)
       .neq('status', 'uninstalled')
       .then(unwrap),
     listAllDeviceModels(),
@@ -414,14 +426,31 @@ export async function getRouteLoadPlan(routeName) {
 
   const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
 
+  const routeDevices = devicesRows.filter((d) => effectiveDeviceRoute(d, cityRoutes) === routeName);
+
+  const neverServiced = routeDevices.length
+    ? await supabase
+        .from('oil_tracking')
+        .select('device_id')
+        .in('device_id', routeDevices.map((d) => d.id))
+        .then(unwrap)
+    : [];
+  const servicedIds = new Set(neverServiced.map((r) => r.device_id));
+
   const byScent = new Map();
   const missing = [];
-  let deviceCount = 0;
+  const newDevices = [];
 
-  for (const device of devicesRows) {
-    const route = effectiveDeviceRoute(device, cityRoutes);
-    if (route !== routeName) continue;
-    deviceCount += 1;
+  for (const device of routeDevices) {
+    if (!servicedIds.has(device.id)) {
+      newDevices.push({
+        id: device.id,
+        serial: device.serial,
+        model: device.model,
+        customer_name: device.customer?.name ?? '—',
+        address: [device.site?.label, device.site?.city ?? device.city].filter(Boolean).join(' · ') || device.city || null,
+      });
+    }
 
     const capacity = capacityByModel.get(device.model);
     const scent = device.scent_name?.trim();
@@ -440,7 +469,7 @@ export async function getRouteLoadPlan(routeName) {
     .filter((row) => row.liters > 0)
     .sort((a, b) => b.liters - a.liters);
 
-  return { items, missing, deviceCount };
+  return { items, missing, newDevices, deviceCount: routeDevices.length };
 }
 
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */

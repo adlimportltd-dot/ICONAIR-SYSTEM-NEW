@@ -4,17 +4,38 @@ import DataTable, { StatusChip } from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import { Field, TextInput, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
-import { BoxIcon } from '../components/ui/Icons';
+import { BoxIcon, RouteIcon, DeviceIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import {
   listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
-  returnStockToWarehouse,
+  returnStockToWarehouse, listRoutes, getRouteLoadPlan,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 
 const LOW_STOCK = 2;
+const PREP_ROUTE_KEY = 'iconair:prepRoute';
+
+// 5 ל'/0.5 ל' — גדלי האריזה הפיזיים שבפועל נטענים לרכב (גלון גדול +
+// בקבוק קטן). ממיר ליטרים גולמיים לרשימת-לקיחה שהטכנאי יכול לבצע
+// ליד המדף בלי לחשב בעצמו — ומכוון-מעלה בכוונה (אף פעם לא מעגל למטה),
+// כדי שלעולם לא "יחסר" ליום העבודה.
+const JUG_L = 5;
+const BOTTLE_L = 0.5;
+function toContainers(liters) {
+  const jugs = Math.floor(liters / JUG_L);
+  const remainder = Math.round((liters - jugs * JUG_L) * 100) / 100;
+  const bottles = remainder > 0 ? Math.ceil(remainder / BOTTLE_L) : 0;
+  return { jugs, bottles };
+}
+function containersLabel(liters) {
+  const { jugs, bottles } = toContainers(liters);
+  const parts = [];
+  if (jugs > 0) parts.push(`${jugs} גלון${jugs > 1 ? 'ים' : ''} (5 ל')`);
+  if (bottles > 0) parts.push(`${bottles} בקבוק${bottles > 1 ? 'ים' : ''} (0.5 ל')`);
+  return parts.join(' + ') || 'אין צורך';
+}
 
 /** שורה בלי ניחוח = מכשירים ביחידות שלמות; שורה עם ניחוח = שמן בליטרים. */
 const isDeviceRow = (scentName) => !scentName;
@@ -22,6 +43,142 @@ const isDeviceRow = (scentName) => !scentName;
 function formatQty(quantity, scentName) {
   const n = Number(quantity ?? 0);
   return isDeviceRow(scentName) ? `${n} יח׳` : `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ל׳`;
+}
+
+/**
+ * "מה להעמיס היום" — הדבר הראשון שהטכנאי אמור לראות ב"הכנה לקו", לפני
+ * הכל: כמה מכל ניחוח לטעון (בגלונים ובבקבוקים, לא רק ליטרים גולמיים —
+ * ר' toContainers למעלה), ואילו מכשירים חדשים (שאף פעם לא קיבלו שירות
+ * בשטח) צריך לקחת פיזית מהמדף. מבוסס על getRouteLoadPlan — לפי הקו
+ * שהטכנאי בוחר (נשמר בדפדפן שלו, לא צריך לבחור כל בוקר מחדש).
+ * 2026-09-09 — תגובה לדרישה מפורשת: "בלי לחפור במספרים או לגלול מיותר".
+ */
+function TodayLoadCard() {
+  const routes = useQuery(listRoutes, []);
+  const [activeRoute, setActiveRoute] = useState(() => {
+    try { return localStorage.getItem(PREP_ROUTE_KEY) || undefined; } catch { return undefined; }
+  });
+
+  useEffect(() => {
+    if (!activeRoute && routes.data?.length) setActiveRoute(routes.data.find((r) => r.name)?.name);
+  }, [activeRoute, routes.data]);
+
+  useEffect(() => {
+    if (!activeRoute) return;
+    try { localStorage.setItem(PREP_ROUTE_KEY, activeRoute); } catch { /* לא קריטי אם החיסון חסום */ }
+  }, [activeRoute]);
+
+  const plan = useQuery(() => getRouteLoadPlan(activeRoute), [activeRoute], { enabled: Boolean(activeRoute) });
+  useRealtime(['devices', 'oil_tracking'], plan.refetch, { enabled: Boolean(activeRoute) });
+
+  const routeOptions = (routes.data ?? []).filter((r) => r.name);
+
+  return (
+    <GlassCard className="mb-3.5">
+      <CardHead
+        icon={RouteIcon}
+        tone="ok"
+        title="מה להעמיס היום"
+        subtitle="לפי הקו שנבחר ומצב השמן הנוכחי בכל מכשיר"
+      />
+
+      {routeOptions.length > 1 && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {routeOptions.map((r) => (
+            <button
+              key={r.name}
+              type="button"
+              onClick={() => setActiveRoute(r.name)}
+              className={`rounded-pill border px-4 py-2.5 text-[15px] font-bold transition-colors ${
+                r.name === activeRoute
+                  ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
+                  : 'border-black/[0.09] text-text-dim hover:border-black/[0.18] hover:text-text'
+              }`}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Async
+        loading={plan.loading || routes.loading}
+        error={plan.error}
+        onRetry={plan.refetch}
+        isEmpty={!activeRoute}
+        empty={<EmptyState title="עדיין אין קווים במערכת" hint="קו נוצר אוטומטית כשמשייכים לקוח ראשון אליו." />}
+      >
+        {plan.data && (
+          <>
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
+                <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">מכשירים בקו</div>
+                <div className="tabular mt-1 font-display text-[30px] font-bold leading-none">{plan.data.deviceCount}</div>
+              </div>
+              <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
+                <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">סה״כ שמן להעמיס</div>
+                <div className="tabular mt-1 font-display text-[30px] font-bold leading-none text-gold-600">
+                  {plan.data.items.reduce((sum, i) => sum + i.liters, 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })} ל׳
+                </div>
+              </div>
+            </div>
+
+            {plan.data.items.length === 0 ? (
+              <div className="rounded-row border border-dashed border-black/[0.1] px-4 py-6 text-center text-[15px] text-text-faint">
+                כל המכשירים בקו הזה מלאים — אין צורך להעמיס שמן היום.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {plan.data.items.map((item) => (
+                  <div key={item.scent_name} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
+                    <div className="min-w-0">
+                      <div className="text-[17px] font-bold">{item.scent_name}</div>
+                      <div className="tabular mt-0.5 text-[13.5px] text-text-faint">סה״כ {item.liters.toLocaleString('he-IL')} ל׳</div>
+                    </div>
+                    <div className="tabular rounded-pill border border-gold-300/[0.4] bg-gold-500/[0.1] px-3.5 py-2 text-[15px] font-bold text-gold-600">
+                      {containersLabel(item.liters)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {plan.data.missing.length > 0 && (
+              <div className="mt-4 rounded-row border border-warn/25 bg-warn/[0.07] px-4 py-3 text-[14px] text-warn">
+                {plan.data.missing.length} מכשירים בקו בלי ניחוח משויך או בלי נפח-מכל מוגדר לדגם — לא נכנסו לחישוב.
+                תעדכן אותם בכרטיס הלקוח כדי שהתכנון יהיה מדויק.
+              </div>
+            )}
+
+            {plan.data.newDevices.length > 0 && (
+              <div className="mt-5">
+                <CardHead
+                  icon={DeviceIcon}
+                  tone="crit"
+                  title="מכשירים חדשים להתקנה היום"
+                  subtitle="עדיין לא קיבלו שום טיפול בשטח — לקחת פיזית מהמדף לפני שיוצאים"
+                />
+                <div className="flex flex-col gap-2.5">
+                  {plan.data.newDevices.map((d) => (
+                    <div key={d.id} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-bold">{d.customer_name}</div>
+                        <div className="mt-0.5 text-[13.5px] text-text-faint">{d.address || 'ללא כתובת ספציפית'}</div>
+                      </div>
+                      <div className="flex flex-none items-center gap-2">
+                        <StatusChip tone="slate">{d.model}</StatusChip>
+                        <span dir="ltr" className="font-mono text-[13px] font-semibold text-text-dim">{d.serial}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </Async>
+    </GlassCard>
+  );
 }
 
 /**
@@ -97,12 +254,14 @@ export default function StockScreen() {
 
   return (
     <>
+      <TodayLoadCard />
+
       <GlassCard>
         <CardHead
           icon={BoxIcon}
           tone="slate"
-          title="מלאי נייד"
-          subtitle={isAdmin ? 'מה יש ברכב של כל טכנאי כרגע' : 'מה יש ברכב שלך כרגע'}
+          title="מה כבר יש ברכב"
+          subtitle={isAdmin ? 'המלאי הנייד הנוכחי של כל טכנאי' : 'המלאי הנייד שלך כרגע'}
           action={isAdmin ? 'עדכון ידני' : undefined}
           onAction={isAdmin ? () => { setEditRow(null); setFormOpen(true); } : undefined}
         />
