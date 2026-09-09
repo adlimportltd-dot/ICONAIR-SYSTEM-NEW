@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
@@ -8,7 +8,10 @@ import { BoxIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
-import { listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels } from '../lib/queries';
+import {
+  listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
+  returnStockToWarehouse,
+} from '../lib/queries';
 import { describeError } from '../lib/supabase';
 
 const LOW_STOCK = 2;
@@ -23,16 +26,21 @@ function formatQty(quantity, scentName) {
 
 /**
  * מלאי נייד — "מה יש ברכב עכשיו" לכל טכנאי. complete_visit (סיום ביקור
- * ב-OilScreen) צורך מכאן אוטומטית יחידה אחת בכל ביקור; המסך הזה הוא
- * המקום שמנהל טוען/מעדכן את הכמות מולה מתחילים כל בוקר.
+ * ב-OilScreen) צורך מכאן אוטומטית את הליטרים/יחידות המדויקים בכל ביקור
+ * (ר' phase19); המסך הזה הוא המקום שמנהל טוען/מעדכן את הכמות מולה
+ * מתחילים כל בוקר ("הכנה לקו").
  *
- * טכנאי רואה רק את השורות שלו, לקריאה בלבד — RLS כבר מגביל את זה,
- * וגם ה-UI לא מציג לו כפתור עריכה, כדי לא להציע פעולה שתיכשל.
+ * טכנאי רואה רק את השורות שלו, בעיקר לקריאה — אין לו כפתור עריכה חופשי
+ * (RLS גם חוסמת את זה), אבל יש לו פעולה מוגבלת אחת על השורות שלו: "החזרה
+ * למחסן" בסוף היום (2026-09-09, phase19) — לא עריכה חופשית, רק הפחתה
+ * מבוקרת דרך return_stock_to_warehouse (שנשאר אטומי ובודק שיש מספיק
+ * להחזיר), שגם מזכה את המחסן הראשי בו-זמנית.
  */
 export default function StockScreen() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
+  const [returnRow, setReturnRow] = useState(null);
 
   const stock = useQuery(listTechnicianStock, []);
   const technicians = useQuery(listTechnicianOptions, [], { enabled: isAdmin });
@@ -118,9 +126,29 @@ export default function StockScreen() {
             rows={stock.data ?? []}
             rowKey={(row) => row.id}
             onRowClick={isAdmin ? (row) => { setEditRow(row); setFormOpen(true); } : undefined}
+            actions={(row) => (row.technician_id === profile?.id && row.quantity > 0
+              ? (
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); setReturnRow(row); }}
+                  className="ghost-btn !px-3.5 !py-2 text-[13.5px]"
+                >
+                  החזרה למחסן
+                </button>
+              )
+              : null)}
           />
         </Async>
       </GlassCard>
+
+      <ReturnStockModal
+        row={returnRow}
+        onClose={() => setReturnRow(null)}
+        onSaved={() => {
+          setReturnRow(null);
+          stock.refetch();
+        }}
+      />
 
       {isAdmin && (
         <StockFormModal
@@ -266,6 +294,90 @@ function StockFormModal({ open, editRow, technicianOptions, scentOptions, modelO
 
         <div className="mt-1 flex gap-2.5">
           <PrimaryButton type="submit" loading={busy}>שמור</PrimaryButton>
+          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * "החזרה למחסן" — דיווח עצמי של טכנאי בסוף יום: כמה חזר איתו פיזית
+ * לרכב (גלונים שלא נפתחו, נפח שנשאר בבקבוק וכו'). לא עריכה חופשית —
+ * רק הפחתה מבוקרת מהשורה שלו, דרך return_stock_to_warehouse (בודקת
+ * שיש מספיק להחזיר ומזכה את המחסן הראשי באותה טרנזקציה, ר' phase19).
+ * ברירת המחדל היא הכמות המלאה שנשארה — ברוב הימים הטכנאי פשוט מאשר.
+ */
+function ReturnStockModal({ row, onClose, onSaved }) {
+  const [quantity, setQuantity] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (row) { setQuantity(String(row.quantity)); setError(null); } }, [row]);
+
+  if (!row) return null;
+
+  const isDevice = isDeviceRow(row.scent_name);
+  const max = Number(row.quantity);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+
+    const n = Number(quantity);
+    if (!n || n <= 0) { setError('כמות להחזרה חייבת להיות גדולה מ-0'); return; }
+    if (n > max) { setError(`אי אפשר להחזיר יותר ממה שיש ברכב (${formatQty(max, row.scent_name)})`); return; }
+    if (isDevice && !Number.isInteger(n)) { setError('כמות מכשירים חייבת להיות מספר יחידות שלם'); return; }
+
+    setBusy(true);
+    try {
+      await returnStockToWarehouse({
+        technician_id: row.technician_id,
+        model: row.model,
+        scent_name: row.scent_name || null,
+        quantity: n,
+      });
+      onSaved();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="החזרה למחסן — סוף יום"
+      subtitle={`${row.model || row.scent_name} · יש לך ברכב ${formatQty(row.quantity, row.scent_name)}`}
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <Field
+          label={isDevice ? 'כמות להחזרה (יחידות)' : 'כמות להחזרה (ליטרים)'}
+          hint="מה שחוזר איתך פיזית לרכב — גלונים שלא נפתחו, או הנפח שנשאר בבקבוק"
+          required
+        >
+          <TextInput
+            type="number"
+            min={0}
+            max={max}
+            step={isDevice ? 1 : 0.1}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            required
+            autoFocus
+          />
+        </Field>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <PrimaryButton type="submit" loading={busy}>אישור החזרה</PrimaryButton>
           <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
         </div>
       </form>

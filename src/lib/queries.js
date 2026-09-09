@@ -793,10 +793,15 @@ export async function createOilEntry(payload) {
 
 /**
  * "סיום ביקור" — עוטפת את אותו insert שעושה createOilEntry, אבל דרך
- * ה-RPC complete_visit (ר' iconair_schema_phase3_visits.sql) שגם מוריד
- * יחידה אחת מהמלאי הנייד של הטכנאי המחובר, אטומית: אם אין מלאי, כל
- * הפעולה נכשלת ושום דבר לא נרשם. עד שה-SQL ההוא ירוץ, הקריאה הזו
- * תיכשל עם "function public.complete_visit does not exist".
+ * ה-RPC complete_visit שגם מנכה את הליטרים המדויקים (p_liters_added,
+ * לא "יחידה אחת" קבועה) מהמלאי הנייד של הטכנאי המחובר, לפי ניחוח
+ * (model is null — אותו מפתח בדיוק כמו allocate_stock_to_technician/
+ * return_stock_to_warehouse), אטומית: אם אין מספיק מלאי, כל הפעולה
+ * נכשלת ושום דבר לא נרשם. 2026-09-09 (phase19): תוקן באג שבו הפונקציה
+ * חיפשה מלאי לפי model+scent יחד וניכתה "1" קבוע — לא תאם את הצורה
+ * שבה allocate_stock_to_technician באמת מקצה מלאי-ניחוח (model=null),
+ * אז בפועל כל קריאה חיה נכשלה בשקט ונפלה ל-createOilEntry למטה בלי
+ * לנכות כלום. ר' iconair_schema_phase19_stock_visit_sync.sql.
  */
 const completeVisitRemote = ({
   device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, notes,
@@ -920,6 +925,11 @@ export const allocateStockToTechnician = ({ technician_id, model, scent_name, qu
  * בדיוק ל-allocateStockToTechnician, אותה אטומיות. זה מה שסוגר את
  * המעגל לדוח העודפים: מה שהוקצה בבוקר, פחות מה שנצרך בפועל
  * (oil_tracking), פחות מה שחזר פיזית למחסן — ר' getRouteConsumptionReport.
+ *
+ * קריא גם ע"י טכנאי על עצמו (p_technician_id = הטכנאי המחובר), לא רק
+ * ע"י מנהל — 2026-09-09 (phase19), ל"החזרה עצמאית בסוף יום" ב-StockScreen.
+ * הפונקציה עצמה security definer (חוצה בכוונה ל-warehouse_stock, שנשאר
+ * חסום ב-RLS לטכנאי בכל מקום אחר) עם בדיקת בעלות מפורשת בתוכה.
  */
 export const returnStockToWarehouse = ({ technician_id, model, scent_name, quantity }) =>
   supabase.rpc('return_stock_to_warehouse', {
