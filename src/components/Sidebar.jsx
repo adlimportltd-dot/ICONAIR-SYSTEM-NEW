@@ -9,14 +9,15 @@ import { brandLogoUrl, BRAND_LOGO_EXT_FALLBACK } from '../lib/queries';
  * סיומות הקובץ האפשריות בזו אחר זו. אם אף אחת לא נטענת (לא הועלה
  * לוגו בכלל) — נופל חזרה לסמל+טקסט המובנה של המערכת.
  *
- * 2026-09-09 (תיקון דחוף, בעקבות משוב "הלוגו נבלע לגמרי בסיידבר"): לוגו
- * שהועלה הוא קובץ תמונה קבוע-צבע — הוא לא "יודע" שהסרגל הפך לנייבי כהה
- * (Overhaul #2), ואם הוא כהה בעצמו הוא נעלם על גבי רקע כהה. הפתרון: על
- * גבי שבב הניווט הכהה בלבד (`dark`), התמונה יושבת בתוך "מסגרת" לבנה
- * קבועה (כרטיס עגול-פינות עם padding+צל+גבול זהב עדין) שמבטיחה ניגודיות
- * גבוהה ותחושה יוקרתית **בלי תלות בצבעי הלוגו שהועלה בפועל**. הסמל
- * המובנה (`BuiltInMark`, כשאין לוגו מותאם או שהטעינה נכשלה) כבר מסתגל
- * לרקע כהה בעצמו (טקסט לבן/ענבר) ולא צריך מסגרת.
+ * 2026-09-09 (תיקון קונטרסט, שני סבבים): לוגו שהועלה הוא קובץ תמונה
+ * קבוע-צבע — לא "יודע" שהסרגל הפך לנייבי כהה. סבב ראשון עטף אותו במסגרת
+ * לבנה (בוטל — "נראה כמו טלאי חובבני"). **הפתרון הנוכחי:** הלוגו שהועלה
+ * הוא PNG עם רקע שקוף (~87% שקיפות, נבדק ישירות על התמונה החיה) וקווי-מתאר
+ * כהים בלבד — בדיוק המצב שבו הופכים אותו למונוכרום-לבן עם CSS filter
+ * (`brightness(0) invert(1)`), בלי שום ריבוע/רקע מסביב: התווים/סמל עצמם
+ * הופכים ללבן ומרחפים ישירות על הנייבי, בדיוק כמו בכל פאנל SaaS יוקרתי
+ * עם לוגו על סרגל כהה. משמש רק כש-`dark` (הסרגל/הראש הכהים) — במסך
+ * ההתחברות (`!dark`, רקע בהיר) הלוגו מוצג כרגיל, בצבעיו המקוריים.
  */
 function BrandLogo({ compact, overrideSrc, dark }) {
   const [extIndex, setExtIndex] = useState(0);
@@ -24,26 +25,18 @@ function BrandLogo({ compact, overrideSrc, dark }) {
 
   if (failed) return <BuiltInMark compact={compact} dark={dark} />;
 
-  const img = (
+  return (
     <img
       src={overrideSrc ?? brandLogoUrl(BRAND_LOGO_EXT_FALLBACK[extIndex])}
       alt="ICON AIR"
-      className={compact ? 'h-9 max-w-[200px] object-contain' : 'h-10 max-w-[210px] object-contain'}
+      className={`${compact ? 'h-10 max-w-[210px]' : 'h-11 max-w-[230px]'} object-contain
+                 ${dark ? 'brightness-0 invert' : ''}`}
       onError={() => {
         if (overrideSrc) { setFailed(true); return; }
         if (extIndex + 1 < BRAND_LOGO_EXT_FALLBACK.length) setExtIndex(extIndex + 1);
         else setFailed(true);
       }}
     />
-  );
-
-  if (!dark) return img;
-
-  return (
-    <div className={`inline-flex items-center justify-center rounded-xl border border-gold-300/40
-                     bg-white shadow-lift ${compact ? 'px-3.5 py-2' : 'px-4 py-2.5'}`}>
-      {img}
-    </div>
   );
 }
 
