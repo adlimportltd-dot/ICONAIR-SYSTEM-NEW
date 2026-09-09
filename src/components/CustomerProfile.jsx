@@ -286,7 +286,15 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
                 />
               }
             >
-              <div className="flex flex-col gap-4">
+              {/*
+                2026-09-09 (בעקבות משוב "הכל נראה מחובר ונוזל יחד"): "באר"
+                אפורה-כחלחלה (bg-ink-800) שמפרידה חזותית בין כל כרטיסי-הכתובת
+                הלבנים — כרטיס אחד (border-slate-300 + shadow-nest) "מרחף"
+                בבירור מעל הרקע השקוע, במקום לשבת צמוד לכרטיס-האם הלבן
+                שגם הוא לבן. זה מה שנותן את ה"אפשר להבחין מיד איפה כתובת אחת
+                נגמרת והשנייה מתחילה" גם ללקוח עם עשרות כתובות (כמו אוורסט).
+              */}
+              <div className="flex flex-col gap-5 rounded-row bg-ink-800 p-3 sm:p-4">
                 {siteRows.map((site) => (
                   <SiteCard
                     key={site.id}
@@ -417,7 +425,7 @@ function SiteCard({ site, devices, isAdmin, onAddDevice, onEditDevice, onChanged
   }
 
   return (
-    <div className="rounded-row border border-black/[0.08] bg-ink-900 shadow-glass-hi">
+    <div className="rounded-row border border-[#CBD5E1] bg-ink-900 shadow-nest">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -585,7 +593,7 @@ function DeviceGroup({ title, subtitle, devices, prices, isAdmin, site = null, o
   if (bare) return body;
 
   return (
-    <div className="rounded-row border border-black/[0.08] bg-ink-900 p-4 shadow-glass-hi">
+    <div className="rounded-row border border-[#CBD5E1] bg-ink-900 p-4 shadow-nest">
       <div className="mb-3">
         <div className="text-[17px] font-semibold">{title}</div>
         {subtitle && <div className="mt-0.5 text-[14px] text-text-faint">{subtitle}</div>}
