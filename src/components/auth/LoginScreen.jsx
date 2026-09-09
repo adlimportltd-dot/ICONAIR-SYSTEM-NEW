@@ -58,8 +58,8 @@ export default function LoginScreen() {
                        border-gold-300/[0.1] p-9 lg:flex"
             style={{
               background:
-                'radial-gradient(120% 140% at 0% 0%, rgba(212,175,55,.13), transparent 60%),' +
-                'radial-gradient(120% 140% at 100% 100%, rgba(197,160,89,.07), transparent 55%),' +
+                'radial-gradient(120% 140% at 0% 0%, rgba(252,211,77,.13), transparent 60%),' +
+                'radial-gradient(120% 140% at 100% 100%, rgba(217,119,6,.07), transparent 55%),' +
                 '#FBF8F1',
             }}
           >

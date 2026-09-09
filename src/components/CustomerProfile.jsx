@@ -194,45 +194,52 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-        {/* --- עמודת צד: סיכום + פרטי לקוח --- */}
-        <aside className="flex flex-col gap-5">
-          <GlassCard>
-            <CardHead icon={DeviceIcon} title="סיכום" subtitle="מה שרואים בכל מבט" />
-            <div className="grid grid-cols-2 gap-3">
-              <Stat label="מכשירים פעילים" value={activeCount} />
-              <Stat label="כתובות" value={siteRows.length} />
-            </div>
-            <div className="mt-4 rounded-row border border-gold-300/[0.3] bg-gold-500/[0.06] p-4">
-              <div className="text-[13px] font-semibold uppercase tracking-[0.8px] text-text-faint">סה״כ כולל מע״מ</div>
-              <div className="tabular mt-1 font-display text-[34px] font-bold leading-none text-gold-600">
-                {formatCurrency(totals.total)}
+      {/*
+        2026-09-09 Full Design Overhaul #2 — "Vertical Stacked Flow": בלי
+        עמודת-צד מקבילה לתוכן הראשי. כל בלוק תופס את מלוא הרוחב ונערם
+        אנכית מלמעלה למטה: (1) פרטי לקוח + סיכום כספי מאוחדים בכרטיס אחד
+        עליון, (2) כתובות ומכשירים, (3) חוזים, (4) אזור מסוכן.
+      */}
+      <div className="flex flex-col gap-6">
+        {/* --- בלוק עליון: פרטי לקוח + סיכום כספי כולל, מאוחד --- */}
+        <GlassCard>
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap items-stretch gap-4 rounded-row border border-amber-400/25 bg-amber-500/[0.07] p-5 sm:p-6">
+              <SummaryStat label="מכשירים פעילים" value={activeCount} />
+              <div className="hidden w-px self-stretch bg-black/[0.08] sm:block" />
+              <SummaryStat label="כתובות" value={siteRows.length} />
+              <div className="hidden w-px self-stretch bg-black/[0.08] sm:block" />
+              <div className="min-w-[200px] flex-1">
+                <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">עלות חודשית כוללת · כולל מע״מ</div>
+                <div className="tabular mt-1 font-display text-[38px] font-extrabold leading-none text-gold-600">
+                  {formatCurrency(totals.total)}
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[14px] font-semibold text-text-dim">
+                  <span>לפני מע״מ <b className="tabular font-mono text-text">{formatCurrency(totals.preVat)}</b></span>
+                  <span>מע״מ 18% <b className="tabular font-mono text-text">{formatCurrency(totals.vatAmount)}</b></span>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[14px] text-text-dim">
-                <span>לפני מע״מ <b className="tabular font-mono text-text">{formatCurrency(totals.preVat)}</b></span>
-                <span>מע״מ 18% <b className="tabular font-mono text-text">{formatCurrency(totals.vatAmount)}</b></span>
-              </div>
             </div>
-          </GlassCard>
 
-          <GlassCard>
-            <CardHead icon={UsersIcon} title="פרטי לקוח" subtitle={detailsEditing ? 'השינויים נשמרים מיד' : 'קשר, כתובת ראשית, קו וחיוב'} />
-            {detailsEditing ? (
-              <CustomerDetailsForm
-                key={customer.updated_at ?? customer.id}
-                customer={customer}
-                isAdmin={isAdmin}
-                onSaved={() => { setDetailsEditing(false); refreshAll(); }}
-                onCancel={() => setDetailsEditing(false)}
-              />
-            ) : (
-              <CustomerDetailsView customer={customer} isAdmin={isAdmin} />
-            )}
-          </GlassCard>
-        </aside>
+            <div>
+              <CardHead icon={UsersIcon} title="פרטי לקוח" subtitle={detailsEditing ? 'השינויים נשמרים מיד' : 'קשר, כתובת ראשית, קו וחיוב'} />
+              {detailsEditing ? (
+                <CustomerDetailsForm
+                  key={customer.updated_at ?? customer.id}
+                  customer={customer}
+                  isAdmin={isAdmin}
+                  onSaved={() => { setDetailsEditing(false); refreshAll(); }}
+                  onCancel={() => setDetailsEditing(false)}
+                />
+              ) : (
+                <CustomerDetailsView customer={customer} isAdmin={isAdmin} />
+              )}
+            </div>
+          </div>
+        </GlassCard>
 
-        {/* --- עמודה ראשית: כתובות, מכשירים, תמחור, חוזים --- */}
-        <div className="flex min-w-0 flex-col gap-5">
+        {/* --- כתובות, מכשירים, תמחור, חוזים — כל אחד נערם במלוא הרוחב --- */}
+        <div className="flex min-w-0 flex-col gap-6">
           {deviceForm && (
             <GlassCard as="section" className="border-gold-300/[0.35]">
               <div ref={deviceFormRef} />
@@ -325,11 +332,12 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
   );
 }
 
-function Stat({ label, value }) {
+/** מספר-על בתוך רצועת הסיכום הכספי העליונה (מכשירים פעילים / כתובות) */
+function SummaryStat({ label, value }) {
   return (
-    <div className="rounded-row border border-black/[0.06] bg-black/[0.02] px-4 py-3.5">
-      <div className="text-[13px] font-semibold uppercase tracking-[0.8px] text-text-faint">{label}</div>
-      <div className="tabular mt-1 font-display text-[30px] font-bold leading-none">{value}</div>
+    <div className="min-w-[110px]">
+      <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">{label}</div>
+      <div className="tabular mt-1 font-display text-[38px] font-extrabold leading-none text-text">{value}</div>
     </div>
   );
 }

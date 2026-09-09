@@ -16,7 +16,7 @@ const EVENT_TONE = { refill: 'teal', replacement: 'gold', reading: 'slate' };
 
 const STOCK_FILL = {
   teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
-  gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
+  gold: 'linear-gradient(90deg,#D97706,#FCD34D)',
   slate: 'linear-gradient(90deg,#475569,#5B6B82)',
   crit: 'linear-gradient(90deg,#B91C1C,#B45309)',
 };

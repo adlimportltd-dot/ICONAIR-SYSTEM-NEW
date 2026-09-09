@@ -96,7 +96,7 @@ export function StatusChip({ tone = 'neutral', children }) {
 export function MiniMeter({ value, tone = 'teal' }) {
   const fills = {
     teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
-    gold: 'linear-gradient(90deg,#C5A059,#D4AF37)',
+    gold: 'linear-gradient(90deg,#D97706,#FCD34D)',
     slate: 'linear-gradient(90deg,#475569,#5B6B82)',
     warn: 'linear-gradient(90deg,#B45309,#D89B4A)',
     crit: 'linear-gradient(90deg,#B91C1C,#B45309)',

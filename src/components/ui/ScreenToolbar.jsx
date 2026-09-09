@@ -54,9 +54,8 @@ export default function ScreenToolbar({
         <button
           type="button"
           onClick={onAction}
-          className="ms-auto flex items-center gap-1.5 rounded-pill px-3.5 py-2.5
-                     text-[15px] font-semibold text-[#221B0C] transition-opacity hover:opacity-90"
-          style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
+          className="ms-auto flex items-center gap-1.5 rounded-pill bg-gold-500 px-3.5 py-2.5
+                     text-[15px] font-extrabold text-slate-950 transition-colors hover:bg-amber-600"
         >
           <PlusIcon className="h-4 w-4" />
           {actionLabel}

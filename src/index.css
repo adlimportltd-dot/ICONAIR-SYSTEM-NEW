@@ -42,41 +42,38 @@
 
   select option:checked,
   select option:hover {
-    background-color: #d4af37;
-    color: #2c2a29;
+    background-color: #f59e0b;
+    color: #020617;
   }
 }
 
 @layer components {
-  /* --- הרקע המרחף: קריסטל-לבן קריר (ברמת slate-50) + הילת זהב מרוסנת אחת.
-     2026-09-09 סבב שני: הוחלף מ-#F7F5F0 (שמנת חמה) ל-#F8FAFC (קריר) —
-     בקשה מפורשת של המשתמש, אל תחזיר לחם בלי בקשה חדשה. --- */
+  /* --- הרקע: לבן טהור לחלוטין — 2026-09-09 Full Design Overhaul #2,
+     בקשה מפורשת "רקע המסך הכללי לבן נקי לחלוטין". בלי הילות זהב ובלי גוון
+     slate-50 עדין — הפרדת כרטיס/רקע עוברת כולה ל-border+shadow (ר' .glass
+     למטה). אל תחזיר גוון רקע כלשהו בלי בקשה חדשה. --- */
   .ambient-field {
     @apply fixed inset-0 z-0 pointer-events-none;
-    /* רקע נקי לחלוטין (slate-50) — בלי הילות זהב. הזהב נשאר לכפתורים
-       ראשיים ולמצב פעיל, לא לרקע. */
-    background: #f8fafc;
+    background: #ffffff;
   }
 
-  /* --- משטח הכרטיסים: לבן נקי, הילת זהב עדינה מהפינה, מסגרת פחם-עמוק דקה
-     וחדה (לא עכורה) שמבדילה אותו מהרקע, צל "מרחף" עדין (shadow-lift) —
-     2026-09-09 סבב שני: border הוחלף מאפרפר-חם (#E4DED0) לפחם קריר-עמוק
-     (stone-800 בשקיפות 10%) לפי בקשה מפורשת. --- */
-  /* 2026-09-09 (Full Design Overhaul): לבן נקי, גבול slate-200 דק וחד,
-     צל עמוק ורך (shadow-lift = צורת shadow-xl בגוון slate-200/50).
-     בלי הילת זהב על משטחים — זהב שמור לכפתורים ראשיים ולמצב פעיל. */
+  /* --- משטח הכרטיסים: לבן טהור, זהה לרקע הדף — הנבדלות מגיעה אך ורק
+     מגבול slate-300 חד (#CBD5E1, חד יותר מ-#E2E8F0 הקודם, כי אין יותר
+     הפרש-גוון לעזור) ומצל "מרחף" עמוק (shadow-lift, עודכן יחד עם זה ב-
+     tailwind.config.js). זהב לא מופיע במשטחים — רק בכפתורים/הדגשים. --- */
   .glass {
     background: #ffffff;
-    @apply border border-[#E2E8F0] shadow-glass-hi;
+    @apply border border-[#CBD5E1] shadow-glass-hi;
   }
 
   .glass-card {
     @apply glass rounded-card shadow-lift;
   }
 
-  /* --- שורה פנימית (קריאה, קו הפצה, מכשיר) — משטח ניטרלי, לא זהב --- */
+  /* --- שורה פנימית (קריאה, קו הפצה, מכשיר) — משטח שקוע ניטרלי, gray-slate
+     קר (לא שמנת חמה כמו קודם), לא זהב --- */
   .inner-row {
-    @apply rounded-row border border-[#E2E8F0] bg-[#F8FAFC] transition-colors duration-200;
+    @apply rounded-row border border-[#E2E8F0] bg-[#F1F5F9] transition-colors duration-200;
   }
 
   /* --- מד התקדמות אופקי --- */

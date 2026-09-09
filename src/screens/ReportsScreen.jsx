@@ -7,7 +7,7 @@ import { useQuery } from '../hooks/useQuery';
 import { getReportSummary, listRoutes, getRouteConsumptionReport, getStockMovementsSummary } from '../lib/queries';
 import { HEBREW_MONTHS, modelTone, formatNumber } from '../lib/mappers';
 
-const TONE_HEX = { slate: '#475569', teal: '#0F766E', gold: '#C5A059' };
+const TONE_HEX = { slate: '#475569', teal: '#0F766E', gold: '#D97706' };
 
 /** ייצוא CSV עם BOM — בלעדיו Excel בעברית פותח ג'יבריש */
 function downloadCsv(filename, rows) {

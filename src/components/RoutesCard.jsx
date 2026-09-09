@@ -11,7 +11,7 @@ const RING_C = 2 * Math.PI * RING_R;
 
 function oilRingColor(percent) {
   if (percent >= 55) return '#0F766E';
-  if (percent >= 35) return '#C5A059';
+  if (percent >= 35) return '#D97706';
   return '#B91C1C';
 }
 

@@ -108,12 +108,12 @@ export default function OilConsumptionChart({ delay, data }) {
         >
           <defs>
             <linearGradient id="oilArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#C5A059" stopOpacity=".34" />
-              <stop offset="100%" stopColor="#C5A059" stopOpacity="0" />
+              <stop offset="0%" stopColor="#D97706" stopOpacity=".34" />
+              <stop offset="100%" stopColor="#D97706" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="oilLine" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#0F766E" />
-              <stop offset="100%" stopColor="#D4AF37" />
+              <stop offset="100%" stopColor="#FCD34D" />
             </linearGradient>
           </defs>
 
@@ -147,8 +147,8 @@ export default function OilConsumptionChart({ delay, data }) {
           {/* נקודת הסיום: קו באורך אפס עם קצה עגול — נשאר עיגול מושלם
               גם כשה-SVG נמתח בצורה לא-אחידה, בניגוד ל-circle */}
           {[
-            { stroke: 'rgba(212,175,55,.22)', width: 22 },
-            { stroke: '#D4AF37', width: 8 },
+            { stroke: 'rgba(252,211,77,.22)', width: 22 },
+            { stroke: '#FCD34D', width: 8 },
             { stroke: '#FFFFFF', width: 3 },
           ].map((dot) => (
             <line
@@ -175,7 +175,7 @@ export default function OilConsumptionChart({ delay, data }) {
 
       <div className="mt-4 flex flex-wrap gap-4 border-t border-black/[0.075] pt-[15px]">
         <span className="flex items-center gap-2 text-[14px] text-text-dim">
-          <Swatch style={{ background: 'linear-gradient(90deg,#0F766E,#D4AF37)' }} />
+          <Swatch style={{ background: 'linear-gradient(90deg,#0F766E,#FCD34D)' }} />
           צריכה בפועל <b className="tabular font-semibold text-text">{summary.actualTotal}</b>
         </span>
         <span className="flex items-center gap-2 text-[14px] text-text-dim">

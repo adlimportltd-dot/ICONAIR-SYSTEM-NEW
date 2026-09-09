@@ -1,16 +1,16 @@
 import { ChevronDownIcon } from './Icons';
 
 // 2026-09-09 (Full Design Overhaul): שדות בגובה ≥46px וטקסט 15px — נוחים
-// לאצבע בנייד, בלי להתאמץ לקרוא. גבול slate-200, רקע slate-50.
+// לאצבע בנייד, בלי להתאמץ לקרוא. גבול slate-200, רקע slate-100 שקוע.
 const controlClass =
-  'w-full rounded-pill border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-[15px] ' +
-  'text-text placeholder:text-text-faint transition-colors ' +
+  'w-full rounded-pill border border-[#E2E8F0] bg-ink-800 px-4 py-3 text-[15px] ' +
+  'text-text font-medium placeholder:text-text-faint placeholder:font-normal transition-colors ' +
   'focus:border-gold-500/60 focus:bg-white focus:outline-none';
 
 export function Field({ label, hint, error, children, required }) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-[15px] font-medium text-text-dim">
+      <span className="text-[15px] font-bold text-text-dim">
         {label}
         {required && <span className="ms-1 text-gold-600">*</span>}
       </span>
@@ -59,15 +59,20 @@ export function Select({ className = '', options = [], placeholder, ...props }) 
   );
 }
 
-/** כפתור ראשי — זהב מלא. משמש לפעולה אחת בכל מסך, לא יותר. */
+/**
+ * כפתור ראשי — ענבר עשיר מלא (bg-amber-500, hover:bg-amber-600), טקסט
+ * slate-950 עבה (font-extrabold). משמש לפעולה אחת בכל מסך, לא יותר.
+ * 2026-09-09 Full Design Overhaul #2: הוחלף מגרדיאנט זהב סטטי לכפתור
+ * ענבר מלא עם הובר אמיתי, בדיוק לפי בקשת המשתמש.
+ */
 export function PrimaryButton({ className = '', loading, children, ...props }) {
   return (
     <button
       type="button"
       disabled={loading || props.disabled}
-      className={`rounded-pill px-5 py-3 text-[15px] font-semibold text-[#221B0C] shadow-lift
-                  transition-opacity disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
-      style={{ background: 'linear-gradient(150deg, #D4AF37, #C5A059)' }}
+      className={`rounded-pill bg-gold-500 px-5 py-3 text-[15px] font-extrabold text-slate-950
+                  shadow-lift transition-colors hover:bg-amber-600
+                  disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
       {...props}
     >
       {loading ? 'שומר…' : children}

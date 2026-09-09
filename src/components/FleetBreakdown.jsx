@@ -5,7 +5,7 @@ import { DeviceIcon } from './ui/Icons';
 const TONE = {
   slate: '#475569',
   teal: '#0F766E',
-  gold: '#C5A059',
+  gold: '#D97706',
 };
 
 const R = 54;
