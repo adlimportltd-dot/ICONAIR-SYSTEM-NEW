@@ -14,13 +14,14 @@ const STATUS_TONE = { active: 'ok', offline: 'crit', maintenance: 'warn', uninst
 export default function DevicesScreen() {
   const [search, setSearch] = useState('');
   const [model, setModel] = useState('');
+  const [scent, setScent] = useState('');
   const [status, setStatus] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [formOpen, setFormOpen] = useState(false);
 
   const devices = useQuery(
-    () => listDevices({ search, model, status, customerId }),
-    [search, model, status, customerId]
+    () => listDevices({ search, model, scent, status, customerId }),
+    [search, model, scent, status, customerId]
   );
   const customers = useQuery(listCustomerOptions, []);
   const scents = useQuery(listScents, []);
@@ -106,6 +107,13 @@ export default function DevicesScreen() {
             onChange: setModel,
             placeholder: 'כל הדגמים',
             options: modelOptions,
+          },
+          {
+            key: 'scent',
+            value: scent,
+            onChange: setScent,
+            placeholder: 'כל הניחוחות',
+            options: scentOptions,
           },
           {
             key: 'status',

@@ -612,7 +612,7 @@ export const deleteCustomerCascade = (customerId) =>
    מכשירים
    ===================================================================== */
 
-export function listDevices({ search = '', model = '', status = '', customerId = '' } = {}) {
+export function listDevices({ search = '', model = '', scent = '', status = '', customerId = '' } = {}) {
   let query = supabase
     .from('devices')
     .select('*, customer:customers(id, name, city, route_name)')
@@ -621,6 +621,7 @@ export function listDevices({ search = '', model = '', status = '', customerId =
   const needle = safeSearch(search);
   if (needle) query = query.ilike('serial', `%${needle}%`);
   if (model) query = query.eq('model', model);
+  if (scent) query = query.eq('scent_name', scent);
   if (status) query = query.eq('status', status);
   if (customerId) query = query.eq('customer_id', customerId);
 
