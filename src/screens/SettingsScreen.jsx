@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
-import { SecondaryButton, TextInput, PrimaryButton } from '../components/ui/Field';
+import { SecondaryButton, TextInput, PrimaryButton, Field } from '../components/ui/Field';
 import { Async } from '../components/ui/States';
-import { UsersIcon, RouteIcon, TagIcon, DeviceIcon, DropIcon, SettingsIcon } from '../components/ui/Icons';
+import { UsersIcon, RouteIcon, TagIcon, DeviceIcon, DropIcon, SettingsIcon, BellIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
 import { useAuth } from '../context/AuthContext';
 import {
   listProfiles, getRouteBreakdown, listRoutes, updateRouteCycle,
   listAllScents, createScent, setScentActive,
   listAllDeviceModels, createDeviceModel, setDeviceModelActive,
-  uploadBrandLogo,
+  uploadBrandLogo, getNotificationSettings, updateNotificationSettings,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { Brand } from '../components/Sidebar';
@@ -21,6 +21,7 @@ export default function SettingsScreen() {
   const team = useQuery(listProfiles, []);
   const routes = useQuery(getRouteBreakdown, []);
   const routeCycles = useQuery(listRoutes, [], { enabled: isAdmin });
+  const notificationSettings = useQuery(getNotificationSettings, [], { enabled: isAdmin });
   const scents = useQuery(listAllScents, [], { enabled: isAdmin });
   const deviceModels = useQuery(listAllDeviceModels, [], { enabled: isAdmin });
 
@@ -96,6 +97,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         {isAdmin && <RouteCyclesCard routeCycles={routeCycles} />}
+        {isAdmin && <NotificationSettingsCard notificationSettings={notificationSettings} />}
         {isAdmin && <BrandingCard />}
         {isAdmin && <DeviceModelsCard deviceModels={deviceModels} />}
         {isAdmin && <ScentsCard scents={scents} />}
@@ -269,6 +271,102 @@ function RouteCyclesCard({ routeCycles }) {
               </div>
             );
           })}
+        </div>
+      </Async>
+    </GlassCard>
+  );
+}
+
+/**
+ * מי מקבל עותק ניהולי מדוח שירות, ומאיזו כתובת נשלח המייל (phase22).
+ * מפתח ה-Resend עצמו לא מוצג ולא נערך כאן בכוונה — הוא סוד, ומקומו
+ * היחיד הוא Supabase Vault (ר' ההסבר מתחת לכרטיס). כרטיס זה שולט רק
+ * בהגדרות שאינן-סודיות של אותה לוגיקת שליחה.
+ */
+function NotificationSettingsCard({ notificationSettings }) {
+  const row = notificationSettings.data;
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  const current = draft ?? { admin_email: row?.admin_email ?? '', from_address: row?.from_address ?? '' };
+  const dirty = row && (current.admin_email !== (row.admin_email ?? '') || current.from_address !== (row.from_address ?? ''));
+
+  async function save() {
+    setError(null);
+    setSaving(true);
+    try {
+      await updateNotificationSettings({
+        admin_email: current.admin_email || null,
+        from_address: current.from_address || 'ICON AIR <onboarding@resend.dev>',
+      });
+      notificationSettings.refetch();
+      setDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <CardHead
+        icon={BellIcon}
+        tone="slate"
+        title="מיילים אוטומטיים על דוחות שירות"
+        subtitle="נשלח אוטומטית ללקוח בסיום ביקור, עם עותק לכתובת שתגדיר כאן"
+      />
+
+      {error && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      <Async loading={notificationSettings.loading} error={notificationSettings.error} onRetry={notificationSettings.refetch}>
+        <div className="flex flex-col gap-3.5">
+          <Field label="כתובת מייל ניהולית (עותק על כל דוח)" hint="ריק = לא יישלח עותק ניהולי">
+            <TextInput
+              type="email"
+              dir="ltr"
+              value={current.admin_email}
+              onChange={(e) => setDraft({ ...current, admin_email: e.target.value })}
+              placeholder="admin@example.com"
+            />
+          </Field>
+
+          <Field label="כתובת השולח" hint='למשל: ICON AIR <reports@yourdomain.co.il> — ללא דומיין מאומת ב-Resend, השתמש ב-onboarding@resend.dev'>
+            <TextInput
+              dir="ltr"
+              value={current.from_address}
+              onChange={(e) => setDraft({ ...current, from_address: e.target.value })}
+              placeholder="ICON AIR <onboarding@resend.dev>"
+            />
+          </Field>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={save}
+              disabled={!dirty || saving}
+              className="ghost-btn !px-4 !py-2 text-[14px] disabled:opacity-40"
+            >
+              {saving ? 'שומר…' : 'שמירה'}
+            </button>
+            {saved && <span className="text-[13.5px] font-semibold text-ok">נשמר</span>}
+          </div>
+
+          <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[13px] leading-relaxed text-text-faint">
+            השליחה בפועל דורשת מפתח API של Resend, שמוגדר פעם אחת ישירות
+            ב-Supabase (Project Settings ← Vault ← Add secret, בשם{' '}
+            <span className="font-mono text-text-dim">resend_api_key</span>) —
+            לא כאן ולא ב-Vercel, כדי שהמפתח לעולם לא יגיע לדפדפן. כל עוד
+            הסוד לא הוגדר, הדוחות עדיין נוצרים כרגיל — רק המייל לא נשלח.
+          </div>
         </div>
       </Async>
     </GlassCard>

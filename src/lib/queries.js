@@ -1400,6 +1400,19 @@ export const listRecentServiceReports = (limit = 8) =>
 export const serviceReportUrl = (filePath) =>
   supabase.storage.from('service-reports').getPublicUrl(filePath).data.publicUrl;
 
+/**
+ * הגדרות שליחת המייל האוטומטית (phase22) — שורה יחידה. מפתח ה-Resend
+ * עצמו לעולם לא עובר כאן ולא בשום קוד frontend — הוא נשמר מוצפן ב-
+ * Supabase Vault ונקרא רק מתוך הטריגר בצד השרת (ר' iconair_schema_
+ * phase22_email_notifications.sql). מה שכן ניהל כאן זה רק "למי לשלוח
+ * עותק ניהולי" ו"מאיזו כתובת לשלוח" — לא סודות.
+ */
+export const getNotificationSettings = () =>
+  supabase.from('notification_settings').select('*').eq('id', true).single().then(unwrap);
+
+export const updateNotificationSettings = (patch) =>
+  supabase.from('notification_settings').update(patch).eq('id', true).select().single().then(unwrap);
+
 /** היסטוריית שמן לרשימת מכשירים נתונה (הכרטיסייה המלאה של עצירה במסלול) */
 export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
   deviceIds.length === 0
