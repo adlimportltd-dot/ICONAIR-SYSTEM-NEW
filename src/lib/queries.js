@@ -276,18 +276,26 @@ export const listDeviceOptions = () =>
 
 /** כל הקווים עם ספירת עצירות (לקוחות חד-כתובתיים + אתרים) ומכשירים, כולל "ללא שיוך לקו". */
 export async function listRoutes() {
-  const [customers, sites, cityRoutes] = await Promise.all([
+  const [customers, sites, cityRoutes, cycles] = await Promise.all([
     supabase.from('customers').select('id, route_name, devices(count)').eq('status', 'active').then(unwrap),
     supabase.from('customer_sites').select('customer_id, city, devices(count)').then(unwrap),
     loadCityRoutesMap(),
+    listRouteCycles(),
   ]);
 
+  const cycleByName = new Map(cycles.map((r) => [r.name, r]));
   const customersWithSites = new Set(sites.map((s) => s.customer_id));
   const groups = new Map();
 
   const bump = (name, stopDelta, deviceDelta) => {
     const key = name ?? '__none__';
-    const g = groups.get(key) ?? { name, customers: 0, devices: 0 };
+    const g = groups.get(key) ?? {
+      name,
+      customers: 0,
+      devices: 0,
+      cycle_start_day: cycleByName.get(name)?.cycle_start_day ?? 1,
+      cycle_end_day: cycleByName.get(name)?.cycle_end_day ?? 12,
+    };
     g.customers += stopDelta;
     g.devices += deviceDelta;
     groups.set(key, g);
@@ -306,6 +314,27 @@ export async function listRoutes() {
     if (b.name === null) return -1;
     return b.customers - a.customers;
   });
+}
+
+/**
+ * מחזוריות חודשית לכל קו: מ-1 לחודש עד יום-סיום קבוע (10–12, שדה
+ * cycle_end_day) — ר' iconair_schema_phase20_route_cycles.sql. קו
+ * שעדיין אין לו שורה ב-routes (עוד לא "נראה" ע"י ensureRouteId) מקבל
+ * את ברירת המחדל 1–12 בצד הלקוח, לא נכשל.
+ */
+export const listRouteCycles = () =>
+  supabase.from('routes').select('name, cycle_start_day, cycle_end_day').eq('active', true).then(unwrap);
+
+/**
+ * עדכון יום-הסיום של מחזור קו — מנהל בלבד (RLS). יום ההתחלה קבוע ב-1.
+ * מבטיח קודם ששורת ה-routes קיימת (ensureRouteId — לא כל קו שרואים
+ * ב-listRoutes בהכרח "נראה" כבר ב-routes), אחרת update על שם שלא קיים
+ * לא עושה כלום בשקט.
+ */
+export async function updateRouteCycle(routeName, cycleEndDay) {
+  await ensureRouteId(routeName);
+  return supabase.from('routes').update({ cycle_end_day: cycleEndDay }).eq('name', routeName)
+    .select('name, cycle_start_day, cycle_end_day').single().then(unwrap);
 }
 
 /**

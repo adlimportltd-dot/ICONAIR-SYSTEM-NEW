@@ -13,6 +13,7 @@ import {
   returnStockToWarehouse, listRoutes, getRouteLoadPlan,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
+import { getCycleInfo } from '../lib/mappers';
 
 const LOW_STOCK = 2;
 const PREP_ROUTE_KEY = 'iconair:prepRoute';
@@ -62,6 +63,7 @@ function TodayLoadCard() {
   const [activeRoute, setActiveRoute] = useState(() => {
     try { return localStorage.getItem(PREP_ROUTE_KEY) || undefined; } catch { return undefined; }
   });
+  const [viewingCycle, setViewingCycle] = useState('current'); // 'current' | 'next'
 
   useEffect(() => {
     if (!activeRoute && routes.data?.length) setActiveRoute(routes.data.find((r) => r.name)?.name);
@@ -76,6 +78,9 @@ function TodayLoadCard() {
   useRealtime(['devices', 'oil_tracking'], plan.refetch, { enabled: Boolean(activeRoute) });
 
   const routeOptions = (routes.data ?? []).filter((r) => r.name);
+  const activeRouteObj = routeOptions.find((r) => r.name === activeRoute);
+  const cycleInfo = useMemo(() => getCycleInfo(activeRouteObj), [activeRouteObj]);
+  const cycle = cycleInfo[viewingCycle];
 
   return (
     <GlassCard className="mb-3.5">
@@ -83,11 +88,36 @@ function TodayLoadCard() {
         icon={RouteIcon}
         tone="ok"
         title="מה להעמיס היום"
-        subtitle="לפי הקו שנבחר ומצב השמן הנוכחי בכל מכשיר"
+        subtitle={
+          viewingCycle === 'next'
+            ? `הכנה מוקדמת למחזור הבא — ${cycle.label} (${cycle.start.getDate()}–${cycle.end.getDate()} לחודש)`
+            : `המחזור הפעיל — ${cycle.label} (עד ${cycle.end.getDate()} לחודש) — לפי מצב השמן הנוכחי בכל מכשיר`
+        }
       />
 
+      {/*
+        2026-09-09 (דרישה מפורשת: "התראה אוטומטית סביב ה-25 לחודש"):
+        לא job ברקע — מחושב בכל טעינה (getCycleInfo.alertDue, ר' mappers.js).
+        זה בכוונה: לא תלוי בהרצת-שרת שאפשר לפספס, ומדויק בכל פתיחה של המסך.
+      */}
+      {cycleInfo.alertDue && viewingCycle === 'current' && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-row border border-warn/30 bg-warn/[0.08] px-4 py-3.5">
+          <div className="min-w-0 flex-1 text-[14.5px] text-warn">
+            <b className="font-bold">המחזור הבא ({cycleInfo.next.label}) נפתח בעוד {cycleInfo.daysUntilNextCycle} ימים</b>
+            {' '}— זמן להתחיל להכין ולהעמיס ציוד לכל הקווים.
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewingCycle('next')}
+            className="ghost-btn flex-none !border-warn/40 !text-warn"
+          >
+            הצג הכנה למחזור הבא
+          </button>
+        </div>
+      )}
+
       {routeOptions.length > 1 && (
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-3.5 flex flex-wrap gap-2">
           {routeOptions.map((r) => (
             <button
               key={r.name}
@@ -104,6 +134,27 @@ function TodayLoadCard() {
           ))}
         </div>
       )}
+
+      <div className="mb-5 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setViewingCycle('current')}
+          className={`flex-1 rounded-pill border px-3.5 py-2 text-[14px] font-semibold transition-colors ${
+            viewingCycle === 'current' ? 'border-black/[0.18] bg-ink-800 text-text' : 'border-black/[0.09] text-text-faint'
+          }`}
+        >
+          מחזור נוכחי · {cycleInfo.current.label}
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewingCycle('next')}
+          className={`flex-1 rounded-pill border px-3.5 py-2 text-[14px] font-semibold transition-colors ${
+            viewingCycle === 'next' ? 'border-black/[0.18] bg-ink-800 text-text' : 'border-black/[0.09] text-text-faint'
+          }`}
+        >
+          מחזור הבא · {cycleInfo.next.label}
+        </button>
+      </div>
 
       <Async
         loading={plan.loading || routes.loading}

@@ -7,7 +7,7 @@ import { UsersIcon, RouteIcon, TagIcon, DeviceIcon, DropIcon, SettingsIcon } fro
 import { useQuery } from '../hooks/useQuery';
 import { useAuth } from '../context/AuthContext';
 import {
-  listProfiles, getRouteBreakdown,
+  listProfiles, getRouteBreakdown, listRoutes, updateRouteCycle,
   listAllScents, createScent, setScentActive,
   listAllDeviceModels, createDeviceModel, setDeviceModelActive,
   uploadBrandLogo,
@@ -20,6 +20,7 @@ export default function SettingsScreen() {
 
   const team = useQuery(listProfiles, []);
   const routes = useQuery(getRouteBreakdown, []);
+  const routeCycles = useQuery(listRoutes, [], { enabled: isAdmin });
   const scents = useQuery(listAllScents, [], { enabled: isAdmin });
   const deviceModels = useQuery(listAllDeviceModels, [], { enabled: isAdmin });
 
@@ -94,6 +95,7 @@ export default function SettingsScreen() {
           </Async>
         </GlassCard>
 
+        {isAdmin && <RouteCyclesCard routeCycles={routeCycles} />}
         {isAdmin && <BrandingCard />}
         {isAdmin && <DeviceModelsCard deviceModels={deviceModels} />}
         {isAdmin && <ScentsCard scents={scents} />}
@@ -187,6 +189,88 @@ function BrandingCard() {
           הלוגו עודכן בהצלחה. במסכים אחרים שכבר פתוחים אצלך או אצל אחרים — רענון הדף (F5) מציג את הגרסה החדשה.
         </div>
       )}
+    </GlassCard>
+  );
+}
+
+/**
+ * מחזוריות חודשית של קווים — כל קו מתחיל ב-1 לחודש (קבוע, לא ניתן
+ * לעריכה) ומסתיים ביום שהמנהל קובע (10–12, ר' iconair_schema_phase20).
+ * זה מה ש"הכנה לקו" (StockScreen.jsx → getCycleInfo) משתמש בו כדי
+ * לחשב מתי מתחיל המחזור הבא ולהציג את התראת ה"סביב ה-25 לחודש".
+ */
+function RouteCyclesCard({ routeCycles }) {
+  const rows = (routeCycles.data ?? []).filter((r) => r.name);
+  const [drafts, setDrafts] = useState({});
+  const [savingName, setSavingName] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function save(routeName) {
+    const value = Number(drafts[routeName]);
+    if (!Number.isInteger(value) || value < 1 || value > 28) {
+      setError('יום סיום המחזור חייב להיות מספר שלם בין 1 ל-28');
+      return;
+    }
+    setError(null);
+    setSavingName(routeName);
+    try {
+      await updateRouteCycle(routeName, value);
+      routeCycles.refetch();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setSavingName(null);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <CardHead
+        icon={RouteIcon}
+        tone="slate"
+        title="מחזורי קווים"
+        subtitle="כל קו רץ מה-1 לחודש עד יום הסיום — קובע את תזמון התראת ׳הכנה לקו׳"
+      />
+
+      {error && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      <Async loading={routeCycles.loading} error={routeCycles.error} onRetry={routeCycles.refetch}
+             isEmpty={rows.length === 0}>
+        <div className="flex flex-col gap-2.5">
+          {rows.map((r) => {
+            const draft = drafts[r.name] ?? String(r.cycle_end_day);
+            const dirty = Number(draft) !== r.cycle_end_day;
+            return (
+              <div key={r.name} className="inner-row flex flex-wrap items-center gap-3 px-4 py-3.5">
+                <b className="min-w-0 flex-1 truncate text-[15px] font-semibold">{r.name}</b>
+                <span className="text-[14px] text-text-faint">מה-1 עד ה-</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={draft}
+                  onChange={(e) => setDrafts((prev) => ({ ...prev, [r.name]: e.target.value }))}
+                  aria-label={`יום סיום מחזור ל${r.name}`}
+                  className="w-[64px] rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-center text-[15px] text-text focus:border-gold-500/45 focus:outline-none"
+                />
+                <span className="text-[14px] text-text-faint">לחודש</span>
+                <button
+                  type="button"
+                  onClick={() => save(r.name)}
+                  disabled={!dirty || savingName === r.name}
+                  className="ghost-btn !px-3.5 !py-2 text-[14px] disabled:opacity-40"
+                >
+                  {savingName === r.name ? 'שומר…' : 'שמירה'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Async>
     </GlassCard>
   );
 }

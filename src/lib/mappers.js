@@ -151,6 +151,46 @@ export function formatDate(value) {
   return new Date(value).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+/**
+ * מחזוריות חודשית של קו: מ-1 לחודש עד cycle_end_day (10–12, ר'
+ * routes.cycle_end_day). מחזירה את המחזור הנוכחי והבא, ואם התאריך
+ * חצה את סף ה-25 לחודש — "אזעקת הכנה" למחזור הבא, מחושבת בכל טעינה
+ * (לא job ברקע) כדי שלא תלויה בהרצה חוצה-שרת שאפשר לפספס.
+ *
+ * "היום" בתוך המחזור הנוכחי (start ≤ today ≤ end) נחשב "מחזור פעיל".
+ */
+export function getCycleInfo(route, today = new Date()) {
+  const startDay = route?.cycle_start_day ?? 1;
+  const endDay = route?.cycle_end_day ?? 12;
+  const y = today.getFullYear();
+  const m = today.getMonth();
+
+  const cycle = (year, month) => ({
+    year,
+    month,
+    start: new Date(year, month, startDay),
+    end: new Date(year, month, endDay, 23, 59, 59),
+    label: new Date(year, month, 1).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' }),
+  });
+
+  const current = cycle(y, m);
+  const next = cycle(y, m + 1);
+
+  const oneDay = 1000 * 60 * 60 * 24;
+  const daysUntilNextCycle = Math.max(0, Math.ceil((next.start - today) / oneDay));
+  const isActiveNow = today >= current.start && today <= current.end;
+
+  return {
+    current,
+    next,
+    daysUntilNextCycle,
+    isActiveNow,
+    // "סביב ה-25 לחודש" — לפי בקשה מפורשת, לא סף מרוחק-ימים כדי שיתאים
+    // גם לחודשים קצרים (פברואר).
+    alertDue: today.getDate() >= 25,
+  };
+}
+
 export function formatDateTime(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString('he-IL', {
