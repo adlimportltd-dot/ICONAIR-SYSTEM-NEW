@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard, listRecentCompletedVisits } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits, listRecentServiceReports } from './lib/queries';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -148,6 +148,40 @@ function Shell() {
     return () => clearTimeout(timer);
   }, [visitToast]);
 
+  // דוחות שירות PDF (phase21): נוצרים אוטומטית ברגע ש"עדכון שמן / סיום
+  // ביקור" מצליח (ר' generateReportSafely ב-serviceReport.js), ומופיעים
+  // כאן חי דרך אותו דפוס בדיוק כמו completedVisits למעלה — הבדל יחיד:
+  // המקור הוא oil_tracking (פעולת שירות אמיתית עם פרטים), לא רק
+  // route_assignments.status='done' (שיכול להיות סימון ידני בלי שירות
+  // בפועל). שני הזרמים רצים זה לצד זה, לא מחליפים אחד את השני.
+  const serviceReports = useQuery(listRecentServiceReports, [], { enabled: isAdmin });
+  useRealtime(['service_reports'], serviceReports.refetch, { enabled: isAdmin });
+
+  const seenReportIds = useRef(null);
+  const [reportToast, setReportToast] = useState(null);
+
+  useEffect(() => {
+    if (!isAdmin || !serviceReports.data) return;
+
+    if (seenReportIds.current === null) {
+      seenReportIds.current = new Set(serviceReports.data.map((r) => r.id));
+      return;
+    }
+
+    const fresh = serviceReports.data.find((r) => !seenReportIds.current.has(r.id));
+    if (fresh) {
+      seenReportIds.current = new Set(serviceReports.data.map((r) => r.id));
+      const tech = fresh.technician_name ?? 'טכנאי';
+      setReportToast(`הטכנאי ${tech} סיים ביקור אצל ${fresh.customer_name} — דוח PDF מוכן`);
+    }
+  }, [isAdmin, serviceReports.data]);
+
+  useEffect(() => {
+    if (!reportToast) return undefined;
+    const timer = setTimeout(() => setReportToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [reportToast]);
+
   // Offline-first: פעולות שדה קריטיות (עדכון שמן/סיום ביקור/רישום מכשיר,
   // ר' queries.js) נכתבות לתור מקומי כשאין רשת, במקום להיזרק כשגיאה.
   // pendingCount נבדק בכל טעינה + בכל שינוי במסך, לא רק פעם אחת — כדי
@@ -238,6 +272,18 @@ function Shell() {
         </div>
       )}
 
+      {reportToast && (
+        <div
+          role="status"
+          className="glass fixed inset-x-0 top-4 z-50 mx-auto flex w-fit max-w-[92vw] items-center
+                     gap-2.5 rounded-pill px-4 py-2.5 text-[14px] font-medium shadow-lift
+                     animate-rise"
+        >
+          <span className="h-2 w-2 flex-none rounded-full bg-gold-500" />
+          {reportToast}
+        </div>
+      )}
+
       <div className="relative z-[1] min-h-screen">
         <Sidebar activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
 
@@ -251,6 +297,8 @@ function Shell() {
             isLive={isLive}
             completedVisits={completedVisits.data ?? []}
             completedVisitsLoading={completedVisits.loading}
+            serviceReports={serviceReports.data ?? []}
+            serviceReportsLoading={serviceReports.loading}
             onNewCall={openNewCall}
             onSearch={() => navigate('devices')}
             onLogoClick={() => navigate('dashboard')}

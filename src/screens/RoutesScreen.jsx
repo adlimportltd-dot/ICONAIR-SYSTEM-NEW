@@ -18,6 +18,7 @@ import {
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
+import { generateReportSafely } from '../lib/serviceReport';
 
 /**
  * מסלולים — עצירות לפי קו הפצה ותאריך, עם ניווט חד-לחיצה לכל תחנה.
@@ -489,6 +490,7 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
               <DeviceDetailRow
                 key={device.id}
                 device={device}
+                customer={stop}
                 deviceModels={deviceModels}
                 scents={scents}
                 onVisitCompleted={() => { onVisitCompleted?.(); history.refetch(); }}
@@ -533,7 +535,7 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
  * "עדכון שמן" פותח את אותו סיום-ביקור שיש במסך "מעקב שמנים" — כאן
  * בלי בחירת מכשיר (כבר ידוע מההקשר), כדי שהטכנאי יעדכן מהמסלול עצמו.
  */
-function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
+function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
   const fillMl = model?.capacity_ml
@@ -581,6 +583,7 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
       <CompleteVisitModal
         open={oilModalOpen}
         device={device}
+        customer={customer}
         scents={scents}
         onClose={() => setOilModalOpen(false)}
         onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
@@ -595,7 +598,8 @@ function DeviceDetailRow({ device, deviceModels, scents, onVisitCompleted }) {
  * מנכה מהמלאי הנייד אטומית; אם אין מלאי תואם נופלים ל-createOilEntry
  * שרק רושם בלי לנסות לנכות), רק בלי שדה בחירת מכשיר — הוא כבר ידוע.
  */
-function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, onClose, onSaved }) {
+  const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -638,13 +642,21 @@ function CompleteVisitModal({ open, device, scents, onClose, onSaved }) {
 
     try {
       let usedFallback = false;
+      let saved;
       try {
-        await completeVisit(payload);
+        saved = await completeVisit(payload);
       } catch (stockError) {
         if (!String(stockError?.message ?? '').includes('אין מלאי נייד')) throw stockError;
-        await createOilEntry(payload);
+        saved = await createOilEntry(payload);
         usedFallback = true;
       }
+
+      generateReportSafely({
+        saved, device, customer,
+        technicianId: session?.user?.id,
+        technicianName: profile?.full_name,
+      });
+
       if (usedFallback) {
         setNoStockNotice(true);
       } else {

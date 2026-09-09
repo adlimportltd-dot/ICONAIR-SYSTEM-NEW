@@ -259,7 +259,11 @@ export const listCustomerOptions = () =>
 export const listDeviceOptions = () =>
   supabase
     .from('devices')
-    .select('id, serial, model, oil_level_pct, customer:customers(id, name)')
+    .select(`
+      id, serial, model, oil_level_pct,
+      customer:customers(id, name, address, city, phone, email),
+      site:customer_sites(id, label, city)
+    `)
     .neq('status', 'uninstalled')
     .order('serial')
     .then(unwrap);
@@ -346,10 +350,10 @@ export async function updateRouteCycle(routeName, cycleEndDay) {
 export async function listStopsByRoute(routeName) {
   const [customers, sites, cityRoutes] = await Promise.all([
     supabase.from('customers')
-      .select('id, name, address, city, phone, notes, route_name, devices(id, model, scent_name, oil_level_pct)')
+      .select('id, name, address, city, phone, email, notes, route_name, devices(id, serial, model, scent_name, oil_level_pct)')
       .eq('status', 'active').then(unwrap),
     supabase.from('customer_sites')
-      .select('id, customer_id, label, city, customer:customers(name, phone, notes), devices(id, model, scent_name, oil_level_pct)')
+      .select('id, customer_id, label, city, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct)')
       .then(unwrap),
     loadCityRoutesMap(),
   ]);
@@ -367,6 +371,7 @@ export async function listStopsByRoute(routeName) {
       address: c.address,
       city: c.city,
       phone: c.phone,
+      email: c.email,
       notes: c.notes,
       devices: c.devices,
     }));
@@ -381,6 +386,7 @@ export async function listStopsByRoute(routeName) {
       address: `${s.label}${s.city ? `, ${s.city}` : ''}`,
       city: s.city,
       phone: s.customer?.phone,
+      email: s.customer?.email,
       notes: s.customer?.notes,
       devices: s.devices,
     }));
@@ -1376,6 +1382,23 @@ export const listRecentCompletedVisits = (limit = 8) =>
     .order('updated_at', { ascending: false })
     .limit(limit)
     .then(unwrap);
+
+/**
+ * דוחות שירות PDF שנוצרו לאחרונה (phase21) — להתראת הפעמון ולטוסט
+ * "הטכנאי X סיים ביקור אצל Y". כל השדות המוצגים כבר "תמונת מצב" על
+ * השורה עצמה (ר' iconair_schema_phase21_service_reports.sql) — אין
+ * כאן joins, כדי שרשימת ההתראות לא תיפול אם מכשיר/לקוח נמחקו בינתיים.
+ */
+export const listRecentServiceReports = (limit = 8) =>
+  supabase
+    .from('service_reports')
+    .select('id, customer_name, customer_email, device_model, event_type, scent_name, technician_name, file_path, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+    .then(unwrap);
+
+export const serviceReportUrl = (filePath) =>
+  supabase.storage.from('service-reports').getPublicUrl(filePath).data.publicUrl;
 
 /** היסטוריית שמן לרשימת מכשירים נתונה (הכרטיסייה המלאה של עצירה במסלול) */
 export const listOilHistoryForDevices = (deviceIds, limit = 20) =>

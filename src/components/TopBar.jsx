@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Sidebar';
-import { SearchIcon, BellIcon, PlusIcon } from './ui/Icons';
-import { relativeTime } from '../lib/mappers';
+import { SearchIcon, BellIcon, PlusIcon, DropIcon } from './ui/Icons';
+import { relativeTime, OIL_EVENT_LABEL } from '../lib/mappers';
+import { serviceReportUrl } from '../lib/queries';
 
 /** שם עצירה קריא: שם הלקוח, ועם תווית הבניין אם זו עצירת-אתר (אוורסט וכו') */
 function stopLabel(visit) {
@@ -14,7 +15,10 @@ function stopLabel(visit) {
  * status='done'). נטען בעצלנות — רק כשנפתח בפעם הראשונה — ומתעדכן
  * אוטומטית בזמן אמת דרך ה-refetch שה-Shell כבר מריץ על שינויים ב-route_assignments.
  */
-function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
+function NotificationsBell({
+  alerts, completedVisits, loading, onOpen,
+  serviceReports = [], serviceReportsLoading = false,
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -54,7 +58,7 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
 
       {open && (
         <div
-          className="glass absolute end-0 top-[calc(100%+8px)] z-30 max-h-[360px] w-[300px]
+          className="glass absolute end-0 top-[calc(100%+8px)] z-30 max-h-[460px] w-[320px]
                      overflow-y-auto rounded-panel p-2 shadow-lift"
         >
           <div className="px-2.5 py-2 text-[13px] font-semibold tracking-wide text-text-faint">
@@ -80,6 +84,67 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
               </div>
             </div>
           ))}
+
+          <div className="mt-2 border-t border-black/[0.06] px-2.5 pb-1 pt-2.5 text-[13px] font-semibold tracking-wide text-text-faint">
+            דוחות שירות אחרונים
+          </div>
+
+          {serviceReportsLoading && (
+            <div className="px-2.5 py-3 text-[14px] text-text-faint">טוען…</div>
+          )}
+
+          {!serviceReportsLoading && serviceReports.length === 0 && (
+            <div className="px-2.5 py-3 text-[14px] text-text-faint">אין עדיין דוחות שירות.</div>
+          )}
+
+          {!serviceReportsLoading && serviceReports.map((report) => {
+            const pdfUrl = serviceReportUrl(report.file_path);
+            const mailtoHref = report.customer_email
+              ? `mailto:${report.customer_email}` +
+                `?subject=${encodeURIComponent(`דוח שירות ICON AIR — ${report.customer_name}`)}` +
+                `&body=${encodeURIComponent(`שלום,\n\nמצורף קישור לדוח השירות מהביקור האחרון:\n${pdfUrl}\n\nבברכה,\nICON AIR`)}`
+              : null;
+            return (
+              <div
+                key={report.id}
+                className="inner-row mb-1.5 flex items-center gap-2.5 px-3 py-2.5 last:mb-0
+                           transition-colors hover:border-gold-300/30 hover:bg-gold-500/[0.07]"
+              >
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-2.5"
+                  title="פתח את דוח ה-PDF"
+                >
+                  <span className="grid h-8 w-8 flex-none place-items-center rounded-lg
+                                    border border-gold-300/25 bg-gold-500/[0.1] text-gold-600">
+                    <DropIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-semibold">
+                      {report.technician_name ?? 'טכנאי'} · {report.customer_name}
+                    </div>
+                    <div className="mt-0.5 truncate text-[13px] text-text-faint">
+                      {OIL_EVENT_LABEL[report.event_type] ?? report.event_type}
+                      {report.device_model ? ` · ${report.device_model}` : ''} · {relativeTime(report.created_at)}
+                    </div>
+                  </div>
+                </a>
+                {mailtoHref && (
+                  <a
+                    href={mailtoHref}
+                    className="flex-none rounded-[8px] border border-black/[0.09] px-2 py-1
+                               text-[12px] font-semibold text-text-dim transition-colors
+                               hover:border-gold-300/40 hover:text-gold-600"
+                    title={`פתח מייל ללקוח (${report.customer_email})`}
+                  >
+                    ✉
+                  </a>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -96,6 +161,7 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
 export default function TopBar({
   title, meta, online, total, alerts = 0, isLive = false, isConnected = true,
   completedVisits = [], completedVisitsLoading = false,
+  serviceReports = [], serviceReportsLoading = false,
   onOpenNotifications, onNewCall, onSearch, onLogoClick,
 }) {
   const allOnline = total > 0 && online === total;
@@ -172,6 +238,8 @@ export default function TopBar({
         alerts={alerts}
         completedVisits={completedVisits}
         loading={completedVisitsLoading}
+        serviceReports={serviceReports}
+        serviceReportsLoading={serviceReportsLoading}
         onOpen={onOpenNotifications}
       />
 

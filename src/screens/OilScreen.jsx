@@ -12,6 +12,8 @@ import {
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, formatNumber, mapOilByScent } from '../lib/mappers';
+import { useAuth } from '../context/AuthContext';
+import { generateReportSafely } from '../lib/serviceReport';
 
 const EVENT_TONE = { refill: 'teal', replacement: 'gold', reading: 'slate' };
 
@@ -184,6 +186,7 @@ export default function OilScreen() {
 }
 
 function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose, onCreated }) {
+  const { session, profile } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -226,8 +229,9 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
 
     try {
       let usedFallback = false;
+      let saved;
       try {
-        await completeVisit(payload);
+        saved = await completeVisit(payload);
       } catch (stockError) {
         // אין מלאי נייד תואם (דגם/ניחוח) לנכות ממנו — קורה הרבה כרגע כי
         // המלאי הנייד עוד לא באמת מאוכלס. עדיף לרשום את הביקור בלי ניכוי
@@ -235,9 +239,27 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
         // אותה טבלה, בלי הצד האטומי של המלאי. כל שגיאה אחרת (למשל מכשיר
         // לא נמצא) ממשיכה לזרוק כרגיל, לא נבלעת כאן.
         if (!String(stockError?.message ?? '').includes('אין מלאי נייד')) throw stockError;
-        await createOilEntry(payload);
+        saved = await createOilEntry(payload);
         usedFallback = true;
       }
+
+      const device = devices.find((d) => d.id === form.device_id);
+      const site = device?.site;
+      const customerRow = device?.customer;
+      generateReportSafely({
+        saved,
+        device,
+        customer: {
+          customer_id: customerRow?.id,
+          name: site ? `${customerRow?.name ?? ''} — ${site.label}` : customerRow?.name,
+          address: site ? `${site.label}${site.city ? `, ${site.city}` : ''}` : customerRow?.address,
+          phone: customerRow?.phone,
+          email: customerRow?.email,
+        },
+        technicianId: session?.user?.id,
+        technicianName: profile?.full_name,
+      });
+
       setForm(emptyForm());
       if (usedFallback) {
         setNoStockNotice(true); // המודל נשאר פתוח כדי שהטכנאי יראה את ההודעה; onCreated() רק כשהוא סוגר בעצמו
