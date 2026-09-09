@@ -8,6 +8,15 @@ import { brandLogoUrl, BRAND_LOGO_EXT_FALLBACK } from '../lib/queries';
  * מנסה לטעון את הלוגו שהמנהל העלה (מסך הגדרות → מיתוג), עובר על
  * סיומות הקובץ האפשריות בזו אחר זו. אם אף אחת לא נטענת (לא הועלה
  * לוגו בכלל) — נופל חזרה לסמל+טקסט המובנה של המערכת.
+ *
+ * 2026-09-09 (תיקון דחוף, בעקבות משוב "הלוגו נבלע לגמרי בסיידבר"): לוגו
+ * שהועלה הוא קובץ תמונה קבוע-צבע — הוא לא "יודע" שהסרגל הפך לנייבי כהה
+ * (Overhaul #2), ואם הוא כהה בעצמו הוא נעלם על גבי רקע כהה. הפתרון: על
+ * גבי שבב הניווט הכהה בלבד (`dark`), התמונה יושבת בתוך "מסגרת" לבנה
+ * קבועה (כרטיס עגול-פינות עם padding+צל+גבול זהב עדין) שמבטיחה ניגודיות
+ * גבוהה ותחושה יוקרתית **בלי תלות בצבעי הלוגו שהועלה בפועל**. הסמל
+ * המובנה (`BuiltInMark`, כשאין לוגו מותאם או שהטעינה נכשלה) כבר מסתגל
+ * לרקע כהה בעצמו (טקסט לבן/ענבר) ולא צריך מסגרת.
  */
 function BrandLogo({ compact, overrideSrc, dark }) {
   const [extIndex, setExtIndex] = useState(0);
@@ -15,17 +24,26 @@ function BrandLogo({ compact, overrideSrc, dark }) {
 
   if (failed) return <BuiltInMark compact={compact} dark={dark} />;
 
-  return (
+  const img = (
     <img
       src={overrideSrc ?? brandLogoUrl(BRAND_LOGO_EXT_FALLBACK[extIndex])}
       alt="ICON AIR"
-      className={compact ? 'h-11 max-w-[220px] object-contain' : 'h-12 max-w-[240px] object-contain'}
+      className={compact ? 'h-9 max-w-[200px] object-contain' : 'h-10 max-w-[210px] object-contain'}
       onError={() => {
         if (overrideSrc) { setFailed(true); return; }
         if (extIndex + 1 < BRAND_LOGO_EXT_FALLBACK.length) setExtIndex(extIndex + 1);
         else setFailed(true);
       }}
     />
+  );
+
+  if (!dark) return img;
+
+  return (
+    <div className={`inline-flex items-center justify-center rounded-xl border border-gold-300/40
+                     bg-white shadow-lift ${compact ? 'px-3.5 py-2' : 'px-4 py-2.5'}`}>
+      {img}
+    </div>
   );
 }
 
@@ -133,7 +151,9 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
                  rounded-card border border-white/[0.06] bg-navy-900 px-4 py-[22px] shadow-lift lg:flex"
       aria-label="ניווט ראשי"
     >
-      <Brand dark onClick={() => onSelect('dashboard')} />
+      <div className="flex justify-center pb-1 pt-1">
+        <Brand dark onClick={() => onSelect('dashboard')} />
+      </div>
 
       <nav className="flex flex-col gap-1">
         <div className="px-2.5 pb-2 text-[12.5px] font-bold tracking-[2px] text-slate-500">
