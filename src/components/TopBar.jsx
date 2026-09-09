@@ -42,7 +42,7 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
         aria-expanded={open}
         aria-label={alerts > 0 ? `${alerts} התראות פתוחות` : 'התראות'}
         className="relative grid h-10 w-10 flex-none place-items-center rounded-pill
-                   border border-white/10 bg-white/[0.05] text-slate-300
+                   border border-white/10 bg-white/[0.05] text-slate-100
                    transition-colors hover:border-amber-400/40 hover:text-amber-300"
       >
         <BellIcon className="h-[18px] w-[18px]" />
@@ -159,7 +159,7 @@ export default function TopBar({
         aria-label="קריאת שירות חדשה"
         onClick={onNewCall}
         className="grid h-10 w-10 flex-none place-items-center rounded-pill
-                   border border-white/10 bg-white/[0.05] text-slate-300
+                   border border-white/10 bg-white/[0.05] text-slate-100
                    transition-colors hover:border-amber-400/40 hover:text-amber-300"
       >
         <PlusIcon className="h-[18px] w-[18px]" />

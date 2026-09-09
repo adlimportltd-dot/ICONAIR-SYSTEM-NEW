@@ -88,10 +88,17 @@ export function Brand({ compact = false, overrideSrc, dark = false, onClick }) {
 
 /**
  * פריט ניווט על גבי הסרגל הכהה — 2026-09-09 Full Design Overhaul #2:
- * הסרגל עצמו עבר לנייבי עמוק, אז כל הטקסט/הובר כאן הם ליטרלים בהירים
- * (slate-300/white), לא טוקני `text-*` הרגילים (מכוונים לרקע לבן). מצב
- * פעיל = ענבר בוהק (amber-400 טקסט, amber-500/15 רקע) — נוכח וברור על
- * גבי הכהה, בלי הצורך בגרדיאנט ידני.
+ * הסרגל עצמו עבר לנייבי עמוק, אז כל הטקסט/הובר כאן הם ליטרלים בהירים,
+ * לא טוקני `text-*` הרגילים (מכוונים לרקע לבן). מצב פעיל = ענבר בוהק
+ * (amber-400 טקסט, amber-500/15 רקע) — נוכח וברור על גבי הכהה.
+ *
+ * 2026-09-09 (תיקון דחוף, בעקבות משוב "הכפתורים הלא-פעילים נבלעים"):
+ * `text-slate-300` היה כאן טעות — בפרויקט הזה `tailwind.config.js` דורס
+ * את `slate.300` הסטנדרטי (בהיר) לגוון כחול-אפור **בינוני-כהה** משלו
+ * (`#5B6B82`, מיועד לשימוש כאקצנט על גבי רקעים *בהירים*), אז על גבי
+ * navy-900 זה יצא כמעט בלתי-קריא. הפריטים הלא-פעילים עכשיו `text-white`
+ * ליטרלי, בלי דעיכת אטימות על האייקון — קונטרסט מלא, בדיוק כמו הפריט
+ * הפעיל, כשההבדל היחיד בין המצבים הוא הרקע/הצבע-הזהוב, לא רמת הבהירות.
  */
 function NavItem({ item, isActive, badge, onSelect }) {
   const Icon = iconMap[item.icon];
@@ -103,7 +110,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
       aria-current={isActive ? 'page' : undefined}
       className={`relative flex w-full items-center gap-3 rounded-pill px-3 py-[11px]
                   text-[14.5px] transition-colors
-                  ${isActive ? 'bg-amber-500/15 font-bold text-amber-400' : 'font-semibold text-slate-300 hover:bg-white/[0.06] hover:text-white'}`}
+                  ${isActive ? 'bg-amber-500/15 font-bold text-amber-400' : 'font-semibold text-white hover:bg-white/[0.08]'}`}
     >
       {isActive && (
         <span
@@ -112,7 +119,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
                      bg-amber-400 shadow-gold-glow"
         />
       )}
-      <Icon className={`h-[19px] w-[19px] flex-none ${isActive ? 'opacity-100' : 'opacity-80'}`} />
+      <Icon className="h-[19px] w-[19px] flex-none" />
       {item.label}
       {badge > 0 && (
         <span className="tabular ms-auto rounded-full bg-crit px-[7px] py-0.5 font-mono text-[13px] font-bold text-white">
@@ -149,7 +156,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
       </div>
 
       <nav className="flex flex-col gap-1">
-        <div className="px-2.5 pb-2 text-[12.5px] font-bold tracking-[2px] text-slate-500">
+        <div className="px-2.5 pb-2 text-[12.5px] font-bold tracking-[2px] text-slate-400">
           ניהול
         </div>
         {visibleNavItems.map((item) => (
