@@ -16,6 +16,10 @@ import { describeError } from '../lib/supabase';
 
 const LOW_STOCK = 2;
 const PREP_ROUTE_KEY = 'iconair:prepRoute';
+// תקרה קבועה על "מכשירים חדשים" — המסך צריך להישאר "במבט אחד" גם אם
+// אירעה קליטה מרוכזת (עשרות/מאות מכשירים בבת אחת), לא רק ביום רגיל
+// עם אחד-שניים חדשים.
+const NEW_DEVICES_SHOWN = 8;
 
 // 5 ל'/0.5 ל' — גדלי האריזה הפיזיים שבפועל נטענים לרכב (גלון גדול +
 // בקבוק קטן). ממיר ליטרים גולמיים לרשימת-לקיחה שהטכנאי יכול לבצע
@@ -156,10 +160,14 @@ function TodayLoadCard() {
                   icon={DeviceIcon}
                   tone="crit"
                   title="מכשירים חדשים להתקנה היום"
-                  subtitle="עדיין לא קיבלו שום טיפול בשטח — לקחת פיזית מהמדף לפני שיוצאים"
+                  subtitle={
+                    plan.data.newDevices.length > NEW_DEVICES_SHOWN
+                      ? `${plan.data.newDevices.length} מכשירים עדיין לא קיבלו טיפול בשטח — מוצגים ${NEW_DEVICES_SHOWN} הראשונים`
+                      : 'עדיין לא קיבלו שום טיפול בשטח — לקחת פיזית מהמדף לפני שיוצאים'
+                  }
                 />
                 <div className="flex flex-col gap-2.5">
-                  {plan.data.newDevices.map((d) => (
+                  {plan.data.newDevices.slice(0, NEW_DEVICES_SHOWN).map((d) => (
                     <div key={d.id} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
                       <div className="min-w-0">
                         <div className="text-[15px] font-bold">{d.customer_name}</div>
