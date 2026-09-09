@@ -12,7 +12,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import { listCustomers, setCustomerPaid } from '../lib/queries';
 import {
   CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, PAYMENT_TYPE_ICON,
-  formatCurrency, formatDate, summarizeDevicesByModel, computeVat, isOverdue,
+  formatCurrency, formatDate, summarizeDevicesByModel, summarizeDevicesByScent, computeVat, isOverdue,
 } from '../lib/mappers';
 
 const STATUS_TONE = { active: 'ok', onboarding: 'gold', paused: 'warn', churned: 'crit' };
@@ -138,6 +138,14 @@ export default function CustomersScreen() {
       width: 'minmax(0,1.1fr)',
       render: (row) => (
         <span className="truncate text-[14px] text-gold-600">{summarizeDevicesByModel(row.devices)}</span>
+      ),
+    },
+    {
+      key: 'scents',
+      label: 'ניחוחות',
+      width: 'minmax(0,1.1fr)',
+      render: (row) => (
+        <span className="truncate text-[14px] text-teal-500">{summarizeDevicesByScent(row.devices)}</span>
       ),
     },
   ];

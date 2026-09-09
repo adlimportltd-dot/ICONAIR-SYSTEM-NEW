@@ -108,6 +108,22 @@ export function summarizeDevicesByModel(devices = []) {
   return [...counts.entries()].map(([model, count]) => `${model} ×${count}`).join(' · ');
 }
 
+/**
+ * "אמברקומבי ×2 · לבנדר ×1" — הניחוחות שנטענים אצל הלקוח כרגע, לפי מכשיר
+ * פעיל. מכשירים בלי ניחוח משויך לא נספרים כלל (לא "ריק" בפני עצמו) —
+ * 2026-09-09, כדי שרשימת הלקוחות תציג את הריחות בפועל, במקום להסתמך על
+ * פתיחת כל כרטיס לקוח בנפרד לראות מה טעון.
+ */
+export function summarizeDevicesByScent(devices = []) {
+  const active = devices.filter((d) => d.status !== 'uninstalled' && d.scent_name);
+  if (active.length === 0) return 'ללא ניחוח משויך';
+
+  const counts = new Map();
+  for (const d of active) counts.set(d.scent_name, (counts.get(d.scent_name) ?? 0) + 1);
+
+  return [...counts.entries()].map(([scent, count]) => `${scent} ×${count}`).join(' · ');
+}
+
 export const CALL_STATUS_LABEL = {
   open: 'פתוחה',
   in_progress: 'בטיפול',

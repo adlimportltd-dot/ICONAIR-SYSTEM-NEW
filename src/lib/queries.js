@@ -556,7 +556,7 @@ export const setStopStatus = (rowId, status) =>
 export function listCustomers({ search = '', status = '', paymentStatus = '', paymentType = '' } = {}) {
   let query = supabase
     .from('customers_secure')
-    .select('*, devices(model, status)')
+    .select('*, devices(model, status, scent_name)')
     .order('name');
 
   const needle = safeSearch(search);
@@ -571,7 +571,7 @@ export function listCustomers({ search = '', status = '', paymentStatus = '', pa
 }
 
 export const createCustomer = (payload) =>
-  supabase.from('customers').insert(payload).select('*, devices(model, status)').single().then(unwrap);
+  supabase.from('customers').insert(payload).select('*, devices(model, status, scent_name)').single().then(unwrap);
 
 export const updateCustomer = (id, patch) =>
   supabase.from('customers').update(patch).eq('id', id).then(unwrap);
