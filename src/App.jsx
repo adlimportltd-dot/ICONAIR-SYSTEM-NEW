@@ -198,13 +198,17 @@ function Shell() {
     <>
       <div className="ambient-field" aria-hidden />
 
+      {/*
+        2026-09-09: הפס אדום (crit) במקום ענבר — עקבי עם המחוון הקבוע
+        ב-TopBar ("ירוק=מחובר, אדום=לא מחובר"), במקום צבע שלישי משלו.
+      */}
       {!isOnline && (
         <div
           role="status"
           className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-2
-                     bg-warn px-3 py-2 text-center text-[14px] font-semibold text-[#221B0C]"
+                     bg-crit px-3 py-2 text-center text-[14px] font-semibold text-white"
         >
-          <span className="h-2 w-2 flex-none animate-pulse-dot rounded-full bg-[#221B0C]" />
+          <span className="h-2 w-2 flex-none animate-pulse-dot rounded-full bg-white" />
           מצב לא מקוון — הנתונים יישמרו ויסתנכרנו אוטומטית ברגע שהחיבור יחזור
           {pendingCount > 0 && ` (${pendingCount} פעולות ממתינות)`}
         </div>
@@ -250,6 +254,7 @@ function Shell() {
             onNewCall={openNewCall}
             onSearch={() => navigate('devices')}
             onLogoClick={() => navigate('dashboard')}
+            isConnected={isOnline}
           />
 
           {activeId === 'dashboard' && (

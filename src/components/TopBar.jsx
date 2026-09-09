@@ -94,7 +94,8 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
  * ממנה נשאר לבן (`.glass`) בכוונה: זה תוכן לקריאה, לא שבב-ניווט.
  */
 export default function TopBar({
-  title, meta, online, total, alerts = 0, isLive = false, completedVisits = [], completedVisitsLoading = false,
+  title, meta, online, total, alerts = 0, isLive = false, isConnected = true,
+  completedVisits = [], completedVisitsLoading = false,
   onOpenNotifications, onNewCall, onSearch, onLogoClick,
 }) {
   const allOnline = total > 0 && online === total;
@@ -121,6 +122,26 @@ export default function TopBar({
         <SearchIcon className="h-4 w-4" />
         חיפוש לקוח, מכשיר או קריאה…
       </button>
+
+      {/*
+        2026-09-09 (בקשה מפורשת: "עיגול ירוק אונליין, עיגול אדום אופליין"):
+        מחוון חיבור-רשת קבוע ותמידי — לא רק כשנופל (שם כבר יש את הפס האדום
+        המלא-רוחב למטה), אלא גם כדי להראות בבירור "כן, אני מחובר" ברגיעה.
+        בכוונה בלי `wide:` — חייב להופיע גם בנייד, זה בדיוק המסך של הטכנאי
+        בשטח. הצבע לבד אף פעם לא מספיק (עיוורי צבעים) — לכן גם טקסט משתנה.
+      */}
+      <div
+        className={`tabular flex flex-none items-center gap-[7px] rounded-xl border px-[11px] py-2
+                    text-[13px] font-bold ${
+                      isConnected
+                        ? 'border-emerald-400/25 bg-emerald-500/[0.14] text-emerald-400'
+                        : 'border-crit/40 bg-crit/20 text-red-300'
+                    }`}
+        title={isConnected ? 'מחובר לרשת' : 'לא מחובר לרשת — הנתונים נשמרים מקומית ויסתנכרנו כשהחיבור יחזור'}
+      >
+        <span className={`h-[7px] w-[7px] flex-none rounded-full ${isConnected ? 'animate-pulse-dot bg-emerald-400' : 'bg-red-400'}`} />
+        <span className="hidden sm:inline">{isConnected ? 'מחובר' : 'לא מחובר'}</span>
+      </div>
 
       {isLive && (
         <div
