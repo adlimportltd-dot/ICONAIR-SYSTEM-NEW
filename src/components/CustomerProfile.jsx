@@ -6,7 +6,7 @@ import { DeviceForm } from './DeviceFormModal';
 import { StatusChip, MiniMeter, oilTone } from './ui/DataTable';
 import { Async, EmptyState } from './ui/States';
 import { PrimaryButton, SecondaryButton, Field, TextInput } from './ui/Field';
-import { TrashIcon, UsersIcon, DeviceIcon, PhoneIcon } from './ui/Icons';
+import { TrashIcon, UsersIcon, DeviceIcon, PhoneIcon, PrinterIcon, EditIcon, PlusIcon, ChevronRightIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
@@ -166,12 +166,25 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
 
   return (
     <div className="animate-rise">
-      {/* --- כותרת המסך --- */}
+      {/*
+        --- כותרת המסך --- כפתור החזרה (2026-09-09, בעקבות משוב "צריך
+        לחפש איך לחזור אחורה"): גדול, עם שברון, וממוקם ראשון בשורה כדי
+        שהעין תיתקל בו מיד — לא ghost-btn דק שנבלע בין שאר האלמנטים.
+      */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onBack} className="ghost-btn">← חזרה לרשימה</button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-pill border border-[#CBD5E1] bg-white px-4 py-2.5
+                     text-[15px] font-bold text-text shadow-nest transition-colors
+                     hover:border-gold-500/50 hover:bg-gold-500/[0.06] hover:text-gold-600"
+        >
+          <ChevronRightIcon className="h-[18px] w-[18px]" />
+          חזרה לרשימה
+        </button>
         <div className="min-w-0">
           <h2 className="truncate font-display text-[28px] font-bold leading-tight">{customer.name}</h2>
-          <div className="mt-1 text-[14px] text-text-faint">
+          <div className="mt-1 text-[14px] font-medium text-text-faint">
             {[customer.city, customer.route_name].filter(Boolean).join(' · ') || 'ללא עיר/קו'}
           </div>
         </div>
@@ -181,10 +194,14 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
         <div className="ms-auto flex flex-wrap gap-2.5">
           {isAdmin && (
             <SecondaryButton onClick={() => setDetailsEditing((v) => !v)}>
+              <EditIcon className="h-4 w-4" />
               {detailsEditing ? 'סגור עריכת פרטים' : 'עריכת פרטים'}
             </SecondaryButton>
           )}
-          <PrimaryButton onClick={() => openDeviceForm({ site: null, editDevice: null })}>הוסף מכשיר</PrimaryButton>
+          <PrimaryButton onClick={() => openDeviceForm({ site: null, editDevice: null })}>
+            <PlusIcon className="h-4 w-4" />
+            הוסף מכשיר
+          </PrimaryButton>
         </div>
       </div>
 
@@ -282,7 +299,12 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
                 <EmptyState
                   title="ללקוח הזה עוד אין מכשירים"
                   hint="לחץ על ״הוסף מכשיר״ — אפשר לפתוח שם גם כתובת חדשה ולשייך אליה ישר."
-                  action={<PrimaryButton onClick={() => openDeviceForm({ site: null, editDevice: null })}>הוסף מכשיר</PrimaryButton>}
+                  action={(
+                    <PrimaryButton onClick={() => openDeviceForm({ site: null, editDevice: null })}>
+                      <PlusIcon className="h-4 w-4" />
+                      הוסף מכשיר
+                    </PrimaryButton>
+                  )}
                 />
               }
             >
@@ -454,14 +476,21 @@ function SiteCard({ site, devices, isAdmin, onAddDevice, onEditDevice, onChanged
         <div className="border-t border-black/[0.06] px-4 pb-4 pt-4">
           {isAdmin && (
             <div className="mb-4 flex flex-wrap items-center gap-2.5">
-              <SecondaryButton onClick={onAddDevice}>הוסף מכשיר לכתובת זו</SecondaryButton>
-              <SecondaryButton onClick={() => setEditing((v) => !v)}>{editing ? 'סגור עריכה' : 'עריכת כתובת'}</SecondaryButton>
+              <SecondaryButton onClick={onAddDevice}>
+                <PlusIcon className="h-4 w-4 text-ok" />
+                הוסף מכשיר לכתובת זו
+              </SecondaryButton>
+              <SecondaryButton onClick={() => setEditing((v) => !v)}>
+                <EditIcon className="h-4 w-4" />
+                {editing ? 'סגור עריכה' : 'עריכת כתובת'}
+              </SecondaryButton>
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={busy}
                 className={`ghost-btn px-4 py-2.5 text-[14px] ${confirmDelete ? '!border-crit/60 !bg-crit/10 !text-crit-soft' : 'hover:!border-crit/40 hover:!text-crit-soft'}`}
               >
+                <TrashIcon className={`h-4 w-4 ${confirmDelete ? '' : 'text-crit-soft'}`} />
                 {confirmDelete ? 'לאשר מחיקת כתובת (המכשירים נשארים)' : 'מחיקת כתובת'}
               </button>
             </div>
@@ -753,7 +782,10 @@ function DeviceRow({ device, effective, isAdmin, onEdit, onChanged, onError }) {
 
           {isAdmin && !priceEditing && (
             <>
-              <button type="button" onClick={onEdit} className="ghost-btn !px-3.5 !py-2 text-[14px]">עריכה</button>
+              <button type="button" onClick={onEdit} className="ghost-btn !px-3.5 !py-2 text-[14px]">
+                <EditIcon className="h-4 w-4" />
+                עריכה
+              </button>
               <button
                 type="button"
                 onClick={handleDelete}
@@ -765,7 +797,7 @@ function DeviceRow({ device, effective, isAdmin, onEdit, onChanged, onError }) {
                     : 'border-black/[0.09] text-text-faint hover:border-crit/35 hover:text-crit-soft'
                 }`}
               >
-                <TrashIcon className="h-4 w-4" />
+                <TrashIcon className={`h-4 w-4 ${confirmDelete ? '' : 'text-crit-soft'}`} />
                 {confirmDelete ? 'לאשר מחיקה' : 'מחיקה'}
               </button>
             </>
@@ -850,7 +882,7 @@ function ContractsSection({ customer, devices = [] }) {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <CardHead title="חוזים" subtitle="חתימה דיגיטלית מרחוק או העלאת חוזה חתום" />
+        <CardHead icon={PrinterIcon} tone="slate" title="חוזים" subtitle="חתימה דיגיטלית מרחוק או העלאת חוזה חתום" />
         <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFileChange} />
         <div className="ms-auto -mt-5 flex flex-wrap gap-2.5">
           <SecondaryButton disabled={busy} onClick={() => fileInputRef.current?.click()}>
@@ -900,6 +932,7 @@ function ContractsSection({ customer, devices = [] }) {
                 className={confirmDeleteId === contract.id ? '!border-crit/40 !text-crit-soft' : ''}
                 onClick={() => handleDelete(contract)}
               >
+                <TrashIcon className="h-4 w-4 text-crit-soft" />
                 {confirmDeleteId === contract.id ? 'לאשר מחיקה' : 'מחיקה'}
               </SecondaryButton>
             </div>
@@ -948,10 +981,11 @@ function DangerZone({ customer, deviceCount, onDeleted, onError }) {
         type="button"
         onClick={handleDelete}
         disabled={busy}
-        className={`mt-4 rounded-pill border px-5 py-2.5 text-[14px] font-semibold transition-colors disabled:opacity-50 ${
+        className={`mt-4 flex items-center gap-1.5 rounded-pill border px-5 py-2.5 text-[14px] font-semibold transition-colors disabled:opacity-50 ${
           confirm ? 'border-crit bg-crit text-white hover:bg-crit/90' : 'border-crit/40 text-crit-soft hover:border-crit/60'
         }`}
       >
+        <TrashIcon className="h-4 w-4" />
         {busy ? 'מוחק…' : confirm ? 'לחץ שוב כדי למחוק לצמיתות' : 'מחק לקוח לצמיתות'}
       </button>
     </div>

@@ -3,6 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
+import { DropIcon, ChartIcon } from '../components/ui/Icons';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
@@ -125,7 +126,7 @@ export default function OilScreen() {
 
       <section className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <GlassCard>
-          <CardHead title="יומן מעקב שמנים" subtitle="80 הרישומים האחרונים" />
+          <CardHead icon={DropIcon} tone="teal" title="יומן מעקב שמנים" subtitle="80 הרישומים האחרונים" />
           <Async
             loading={entries.loading}
             error={entries.error}
@@ -143,7 +144,7 @@ export default function OilScreen() {
         </GlassCard>
 
         <GlassCard>
-          <CardHead title="תצרוכת שמן לפי ניחוח" subtitle="החודש הנוכחי, מתוך יומן המילויים" />
+          <CardHead icon={ChartIcon} tone="teal" title="תצרוכת שמן לפי ניחוח" subtitle="החודש הנוכחי, מתוך יומן המילויים" />
           <Async loading={scentUsage.loading} error={scentUsage.error} onRetry={scentUsage.refetch}>
             <div className="flex flex-col gap-[15px]">
               {mapOilByScent(scentUsage.data ?? []).map((item) => (

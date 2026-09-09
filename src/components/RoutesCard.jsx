@@ -46,6 +46,7 @@ export default function RoutesCard({ delay, routes = [], onOpenMap }) {
     <GlassCard delay={delay}>
       <CardHead
         icon={RouteIcon}
+        tone="ok"
         title="פילוח לפי קו הפצה"
         subtitle={`${routes.length} קווים · ${totalDevices} מכשירים בשטח`}
         action="למסלולים"

@@ -70,8 +70,8 @@ export function PrimaryButton({ className = '', loading, children, ...props }) {
     <button
       type="button"
       disabled={loading || props.disabled}
-      className={`rounded-pill bg-gold-500 px-5 py-3 text-[15px] font-extrabold text-slate-950
-                  shadow-lift transition-colors hover:bg-amber-600
+      className={`inline-flex items-center justify-center gap-2 rounded-pill bg-gold-500 px-5 py-3
+                  text-[15px] font-extrabold text-slate-950 shadow-lift transition-colors hover:bg-amber-600
                   disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
       {...props}
     >

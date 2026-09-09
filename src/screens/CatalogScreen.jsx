@@ -3,6 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import { Field, TextInput, Select, PrimaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
+import { BoxIcon, TagIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -171,6 +172,8 @@ function ReturnStockCard({ technicianOptions, modelOptions, scentOptions, onRetu
   return (
     <GlassCard>
       <CardHead
+        icon={BoxIcon}
+        tone="ok"
         title="החזרת מלאי מטכנאי"
         subtitle="מה שיצא ברכב ולא נוצל בשטח — חוזר לכאן, ומצטבר על מה שכבר יש במחסן"
       />
@@ -272,6 +275,8 @@ function ReceiveStockCard({ modelOptions, scentOptions, onReceived }) {
   return (
     <GlassCard>
       <CardHead
+        icon={BoxIcon}
+        tone="teal"
         title="קליטת סחורה למחסן הראשי"
         subtitle="מכשירים ביחידות שלמות · שמנים בליטרים — מצטבר על מה שכבר יש במחסן"
       />
@@ -395,7 +400,7 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
 
   return (
     <GlassCard>
-      <CardHead title="מלאי במחסן הראשי" subtitle="כמה יש כרגע, לפי דגם וניחוח" />
+      <CardHead icon={TagIcon} tone="gold" title="מלאי במחסן הראשי" subtitle="כמה יש כרגע, לפי דגם וניחוח" />
 
       <Async
         loading={warehouse.loading}

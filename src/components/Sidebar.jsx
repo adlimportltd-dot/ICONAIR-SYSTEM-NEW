@@ -52,9 +52,27 @@ function BuiltInMark({ compact, dark = false }) {
 /**
  * לוגו + שם המערכת. משמש בסרגל הצד (dark), בשורה העליונה בנייד (dark)
  * ובמסך ההתחברות (light — `dark` נשאר false שם).
+ *
+ * 2026-09-09 (בעקבות בקשה מפורשת "לחיצה על הלוגו תחזיר לדשבורד"): `onClick`
+ * אופציונלי — אם הועבר (Sidebar/TopBar בתוך המעטפת המחוברת), הלוגו נהיה
+ * כפתור אמיתי עם הובר; ב-LoginScreen (לפני התחברות, אין לאן "לחזור")
+ * הוא לא מועבר בכלל, אז הלוגו נשאר בלתי-לחיץ כברירת מחדל.
  */
-export function Brand({ compact = false, overrideSrc, dark = false }) {
-  return <BrandLogo compact={compact} overrideSrc={overrideSrc} dark={dark} />;
+export function Brand({ compact = false, overrideSrc, dark = false, onClick }) {
+  const logo = <BrandLogo compact={compact} overrideSrc={overrideSrc} dark={dark} />;
+
+  if (!onClick) return logo;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="חזרה לדשבורד"
+      className="rounded-xl text-start transition-opacity hover:opacity-80 focus-visible:opacity-80"
+    >
+      {logo}
+    </button>
+  );
 }
 
 /**
@@ -115,7 +133,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
                  rounded-card border border-white/[0.06] bg-navy-900 px-4 py-[22px] shadow-lift lg:flex"
       aria-label="ניווט ראשי"
     >
-      <Brand dark />
+      <Brand dark onClick={() => onSelect('dashboard')} />
 
       <nav className="flex flex-col gap-1">
         <div className="px-2.5 pb-2 text-[12.5px] font-bold tracking-[2px] text-slate-500">

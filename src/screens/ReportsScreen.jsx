@@ -3,6 +3,7 @@ import GlassCard, { CardHead, Swatch } from '../components/ui/GlassCard';
 import DataTable from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
 import { SecondaryButton, Select } from '../components/ui/Field';
+import { ChartIcon, BoxIcon, DropIcon, DeviceIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
 import { getReportSummary, listRoutes, getRouteConsumptionReport, getStockMovementsSummary } from '../lib/queries';
 import { HEBREW_MONTHS, modelTone, formatNumber } from '../lib/mappers';
@@ -63,7 +64,7 @@ function RouteConsumptionSection() {
   return (
     <section className="mt-3.5 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <GlassCard>
-        <CardHead title="צריכת ריח לפי קו" subtitle="מבוסס רישומי 'סיום ביקור' בפועל בשטח" />
+        <CardHead icon={ChartIcon} tone="slate" title="צריכת ריח לפי קו" subtitle="מבוסס רישומי 'סיום ביקור' בפועל בשטח" />
 
         <div className="mb-3.5 flex flex-wrap gap-2.5">
           <Select value={routeName} onChange={(e) => setRouteName(e.target.value)} options={routeOptions}
@@ -107,7 +108,7 @@ function RouteConsumptionSection() {
       </GlassCard>
 
       <GlassCard>
-        <CardHead title="יצא מול חזר — מלאי טכנאים" subtitle="מ-stock_movements: הקצאות מול החזרות למחסן" />
+        <CardHead icon={BoxIcon} tone="slate" title="יצא מול חזר — מלאי טכנאים" subtitle="מ-stock_movements: הקצאות מול החזרות למחסן" />
         <Async
           loading={movements.loading}
           error={movements.error}
@@ -208,6 +209,8 @@ function Report({ data }) {
       <section className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <GlassCard>
           <CardHead
+            icon={DropIcon}
+            tone="teal"
             title="צריכת שמן חודשית"
             subtitle={`סה״כ ${formatNumber(totalActual, 1)} ליטר מול ממוצע נגרר ${formatNumber(totalTarget, 1)} ליטר`}
             action="ייצוא CSV"
@@ -221,7 +224,7 @@ function Report({ data }) {
 
         <div className="flex flex-col gap-3.5">
           <GlassCard>
-            <CardHead title="פילוח הצי" subtitle="מכשירים לפי דגם" />
+            <CardHead icon={DeviceIcon} tone="gold" title="פילוח הצי" subtitle="מכשירים לפי דגם" />
             <div className="flex flex-col gap-3">
               {fleet.map((row) => (
                 <div key={row.model} className="flex items-center gap-2.5 text-[15px]">
@@ -237,7 +240,7 @@ function Report({ data }) {
           </GlassCard>
 
           <GlassCard>
-            <CardHead title="תצרוכת שמן לפי ניחוח" subtitle="ליטרים שהוזרמו החודש" />
+            <CardHead icon={DropIcon} tone="teal" title="תצרוכת שמן לפי ניחוח" subtitle="ליטרים שהוזרמו החודש" />
             <div className="flex flex-col gap-2.5">
               {scentUsage.map((row) => (
                 <div key={row.name} className="flex items-baseline gap-2 text-[15px]">

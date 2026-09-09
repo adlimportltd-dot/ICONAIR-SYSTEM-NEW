@@ -21,6 +21,7 @@ export default function ServiceCallsCard({ delay, calls = [], subtitle, onOpenAl
     <GlassCard delay={delay}>
       <CardHead
         icon={WrenchIcon}
+        tone="crit"
         title="קריאות שירות פתוחות"
         subtitle={subtitle}
         action="לכל הקריאות"

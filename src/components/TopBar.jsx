@@ -95,7 +95,7 @@ function NotificationsBell({ alerts, completedVisits, loading, onOpen }) {
  */
 export default function TopBar({
   title, meta, online, total, alerts = 0, isLive = false, completedVisits = [], completedVisitsLoading = false,
-  onOpenNotifications, onNewCall, onSearch,
+  onOpenNotifications, onNewCall, onSearch, onLogoClick,
 }) {
   const allOnline = total > 0 && online === total;
 
@@ -103,7 +103,7 @@ export default function TopBar({
     <header className="sticky top-2 z-[15] mb-[18px] flex items-center gap-3 rounded-panel
                         border border-white/[0.06] bg-navy-900 px-3.5 py-3 shadow-lift">
       <div className="lg:hidden">
-        <Brand compact dark />
+        <Brand compact dark onClick={onLogoClick} />
       </div>
 
       <div className="hidden min-w-0 flex-col lg:flex">

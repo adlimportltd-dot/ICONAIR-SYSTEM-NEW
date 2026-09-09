@@ -4,6 +4,7 @@ import DataTable, { StatusChip } from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import { Field, TextInput, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
+import { BoxIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
@@ -90,6 +91,8 @@ export default function StockScreen() {
     <>
       <GlassCard>
         <CardHead
+          icon={BoxIcon}
+          tone="slate"
           title="מלאי נייד"
           subtitle={isAdmin ? 'מה יש ברכב של כל טכנאי כרגע' : 'מה יש ברכב שלך כרגע'}
           action={isAdmin ? 'עדכון ידני' : undefined}

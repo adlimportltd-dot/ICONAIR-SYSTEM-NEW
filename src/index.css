@@ -91,11 +91,13 @@
            text-[13.5px] font-semibold text-text-dim;
   }
 
-  /* --- כפתור פעולה משני — יעד לחיצה נוח לאצבע (≥40px גובה), גבול slate --- */
+  /* --- כפתור פעולה משני — יעד לחיצה נוח לאצבע (≥40px גובה), גבול slate.
+     inline-flex+gap: 2026-09-09, כדי שאייקון+טקסט (עריכה/מחיקה/הוספה)
+     יתיישרו נכון בלי צורך ב-flex ידני בכל מקום שמשתמש בכפתור הזה. --- */
   .ghost-btn {
-    @apply whitespace-nowrap rounded-[11px] border border-[#CBD5E1] bg-white px-4 py-2.5
-           text-[15px] font-medium text-text transition-colors
-           hover:border-gold-500/60 hover:text-gold-600;
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px]
+           border border-[#CBD5E1] bg-white px-4 py-2.5 text-[15px] font-medium text-text
+           transition-colors hover:border-gold-500/60 hover:text-gold-600;
   }
 
   .tabular {

@@ -72,7 +72,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
       <div
         ref={panel}
         className="glass relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-card
-                   border-black/[0.09] p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
+                   p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
       >
         <div className="mb-4 flex items-start gap-3">
           <div className="min-w-0">

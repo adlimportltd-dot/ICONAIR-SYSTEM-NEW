@@ -128,7 +128,7 @@ function RouteLoadPlanCard({ routeName }) {
 
   return (
     <GlassCard>
-      <CardHead title="תכנון העמסה להיום" subtitle="לפי נפח המכל של כל דגם ומצב השמן הנוכחי במכשירים" />
+      <CardHead icon={RouteIcon} tone="ok" title="תכנון העמסה להיום" subtitle="לפי נפח המכל של כל דגם ומצב השמן הנוכחי במכשירים" />
 
       <div className="mb-3.5">
         <Select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} options={technicianOptions}
@@ -820,7 +820,7 @@ function PendingChangeRequestsCard() {
 
   return (
     <GlassCard className="mb-3.5">
-      <CardHead title="בקשות שינוי ממתינות" subtitle="שינויי ניחוח/דגם שטכנאים ביקשו בשטח — דורש אישור" />
+      <CardHead icon={NavigationIcon} tone="slate" title="בקשות שינוי ממתינות" subtitle="שינויי ניחוח/דגם שטכנאים ביקשו בשטח — דורש אישור" />
       <Async loading={requests.loading} error={requests.error} onRetry={requests.refetch}>
         <div className="flex flex-col gap-2">
           {(requests.data ?? []).map((r) => (

@@ -249,6 +249,7 @@ function Shell() {
             completedVisitsLoading={completedVisits.loading}
             onNewCall={openNewCall}
             onSearch={() => navigate('devices')}
+            onLogoClick={() => navigate('dashboard')}
           />
 
           {activeId === 'dashboard' && (

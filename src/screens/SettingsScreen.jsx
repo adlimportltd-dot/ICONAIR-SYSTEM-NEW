@@ -3,6 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import { SecondaryButton, TextInput, PrimaryButton } from '../components/ui/Field';
 import { Async } from '../components/ui/States';
+import { UsersIcon, RouteIcon, TagIcon, DeviceIcon, DropIcon, SettingsIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -45,7 +46,7 @@ export default function SettingsScreen() {
   return (
     <section className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <GlassCard>
-        <CardHead title="החשבון שלי" />
+        <CardHead icon={SettingsIcon} tone="slate" title="החשבון שלי" />
 
         <dl className="flex flex-col gap-3 text-[15px]">
           <div className="flex items-baseline justify-between gap-3">
@@ -78,7 +79,7 @@ export default function SettingsScreen() {
 
       <div className="flex flex-col gap-3.5">
         <GlassCard>
-          <CardHead title="צוות" subtitle="משתמשים פעילים במערכת" />
+          <CardHead icon={UsersIcon} tone="slate" title="צוות" subtitle="משתמשים פעילים במערכת" />
           <Async loading={team.loading} error={team.error} onRetry={team.refetch}
                  isEmpty={team.data?.length === 0}>
             <DataTable columns={teamColumns} rows={team.data ?? []} rowKey={(row) => row.id} />
@@ -86,7 +87,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         <GlassCard>
-          <CardHead title="קווי הפצה" subtitle="לפי שדה 'קו הפצה' בכרטיס הלקוח" />
+          <CardHead icon={RouteIcon} tone="ok" title="קווי הפצה" subtitle="לפי שדה 'קו הפצה' בכרטיס הלקוח" />
           <Async loading={routes.loading} error={routes.error} onRetry={routes.refetch}
                  isEmpty={routes.data?.length === 0}>
             <DataTable columns={routeColumns} rows={routes.data ?? []} rowKey={(row) => row.name} />
@@ -145,7 +146,7 @@ function BrandingCard() {
 
   return (
     <GlassCard>
-      <CardHead title="מיתוג — לוגו המערכת" subtitle="מוצג בסרגל הצד, במסך הכניסה ובראש המסך בנייד" />
+      <CardHead icon={TagIcon} tone="gold" title="מיתוג — לוגו המערכת" subtitle="מוצג בסרגל הצד, במסך הכניסה ובראש המסך בנייד" />
 
       <div className="mb-4 flex items-center justify-center rounded-row border border-black/[0.07] bg-black/[0.02] p-5">
         <Brand overrideSrc={previewUrl ?? undefined} />
@@ -233,7 +234,7 @@ function DeviceModelsCard({ deviceModels }) {
 
   return (
     <GlassCard>
-      <CardHead title="דגמי מכשירים" subtitle="הרשימה שממנה נבחר דגם בכל מסך במערכת" />
+      <CardHead icon={DeviceIcon} tone="gold" title="דגמי מכשירים" subtitle="הרשימה שממנה נבחר דגם בכל מסך במערכת" />
 
       <form onSubmit={add} className="mb-3.5 flex gap-2">
         <TextInput value={name} onChange={(e) => setName(e.target.value)}
@@ -313,7 +314,7 @@ function ScentsCard({ scents }) {
 
   return (
     <GlassCard>
-      <CardHead title="ניחוחות" subtitle="הרשימה שממנה נבחר ניחוח בכל מסך במערכת" />
+      <CardHead icon={DropIcon} tone="teal" title="ניחוחות" subtitle="הרשימה שממנה נבחר ניחוח בכל מסך במערכת" />
 
       <form onSubmit={add} className="mb-3.5 flex gap-2">
         <TextInput value={name} onChange={(e) => setName(e.target.value)}

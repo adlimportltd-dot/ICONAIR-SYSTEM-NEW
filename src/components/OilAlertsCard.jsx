@@ -12,7 +12,7 @@ function levelFill(level) {
 export default function OilAlertsCard({ delay, alerts = [], onAssignAll }) {
   return (
     <GlassCard delay={delay}>
-      <CardHead icon={DropIcon} title="התראות מלאי שמן" subtitle="מכשירים מתחת ל-20%" />
+      <CardHead icon={DropIcon} tone="crit" title="התראות מלאי שמן" subtitle="מכשירים מתחת ל-20%" />
 
       <div className="flex flex-col gap-3.5">
         {alerts.map((alert) => (

@@ -184,6 +184,25 @@ export function ArrowDownIcon(props) {
   );
 }
 
+/** שברון פונה לכיוון "התחלה" (ימין ב-RTL) — משמש לכפתורי חזרה/back */
+export function ChevronRightIcon(props) {
+  return (
+    <svg {...base} strokeWidth={2.2} {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+/** עיפרון — לכל כפתור "עריכה" במערכת, כדי שפעולת העריכה תיראה ולא רק תיכתב */
+export function EditIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props) {
   return (
     <svg {...base} {...props}>
