@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
@@ -9,20 +9,29 @@ import { PrinterIcon, UsersIcon } from '../components/ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
-import { listCustomers, setCustomerPaid } from '../lib/queries';
+import { listCustomers, setCustomerPaid, listAllCustomerDevicePricing } from '../lib/queries';
 import {
   CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, PAYMENT_TYPE_ICON,
-  formatCurrency, formatDate, summarizeDevicesByModel, summarizeDevicesByScent, computeVat, isOverdue,
+  formatCurrency, formatDate, summarizeDevicesByModel, summarizeDevicesByScent, isOverdue,
 } from '../lib/mappers';
+import { computeAllCustomerTotals, effectiveCustomerBilling } from '../lib/pricing';
 
 const STATUS_TONE = { active: 'ok', onboarding: 'gold', paused: 'warn', churned: 'crit' };
 
 const EMPTY_VAT_BUCKET = { preVat: 0, vatAmount: 0, total: 0 };
 
-function summarizeCollection(rows) {
+/**
+ * deviceTotalsMap (מ-computeAllCustomerTotals, pricing.js) הוא הבסיס
+ * לכל סיכום כספי כאן — 2026-09-10, תיקון לבאג שבו לקוחות ריבוי-כתובות
+ * (כמו אוורסט) נספרו כ-0 בסיכום הכללי כי amount_due הידני שלהם מעולם
+ * לא עודכן, בעוד התמחור האמיתי יושב על המכשירים/הכתובות בכרטיס עצמו.
+ * effectiveCustomerBilling נופל אוטומטית ל-amount_due רק ללקוח בלי שום
+ * מכשיר מתומחר.
+ */
+function summarizeCollection(rows, deviceTotalsMap) {
   const totals = rows.reduce(
     (acc, row) => {
-      const vat = computeVat(row.amount_due, row.vat_mode);
+      const vat = effectiveCustomerBilling(row, deviceTotalsMap.get(row.id));
       const bucket = row.is_paid ? acc.paidBreakdown : acc.unpaidBreakdown;
       bucket.preVat += vat.preVat;
       bucket.vatAmount += vat.vatAmount;
@@ -80,19 +89,30 @@ export default function CustomersScreen() {
 
   const allCustomers = useQuery(() => listCustomers({}), []);
 
-  const collectionTotals = summarizeCollection(allCustomers.data ?? []);
+  // תמחור-מכשירים גורף לכל הלקוחות — ר' ההערה על summarizeCollection
+  // למעלה. admin בלבד (unit_price רגיש כספית, ורק admin רואה בכלל את
+  // עמודות/סיכומי הכספים במסך הזה).
+  const pricing = useQuery(listAllCustomerDevicePricing, [], { enabled: isAdmin });
+  const deviceTotalsMap = useMemo(
+    () => computeAllCustomerTotals(pricing.data?.devices ?? [], pricing.data?.sitePrices ?? []),
+    [pricing.data]
+  );
+
+  const collectionTotals = summarizeCollection(allCustomers.data ?? [], deviceTotalsMap);
   const { totalRevenue, methodBreakdown, revenueBreakdown, paidBreakdown, unpaidBreakdown } = collectionTotals;
 
-  const printSummary = summarizeCollection(customers.data ?? []);
+  const printSummary = summarizeCollection(customers.data ?? [], deviceTotalsMap);
 
   function refetchAll() {
     customers.refetch();
     allCustomers.refetch();
+    pricing.refetch();
   }
 
   // סנכרון רוחבי: שינוי בכרטיס לקוח (גם ממכשיר/משתמש אחר) מרענן את
-  // הרשימה והסיכומים הכספיים חי.
-  useRealtime(['customers', 'devices', 'customer_sites'], refetchAll);
+  // הרשימה והסיכומים הכספיים חי. customer_site_model_prices נוסף
+  // 2026-09-10 — עריכת מחיר-דגם לכתובת חייבת לעדכן את הסיכום הכללי חי.
+  useRealtime(['customers', 'devices', 'customer_sites', 'customer_site_model_prices'], refetchAll);
 
   async function togglePaid(row, event) {
     event.stopPropagation();
@@ -156,7 +176,7 @@ export default function CustomersScreen() {
       label: 'תשלום',
       width: '160px',
       render: (row) => {
-        const { total, vatAmount } = computeVat(row.amount_due, row.vat_mode);
+        const { total, vatAmount } = effectiveCustomerBilling(row, deviceTotalsMap.get(row.id));
         return (
           <div className="min-w-0">
             <div className="truncate text-[14px]">{PAYMENT_TYPE_LABEL[row.payment_type]}</div>
@@ -410,12 +430,12 @@ export default function CustomersScreen() {
 
     </div>
 
-      {isAdmin && <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} />}
+      {isAdmin && <CustomersPrintReport rows={customers.data ?? []} summary={printSummary} deviceTotalsMap={deviceTotalsMap} />}
     </>
   );
 }
 
-function CustomersPrintReport({ rows, summary }) {
+function CustomersPrintReport({ rows, summary, deviceTotalsMap }) {
   const generatedAt = new Date().toLocaleString('he-IL', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
@@ -457,7 +477,7 @@ function CustomersPrintReport({ rows, summary }) {
         </thead>
         <tbody>
           {rows.map((row) => {
-            const { total } = computeVat(row.amount_due, row.vat_mode);
+            const { total } = effectiveCustomerBilling(row, deviceTotalsMap.get(row.id));
             return (
               <tr key={row.id}>
                 <td style={{ border: '1px solid #ccc', padding: '5px 7px', fontWeight: 600 }}>{row.name}</td>

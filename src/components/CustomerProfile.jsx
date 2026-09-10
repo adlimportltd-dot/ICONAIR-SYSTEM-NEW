@@ -32,6 +32,9 @@ import {
   DEVICE_STATUS_LABEL, CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, modelTone, relativeTime,
   formatDate, formatDateTime, summarizeDevicesByModel, computeVat, formatCurrency,
 } from '../lib/mappers';
+import {
+  computeDeviceBreakdown, computeCustomerDeviceTotal, priceMapOf, hasOwnPrice, effectivePrice,
+} from '../lib/pricing';
 import { whatsappLink } from '../lib/navLinks';
 
 const DEVICE_STATUS_TONE = { active: 'ok', offline: 'crit', maintenance: 'warn', uninstalled: 'slate' };
@@ -47,38 +50,12 @@ const CONTRACT_STATUS_TONE = {
 
 const UNASSIGNED = '__none__';
 
-/* =====================================================================
-   תמחור — מקור אמת אחד לכל הכרטיס
-   מחיר-יחידה למכשיר: devices.unit_price אם הוזן ידנית (חריג), אחרת
-   מחיר-הדגם של הכתובת שלו (customer_site_model_prices), אחרת 0.
-   הכול לפני מע"מ; מע"מ 18% מחושב מעל הסכום (computeVat, 'excluded').
-   ===================================================================== */
-const priceMapOf = (prices) => new Map((prices ?? []).map((p) => [p.model, Number(p.unit_price)]));
-
-const hasOwnPrice = (device) => device.unit_price !== null && device.unit_price !== undefined && device.unit_price !== '';
-
-function effectivePrice(device, priceMap) {
-  if (hasOwnPrice(device)) return Number(device.unit_price);
-  return priceMap.get(device.model) ?? 0;
-}
-
-function computeBreakdown(devices, prices) {
-  const priceMap = priceMapOf(prices);
-  const byModel = new Map();
-  for (const d of devices) {
-    if (d.status === 'uninstalled') continue;
-    const line = byModel.get(d.model) ?? {
-      model: d.model, count: 0, defaultUnitPrice: priceMap.get(d.model) ?? 0, lineTotal: 0, overrides: 0,
-    };
-    line.count += 1;
-    line.lineTotal += effectivePrice(d, priceMap);
-    if (hasOwnPrice(d)) line.overrides += 1;
-    byModel.set(d.model, line);
-  }
-  const lines = [...byModel.values()].sort((a, b) => a.model.localeCompare(b.model, 'he'));
-  const preVatRaw = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-  return { lines, ...computeVat(preVatRaw, 'excluded') };
-}
+/*
+ * תמחור — מקור אמת אחד לכל המערכת, לא רק לכרטיס הזה: computeDeviceBreakdown/
+ * computeCustomerDeviceTotal עברו ל-src/lib/pricing.js (2026-09-10) כדי
+ * ש-CustomersScreen/דוחות יחשבו בדיוק אותו סכום ללקוחות ריבוי-כתובות
+ * כמו אוורסט, במקום ליפול ל-amount_due הידני שנשאר 0 עבורם.
+ */
 
 /**
  * כרטיס לקוח מאוחד (Master Profile) — מסך שלם בתוך מסך הלקוחות, לא
@@ -140,12 +117,10 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
   const unassigned = devicesBySite.get(UNASSIGNED) ?? [];
 
   // סיכום כולל: כתובות (לפי מחיר-דגם/מכשיר) + מכשירים בלי כתובת (לפי מחיר-מכשיר בלבד)
-  const totals = useMemo(() => {
-    let preVat = 0;
-    for (const site of siteRows) preVat += computeBreakdown(devicesBySite.get(site.id) ?? [], site.prices).preVat;
-    preVat += computeBreakdown(unassigned, []).preVat;
-    return computeVat(preVat, 'excluded');
-  }, [siteRows, devicesBySite, unassigned]);
+  const totals = useMemo(
+    () => computeCustomerDeviceTotal(rows, siteRows),
+    [rows, siteRows]
+  );
 
   function refreshAll() {
     devices.refetch();
@@ -245,11 +220,12 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
                   key={customer.updated_at ?? customer.id}
                   customer={customer}
                   isAdmin={isAdmin}
+                  computedBilling={totals}
                   onSaved={() => { setDetailsEditing(false); refreshAll(); }}
                   onCancel={() => setDetailsEditing(false)}
                 />
               ) : (
-                <CustomerDetailsView customer={customer} isAdmin={isAdmin} />
+                <CustomerDetailsView customer={customer} isAdmin={isAdmin} computedBilling={totals} />
               )}
             </div>
           </div>
@@ -372,11 +348,19 @@ function SummaryStat({ label, value }) {
   );
 }
 
-/** תצוגת פרטי הלקוח — שורות ברורות, טלפון ואימייל לחיצים לשטח */
-function CustomerDetailsView({ customer, isAdmin }) {
+/**
+ * תצוגת פרטי הלקוח — שורות ברורות, טלפון ואימייל לחיצים לשטח.
+ * "חיוב כללי" מציג את computedBilling (סכום המכשירים/כתובות האמיתי,
+ * אותו מקור בדיוק כמו רצועת הסיכום למעלה בכרטיס) כשקיים תמחור-מכשירים
+ * ללקוח — לא את amount_due הידני, שנשאר 0/מיושן אצל לקוחות ריבוי-כתובות
+ * כמו אוורסט. amount_due עדיין המקור היחיד ללקוח בלי שום מכשיר מתומחר
+ * (חיוב-גלובלי ידני טהור) — ר' effectiveCustomerBilling ב-pricing.js
+ * לאותה לוגיקה בדיוק, כאן פשוט אין צורך לקרוא לה כי totals כבר מחושב.
+ */
+function CustomerDetailsView({ customer, isAdmin, computedBilling }) {
   const tel = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
   const wa = whatsappLink(customer.phone, '');
-  const vat = computeVat(customer.amount_due, customer.vat_mode);
+  const vat = computedBilling?.hasDeviceBilling ? computedBilling : computeVat(customer.amount_due, customer.vat_mode);
 
   return (
     <dl className="flex flex-col divide-y divide-black/[0.06] text-[15px]">
@@ -405,6 +389,9 @@ function CustomerDetailsView({ customer, isAdmin }) {
           <Row label="חיוב כללי (כולל מע״מ)">
             <span className="tabular font-mono font-semibold">{formatCurrency(vat.total)}</span>
             <span className="ms-2 text-[13px] text-text-faint">לפני מע״מ {formatCurrency(vat.preVat)}</span>
+            {computedBilling?.hasDeviceBilling && (
+              <span className="ms-2 text-[13px] text-teal-500">מחושב אוטומטית ממכשירים/כתובות</span>
+            )}
           </Row>
         </>
       )}
@@ -430,7 +417,7 @@ function SiteCard({ site, devices, isAdmin, onAddDevice, onEditDevice, onChanged
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-  const breakdown = computeBreakdown(devices, site.prices);
+  const breakdown = computeDeviceBreakdown(devices, site.prices);
 
   async function handleDelete() {
     if (!confirmDelete) { setConfirmDelete(true); return; }
@@ -564,7 +551,7 @@ function SiteEditForm({ site, onSaved, onCancel }) {
    קבוצת מכשירים (של כתובת, או "ללא כתובת") + טבלת תמחור לדגם + סיכום
    ===================================================================== */
 function DeviceGroup({ title, subtitle, devices, prices, isAdmin, site = null, onEditDevice, onChanged, onError, showSummary, bare = false }) {
-  const breakdown = computeBreakdown(devices, prices);
+  const breakdown = computeDeviceBreakdown(devices, prices);
   const priceMap = priceMapOf(prices);
 
   const body = (

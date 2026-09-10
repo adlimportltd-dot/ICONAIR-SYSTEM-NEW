@@ -38,17 +38,22 @@ function fromCustomer(customer) {
  * מוטבעת בתוך כרטיס הלקוח המאוחד — אותם שדות, אותה ולידציה, מקור
  * אמת אחד. customer === null → יצירה; אחרת עדכון של אותו לקוח.
  *
- * הערה על החיוב: amount_due כאן הוא הסכום *הכללי* של הלקוח (חד-כתובתי,
- * כפי שהיה תמיד). ללקוח רב-כתובתי התמחור המדויק הוא לפי כתובת/מכשיר
- * בכרטיס עצמו — שם מוצג הסכום המחושב.
+ * הערה על החיוב (עודכן 2026-09-10): amount_due הוא הסכום *הכללי* הידני
+ * של לקוח בלי שום מכשיר מתומחר. ללקוח עם תמחור מכשירים/כתובות (הרוב
+ * המכריע כיום, כולל ריבוי-כתובות כמו אוורסט) computedBilling — שמגיע
+ * מ-CustomerProfile.jsx, אותו חישוב בדיוק כמו רצועת הסיכום למעלה
+ * בכרטיס — הוא הסכום הקובע, והשדה הופך לתצוגה בלבד. ר' pricing.js
+ * effectiveCustomerBilling לאותה לוגיקה, ו-CustomersScreen.jsx לאותו
+ * עיקרון ברשימת הלקוחות/הדוחות.
  */
-export default function CustomerDetailsForm({ customer = null, isAdmin, onSaved, onCancel, submitLabel }) {
+export default function CustomerDetailsForm({ customer = null, isAdmin, computedBilling, onSaved, onCancel, submitLabel }) {
   const [form, setForm] = useState(() => fromCustomer(customer));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const vat = computeVat(form.amount_due, form.vat_mode);
+  const displayVat = computedBilling?.hasDeviceBilling ? computedBilling : vat;
   const isEdit = Boolean(customer?.id);
 
   async function submit(event) {
@@ -130,33 +135,50 @@ export default function CustomerDetailsForm({ customer = null, isAdmin, onSaved,
                 ]}
               />
             </Field>
-            <Field label="אופן חישוב מע״מ" hint="קובע איך הסכום שתזין מתפרש">
-              <Select
-                value={form.vat_mode}
-                onChange={set('vat_mode')}
-                options={Object.entries(VAT_MODE_LABEL).map(([value, label]) => ({ value, label }))}
-              />
-            </Field>
-            <Field label={form.vat_mode === 'excluded' ? 'מחיר בסיס (לפני מע״מ)' : 'סה״כ לתשלום (כולל מע״מ)'}>
-              <TextInput type="number" min={0} step="0.01" value={form.amount_due} onChange={set('amount_due')} />
-            </Field>
+            {computedBilling?.hasDeviceBilling ? (
+              <Field label="חיוב כללי" hint="מחושב אוטומטית מהמכשירים/הכתובות — לא ניתן לעריכה ידנית כאן">
+                <div className="flex h-[42px] items-center rounded-[10px] border border-black/[0.09] bg-ink-800 px-3.5 text-[15px] font-semibold text-text-dim">
+                  {formatCurrency(computedBilling.total)} <span className="ms-1.5 text-[13px] font-normal text-text-faint">כולל מע״מ</span>
+                </div>
+              </Field>
+            ) : (
+              <>
+                <Field label="אופן חישוב מע״מ" hint="קובע איך הסכום שתזין מתפרש">
+                  <Select
+                    value={form.vat_mode}
+                    onChange={set('vat_mode')}
+                    options={Object.entries(VAT_MODE_LABEL).map(([value, label]) => ({ value, label }))}
+                  />
+                </Field>
+                <Field label={form.vat_mode === 'excluded' ? 'מחיר בסיס (לפני מע״מ)' : 'סה״כ לתשלום (כולל מע״מ)'}>
+                  <TextInput type="number" min={0} step="0.01" value={form.amount_due} onChange={set('amount_due')} />
+                </Field>
+              </>
+            )}
             <Field label="תאריך פירעון" hint="מתי אמור להיכנס התשלום">
               <TextInput type="date" value={form.payment_due_date} onChange={set('payment_due_date')} />
             </Field>
           </div>
 
+          {computedBilling?.hasDeviceBilling && (
+            <div className="mt-2 text-[13px] text-teal-500">
+              ללקוח הזה יש תמחור מכשירים/כתובות בכרטיס — הסכום כאן עוקב אחריו אוטומטית.
+              לשינוי הסכום, ערכו את מחירי המכשירים/הדגמים בכתובות למטה.
+            </div>
+          )}
+
           <div className="mt-3.5 grid grid-cols-3 gap-2.5 rounded-row border border-black/[0.06] bg-ink-800 px-3.5 py-3 text-center">
             <div>
               <div className="text-[10.5px] text-text-faint">לפני מע״מ</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(vat.preVat)}</div>
+              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold">{formatCurrency(displayVat.preVat)}</div>
             </div>
             <div>
               <div className="text-[10.5px] text-text-faint">מע״מ (18%)</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-text-dim">{formatCurrency(vat.vatAmount)}</div>
+              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-text-dim">{formatCurrency(displayVat.vatAmount)}</div>
             </div>
             <div>
               <div className="text-[10.5px] text-text-faint">סה״כ לתשלום</div>
-              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-600">{formatCurrency(vat.total)}</div>
+              <div className="tabular mt-0.5 font-mono text-[13px] font-semibold text-gold-600">{formatCurrency(displayVat.total)}</div>
             </div>
           </div>
         </div>

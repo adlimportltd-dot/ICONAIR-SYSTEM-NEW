@@ -681,6 +681,21 @@ export function listCustomers({ search = '', status = '', paymentStatus = '', pa
   return query.then(unwrap);
 }
 
+/**
+ * שתי שאילתות גורפות (לא N+1 פר-לקוח) שמזינות את computeAllCustomerTotals
+ * ב-pricing.js — כל מכשיר פעיל + כל שורת מחיר-דגם-לכתובת במערכת, כדי
+ * שרשימת הלקוחות/הדוחות יוכלו לחשב "כמה כל לקוח באמת משלם" (כולל
+ * לקוחות ריבוי-כתובות כמו אוורסט) בלי לעבור פר-לקוח על השרת.
+ * admin בלבד בצד ה-UI (unit_price רגיש כספית) — ר' קריאה ב-CustomersScreen.
+ */
+export async function listAllCustomerDevicePricing() {
+  const [devices, sitePrices] = await Promise.all([
+    supabase.from('devices').select('customer_id, site_id, model, unit_price, status').then(unwrap),
+    supabase.from('customer_site_model_prices').select('site_id, model, unit_price').then(unwrap),
+  ]);
+  return { devices, sitePrices };
+}
+
 export const createCustomer = (payload) =>
   supabase.from('customers').insert(payload).select('*, devices(model, status, scent_name)').single().then(unwrap);
 
