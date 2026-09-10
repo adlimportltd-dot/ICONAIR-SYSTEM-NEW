@@ -5,10 +5,12 @@ import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
 import { DropIcon, ChartIcon } from '../components/ui/Icons';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
+import MlSlider from '../components/ui/MlSlider';
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
 import {
   listOilEntries, completeVisit, createOilEntry, listDeviceOptions, getOilByScent, listScents,
+  listAllDeviceModels,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, formatNumber, mapOilByScent } from '../lib/mappers';
@@ -26,8 +28,14 @@ const STOCK_FILL = {
 
 const emptyForm = () => ({
   device_id: '', scent_name: '', event_type: 'refill',
-  liters_added: '0.35', level_before_pct: '', level_after_pct: '100', notes: '',
+  liters_added: '0', level_before_pct: '', level_after_pct: '100', notes: '',
 });
+
+// אותו עיקרון בדיוק כמו RoutesScreen.jsx (ר' ההערה שם על MlSlider) —
+// קפיצות 10 מ"ל, ומקסימום כללי כשלמכשיר הנבחר (או לפני שנבחר מכשיר
+// בכלל) אין capacity_ml מוגדר לדגם שלו.
+const ML_STEP = 10;
+const DEFAULT_SLIDER_MAX_ML = 1000;
 
 export default function OilScreen() {
   const [search, setSearch] = useState('');
@@ -37,6 +45,7 @@ export default function OilScreen() {
   const scentUsage = useQuery(() => getOilByScent({ limit: 8 }), []);
   const devices = useQuery(listDeviceOptions, []);
   const scents = useQuery(listScents, []);
+  const deviceModels = useQuery(listAllDeviceModels, []);
 
   // הסינון מקומי: כבר הורדנו 80 שורות, אין טעם לחזור לשרת על כל תו
   const filtered = useMemo(() => {
@@ -173,6 +182,7 @@ export default function OilScreen() {
         deviceOptions={deviceOptions}
         scentOptions={scentOptions}
         devices={devices.data ?? []}
+        deviceModels={deviceModels.data ?? []}
         onClose={() => setFormOpen(false)}
         onCreated={() => {
           setFormOpen(false);
@@ -185,7 +195,7 @@ export default function OilScreen() {
   );
 }
 
-function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose, onCreated }) {
+function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, deviceModels, onClose, onCreated }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
@@ -201,6 +211,12 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
+  const selectedDevice = devices.find((d) => d.id === form.device_id) ?? null;
+  const selectedModel = selectedDevice ? deviceModels.find((m) => m.name === selectedDevice.model) : null;
+  const sliderMaxMl = selectedModel?.capacity_ml
+    ? Math.round(selectedModel.capacity_ml / ML_STEP) * ML_STEP
+    : DEFAULT_SLIDER_MAX_ML;
+
   /** בחירת מכשיר ממלאת מראש את המפלס הנוכחי — הטכנאי לא צריך לזכור אותו */
   function pickDevice(event) {
     const id = event.target.value;
@@ -208,6 +224,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
     setForm((prev) => ({
       ...prev,
       device_id: id,
+      liters_added: '0',
       level_before_pct: device ? String(device.oil_level_pct) : '',
     }));
   }
@@ -300,13 +317,29 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, onClose,
             <Select value={form.scent_name} onChange={set('scent_name')} options={scentOptions}
                     placeholder="ללא ניחוח ספציפי" />
           </Field>
-          <Field label="ליטרים שהוזרמו">
-            <TextInput type="number" step="0.001" min="0" value={form.liters_added} onChange={set('liters_added')} />
-          </Field>
           <Field label="מפלס לפני (%)">
             <TextInput type="number" min={0} max={100} value={form.level_before_pct} onChange={set('level_before_pct')} />
           </Field>
         </div>
+
+        <Field
+          label="כמות שנוספה"
+          hint={
+            !selectedDevice
+              ? 'בחר מכשיר כדי לראות את קיבולת המכל שלו'
+              : selectedModel?.capacity_ml
+                ? `קיבולת ${selectedDevice.model}: ${sliderMaxMl} מ״ל`
+                : 'לא הוגדרה קיבולת לדגם הזה — טווח כללי'
+          }
+        >
+          <MlSlider
+            valueMl={Math.round(Number(form.liters_added || 0) * 1000)}
+            maxMl={sliderMaxMl}
+            step={ML_STEP}
+            disabled={!selectedDevice}
+            onChange={(ml) => setForm((prev) => ({ ...prev, liters_added: String(ml / 1000) }))}
+          />
+        </Field>
 
         <Field label="מפלס אחרי (%)" required>
           <TextInput type="number" min={0} max={100} value={form.level_after_pct}
