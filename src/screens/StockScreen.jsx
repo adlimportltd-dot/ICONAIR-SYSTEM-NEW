@@ -11,7 +11,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import {
   listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
   returnStockToWarehouse, returnAllStockToWarehouse, resetTechnicianStock, listRoutes, getRouteLoadPlan,
-  resetRouteInitialFill,
+  resetRouteCycle,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { getCycleInfo, containersLabel } from '../lib/mappers';
@@ -76,12 +76,12 @@ function TodayLoadCard() {
   const [resetError, setResetError] = useState(null);
   const [resetConfirming, setResetConfirming] = useState(false);
 
-  async function runInitialReset() {
-    if (!plan.data?.newDevices?.length) return;
+  async function runCycleReset() {
+    if (!plan.data?.deviceIds?.length) return;
     setResetError(null);
     setResetBusy(true);
     try {
-      await resetRouteInitialFill(plan.data.newDevices.map((d) => d.id));
+      await resetRouteCycle(plan.data.deviceIds);
       setResetConfirming(false);
       plan.refetch();
     } catch (caught) {
@@ -282,6 +282,54 @@ function TodayLoadCard() {
               </div>
             )}
 
+            {/*
+              2026-09-10 (מדיניות מפורשת): בתחילת מחזור חדש כל מכשיר
+              בהיקף שנבחר — כולל מכשירים שכבר טופלו במחזורים קודמים,
+              לא רק "חדשים" — נחשב ריק ודורש מילוי מלא. זה הפוך במכוון
+              מהגרסה הקודמת של הכפתור הזה (שנגעה רק במכשירים שמעולם לא
+              טופלו) — ר' resetRouteCycle/reset_route_cycle ב-queries.js.
+              לכן הכפתור זמין כל עוד יש מכשירים בהיקף, לא רק כשיש
+              "מכשירים חדשים" — ומוצג רק למנהל, כי זו פעולה שמשפיעה על
+              כל התכנון של הבוקר.
+            */}
+            {isAdmin && plan.data.deviceIds.length > 0 && (
+              <div className="mt-5 rounded-row border border-crit/25 bg-crit/[0.06] px-4 py-3.5">
+                {!resetConfirming ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1 text-[14px] text-text-dim">
+                      תחילת מחזור חדש? כל {plan.data.deviceCount} המכשירים ב{isAllRoutes ? 'כל הקווים' : 'קו זה'}
+                      {' '}יסומנו כריקים (0%) ויידרשו מילוי מלא — כולל מכשירים שכבר טופלו בעבר, לא רק חדשים.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setResetConfirming(true)}
+                      className="ghost-btn flex-none !border-crit/40 !text-crit-soft"
+                    >
+                      איפוס לתחילת מחזור
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1 text-[14.5px] font-semibold text-crit-soft">
+                      לאפס את כל {plan.data.deviceCount} המכשירים ל-0% (דורש מילוי מלא), כולל מכשירים שכבר טופלו בעבר?
+                      פעולה זו תעדכן את חישוב ההעמסה למעלה לכמות המלאה.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={runCycleReset}
+                      disabled={resetBusy}
+                      className="rounded-pill border border-crit/40 bg-crit/10 px-4 py-2 text-[14px]
+                                 font-bold text-crit-soft transition-colors hover:border-crit/60 disabled:opacity-40"
+                    >
+                      {resetBusy ? 'מאפס…' : 'אשר איפוס מחזור'}
+                    </button>
+                    <SecondaryButton onClick={() => setResetConfirming(false)}>ביטול</SecondaryButton>
+                  </div>
+                )}
+                {resetError && <div className="mt-2 text-[13.5px] text-crit-soft">{resetError}</div>}
+              </div>
+            )}
+
             {plan.data.newDevices.length > 0 && (
               <div className="mt-5">
                 <CardHead
@@ -294,51 +342,6 @@ function TodayLoadCard() {
                       : 'עדיין לא קיבלו שום טיפול בשטח — לקחת פיזית מהמדף לפני שיוצאים'
                   }
                 />
-
-                {/*
-                  2026-09-10: מכשיר שמעולם לא קיבל שירות מוצג כ"100% מלא"
-                  רק כי זו ברירת המחדל הטכנית של הטבלה — לא תצפית אמיתית.
-                  זה גורם לחישוב ההעמסה למעלה לצאת "0 מ״ל" למכשירים שלמעשה
-                  צריכים מילוי מלא. הכפתור הזה רושם קריאת-איפוס אמיתית
-                  (לא "מילוי" מזויף) רק למכשירים האלה בדיוק — מכשיר שכבר
-                  קיבל שירות פעם אחת לעולם לא יושפע, גם אם ייבחר בטעות.
-                */}
-                {isAdmin && (
-                  <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.06] px-4 py-3.5">
-                    {!resetConfirming ? (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="min-w-0 flex-1 text-[14px] text-text-dim">
-                          המכשירים האלה מוצגים כ"מלאים" רק כי הם עוד לא קיבלו אף רישום —
-                          לכן חישוב ההעמסה למעלה יוצא 0. אפשר לסמן אותם כדורשים מילוי מלא.
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setResetConfirming(true)}
-                          className="ghost-btn flex-none !border-crit/40 !text-crit-soft"
-                        >
-                          איפוס קו / תחילת עבודה
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="min-w-0 flex-1 text-[14.5px] font-semibold text-crit-soft">
-                          לסמן את {plan.data.newDevices.length} המכשירים האלה כדורשים מילוי מלא, ולעדכן את חישוב ההעמסה למעלה בהתאם?
-                        </div>
-                        <button
-                          type="button"
-                          onClick={runInitialReset}
-                          disabled={resetBusy}
-                          className="rounded-pill border border-crit/40 bg-crit/10 px-4 py-2 text-[14px]
-                                     font-bold text-crit-soft transition-colors hover:border-crit/60 disabled:opacity-40"
-                        >
-                          {resetBusy ? 'מאפס…' : 'אשר איפוס'}
-                        </button>
-                        <SecondaryButton onClick={() => setResetConfirming(false)}>ביטול</SecondaryButton>
-                      </div>
-                    )}
-                    {resetError && <div className="mt-2 text-[13.5px] text-crit-soft">{resetError}</div>}
-                  </div>
-                )}
 
                 <div className="flex flex-col gap-2.5">
                   {plan.data.newDevices.slice(0, NEW_DEVICES_SHOWN).map((d) => (

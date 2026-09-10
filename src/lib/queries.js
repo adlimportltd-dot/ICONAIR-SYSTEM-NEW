@@ -532,20 +532,27 @@ export async function getRouteLoadPlan(routeName) {
 
   return {
     items, missing, newDevices, deviceCount: routeDevices.length,
+    deviceIds: routeDevices.map((d) => d.id),
     bufferPct: Number(settings?.route_load_buffer_pct ?? 0),
   };
 }
 
 /**
- * "איפוס קו / תחילת עבודה" (phase26) — למכשירים שמעולם לא קיבלו שירות
- * בפועל (oil_level_pct=100 הוא רק ברירת-מחדל טכנית, לא תצפית אמיתית),
- * רושם קריאת-איפוס אמיתית (event_type='reading', לא 'refill' — לא
- * "מולא" בפועל) כדי שחישוב ההעמסה ישקף שהם צריכים מילוי מלא. השרת
- * מוודא בעצמו שהוא נוגע רק במכשירים שבאמת עוד לא קיבלו אף רישום —
- * ר' reset_route_initial_fill ב-iconair_schema_phase26.
+ * "איפוס לתחילת מחזור חדש" (phase27) — מאפס את **כל** המכשירים בהיקף
+ * שנבחר (קו יחיד, או deviceIds ממכלול "כל הקווים") ל-0%, בלי קשר להאם
+ * כבר טופלו בעבר. לפי בקשה מפורשת (2026-09-10): "בתחילת מחזור חדש הכל
+ * ריק ודורש מילוי מלא" — מדיניות עסקית, לא רק "מכשיר חדש שטרם הותקן".
+ *
+ * זה *מרחיב* את reset_route_initial_fill הישן (phase26, ששם היה מוגבל
+ * רק למכשירים שמעולם לא קיבלו רישום) — reset_route_initial_fill עדיין
+ * קיימת בשרת אבל אין לה יותר קורא מה-UI, הוחלפה בפונקציה הזו שמכסה גם
+ * אותה וגם מכשירים שכבר טופלו במחזורים קודמים. אותה שיטת רישום בדיוק:
+ * INSERT אמיתי ל-oil_tracking (event_type='reading', 0 ליטר, לא
+ * "מילוי") כדי שההיסטוריה תישאר שקופה — לא UPDATE שקט על devices —
+ * ר' reset_route_cycle ב-iconair_schema_phase27_route_cycle_reset.sql.
  */
-export const resetRouteInitialFill = (deviceIds) =>
-  supabase.rpc('reset_route_initial_fill', { p_device_ids: deviceIds }).then(unwrap);
+export const resetRouteCycle = (deviceIds) =>
+  supabase.rpc('reset_route_cycle', { p_device_ids: deviceIds }).then(unwrap);
 
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
 export const todayISO = () => {
