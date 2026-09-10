@@ -587,7 +587,6 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
         customer={customer}
         scents={scents}
         capacityMl={model?.capacity_ml ?? null}
-        suggestedFillMl={fillMl}
         onClose={() => setOilModalOpen(false)}
         onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
       />
@@ -613,8 +612,14 @@ const ML_STEP = 10;
  * (form.liters_added) בדיוק כמו קודם — completeVisit/createOilEntry
  * מצפים לליטרים — הסליידר רק ממיר מ"ל↔ליטר בצד התצוגה, כך שהשמירה
  * בפועל (submit) לא השתנתה כלל.
+ *
+ * ברירת מחדל = 0 (2026-09-10, תיקון בעקבות משוב): התחלה מ"מוצע-מלא"
+ * גרמה לסליידר להיראות "מתחיל מהכמות הגדולה" (התחיל עם המחוון כבר
+ * בקצה הימני/מקסימום) — הטכנאי רוצה לגרור בעצמו מנמוך לגבוה, לא לקבל
+ * ערך מוכן-מראש. הקיבולת עדיין מוצגת כרמז (hint מתחת לכותרת השדה),
+ * רק לא כערך פתיחה של הסליידר.
  */
-function CompleteVisitModal({ open, device, customer, scents, capacityMl, suggestedFillMl, onClose, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClose, onSaved }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
@@ -625,16 +630,10 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, sugges
 
   useEffect(() => {
     if (open) {
-      // ברירת מחדל: הכמות המוצעת למילוי מלא (capacity × (100−מפלס)/100,
-      // כבר מחושבת למעלה ב-DeviceDetailRow), מעוגלת לקפיצת 10 מ"ל
-      // הקרובה — לא "0.35" שרירותי כמו קודם.
-      const suggestedMl = suggestedFillMl && suggestedFillMl > 0
-        ? Math.min(sliderMaxMl, Math.round(suggestedFillMl / ML_STEP) * ML_STEP)
-        : 0;
       setForm({
         event_type: 'refill',
         scent_name: device.scent_name ?? '',
-        liters_added: String(suggestedMl / 1000),
+        liters_added: '0',
         level_before_pct: String(device.oil_level_pct ?? ''),
         level_after_pct: '100',
         notes: '',
@@ -642,7 +641,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, sugges
       setError(null);
       setNoStockNotice(false);
     }
-  }, [open, device, suggestedFillMl, sliderMaxMl]);
+  }, [open, device]);
 
   if (!open || !form) return null;
 
