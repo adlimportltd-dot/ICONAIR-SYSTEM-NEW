@@ -11,6 +11,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import {
   listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
   returnStockToWarehouse, returnAllStockToWarehouse, resetTechnicianStock, listRoutes, getRouteLoadPlan,
+  resetRouteInitialFill,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { getCycleInfo } from '../lib/mappers';
@@ -59,6 +60,7 @@ function formatQty(quantity, scentName) {
  * 2026-09-09 — תגובה לדרישה מפורשת: "בלי לחפור במספרים או לגלול מיותר".
  */
 function TodayLoadCard() {
+  const { isAdmin } = useAuth();
   const routes = useQuery(listRoutes, []);
   const [activeRoute, setActiveRoute] = useState(() => {
     try { return localStorage.getItem(PREP_ROUTE_KEY) || undefined; } catch { return undefined; }
@@ -76,6 +78,25 @@ function TodayLoadCard() {
 
   const plan = useQuery(() => getRouteLoadPlan(activeRoute), [activeRoute], { enabled: Boolean(activeRoute) });
   useRealtime(['devices', 'oil_tracking'], plan.refetch, { enabled: Boolean(activeRoute) });
+
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState(null);
+  const [resetConfirming, setResetConfirming] = useState(false);
+
+  async function runInitialReset() {
+    if (!plan.data?.newDevices?.length) return;
+    setResetError(null);
+    setResetBusy(true);
+    try {
+      await resetRouteInitialFill(plan.data.newDevices.map((d) => d.id));
+      setResetConfirming(false);
+      plan.refetch();
+    } catch (caught) {
+      setResetError(describeError(caught));
+    } finally {
+      setResetBusy(false);
+    }
+  }
 
   const routeOptions = (routes.data ?? []).filter((r) => r.name);
   const activeRouteObj = routeOptions.find((r) => r.name === activeRoute);
@@ -229,6 +250,52 @@ function TodayLoadCard() {
                       : 'עדיין לא קיבלו שום טיפול בשטח — לקחת פיזית מהמדף לפני שיוצאים'
                   }
                 />
+
+                {/*
+                  2026-09-10: מכשיר שמעולם לא קיבל שירות מוצג כ"100% מלא"
+                  רק כי זו ברירת המחדל הטכנית של הטבלה — לא תצפית אמיתית.
+                  זה גורם לחישוב ההעמסה למעלה לצאת "0 מ״ל" למכשירים שלמעשה
+                  צריכים מילוי מלא. הכפתור הזה רושם קריאת-איפוס אמיתית
+                  (לא "מילוי" מזויף) רק למכשירים האלה בדיוק — מכשיר שכבר
+                  קיבל שירות פעם אחת לעולם לא יושפע, גם אם ייבחר בטעות.
+                */}
+                {isAdmin && (
+                  <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.06] px-4 py-3.5">
+                    {!resetConfirming ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="min-w-0 flex-1 text-[14px] text-text-dim">
+                          המכשירים האלה מוצגים כ"מלאים" רק כי הם עוד לא קיבלו אף רישום —
+                          לכן חישוב ההעמסה למעלה יוצא 0. אפשר לסמן אותם כדורשים מילוי מלא.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setResetConfirming(true)}
+                          className="ghost-btn flex-none !border-crit/40 !text-crit-soft"
+                        >
+                          איפוס קו / תחילת עבודה
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="min-w-0 flex-1 text-[14.5px] font-semibold text-crit-soft">
+                          לסמן את {plan.data.newDevices.length} המכשירים האלה כדורשים מילוי מלא, ולעדכן את חישוב ההעמסה למעלה בהתאם?
+                        </div>
+                        <button
+                          type="button"
+                          onClick={runInitialReset}
+                          disabled={resetBusy}
+                          className="rounded-pill border border-crit/40 bg-crit/10 px-4 py-2 text-[14px]
+                                     font-bold text-crit-soft transition-colors hover:border-crit/60 disabled:opacity-40"
+                        >
+                          {resetBusy ? 'מאפס…' : 'אשר איפוס'}
+                        </button>
+                        <SecondaryButton onClick={() => setResetConfirming(false)}>ביטול</SecondaryButton>
+                      </div>
+                    )}
+                    {resetError && <div className="mt-2 text-[13.5px] text-crit-soft">{resetError}</div>}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2.5">
                   {plan.data.newDevices.slice(0, NEW_DEVICES_SHOWN).map((d) => (
                     <div key={d.id} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">

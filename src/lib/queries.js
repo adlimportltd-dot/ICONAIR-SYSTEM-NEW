@@ -521,6 +521,17 @@ export async function getRouteLoadPlan(routeName) {
   };
 }
 
+/**
+ * "איפוס קו / תחילת עבודה" (phase26) — למכשירים שמעולם לא קיבלו שירות
+ * בפועל (oil_level_pct=100 הוא רק ברירת-מחדל טכנית, לא תצפית אמיתית),
+ * רושם קריאת-איפוס אמיתית (event_type='reading', לא 'refill' — לא
+ * "מולא" בפועל) כדי שחישוב ההעמסה ישקף שהם צריכים מילוי מלא. השרת
+ * מוודא בעצמו שהוא נוגע רק במכשירים שבאמת עוד לא קיבלו אף רישום —
+ * ר' reset_route_initial_fill ב-iconair_schema_phase26.
+ */
+export const resetRouteInitialFill = (deviceIds) =>
+  supabase.rpc('reset_route_initial_fill', { p_device_ids: deviceIds }).then(unwrap);
+
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
 export const todayISO = () => {
   const d = new Date();
