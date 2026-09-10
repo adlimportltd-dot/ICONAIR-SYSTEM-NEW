@@ -5,6 +5,7 @@ import { Async, EmptyState } from '../components/ui/States';
 import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } from '../components/ui/Field';
 import { RouteIcon, NavigationIcon, PhoneIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
+import MlSlider from '../components/ui/MlSlider';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -585,6 +586,8 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
         device={device}
         customer={customer}
         scents={scents}
+        capacityMl={model?.capacity_ml ?? null}
+        suggestedFillMl={fillMl}
         onClose={() => setOilModalOpen(false)}
         onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
       />
@@ -592,25 +595,46 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
   );
 }
 
+// נפילה בטוחה כשלדגם אין capacity_ml מוגדר (ר' הערה ב-getRouteLoadPlan
+// ב-queries.js על דגם "Icon 600" שסומן "?" ע"י המשתמש) — הסליידר עדיין
+// צריך מקסימום סביר במקום לקרוס או להיתקע על 0.
+const DEFAULT_SLIDER_MAX_ML = 1000;
+const ML_STEP = 10;
+
 /**
  * טופס "סיום ביקור" מוקטן, ישירות מתוך שורת המכשיר במסלול — אותה
  * לוגיקה בדיוק כמו NewOilEntryModal במסך "מעקב שמנים" (completeVisit
  * מנכה מהמלאי הנייד אטומית; אם אין מלאי תואם נופלים ל-createOilEntry
  * שרק רושם בלי לנסות לנכות), רק בלי שדה בחירת מכשיר — הוא כבר ידוע.
+ *
+ * "כמות שנוספה" (2026-09-10, בקשה מפורשת): לא שדה טקסט חופשי יותר —
+ * סליידר MlSlider בקפיצות של 10 מ"ל, שהמקסימום שלו הוא capacity_ml של
+ * הדגם הספציפי הזה (לא ערך גלובלי קבוע). הערך עדיין נשמר ב-form כליטרים
+ * (form.liters_added) בדיוק כמו קודם — completeVisit/createOilEntry
+ * מצפים לליטרים — הסליידר רק ממיר מ"ל↔ליטר בצד התצוגה, כך שהשמירה
+ * בפועל (submit) לא השתנתה כלל.
  */
-function CompleteVisitModal({ open, device, customer, scents, onClose, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, capacityMl, suggestedFillMl, onClose, onSaved }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [noStockNotice, setNoStockNotice] = useState(false);
 
+  const sliderMaxMl = capacityMl && capacityMl > 0 ? Math.round(capacityMl / ML_STEP) * ML_STEP : DEFAULT_SLIDER_MAX_ML;
+
   useEffect(() => {
     if (open) {
+      // ברירת מחדל: הכמות המוצעת למילוי מלא (capacity × (100−מפלס)/100,
+      // כבר מחושבת למעלה ב-DeviceDetailRow), מעוגלת לקפיצת 10 מ"ל
+      // הקרובה — לא "0.35" שרירותי כמו קודם.
+      const suggestedMl = suggestedFillMl && suggestedFillMl > 0
+        ? Math.min(sliderMaxMl, Math.round(suggestedFillMl / ML_STEP) * ML_STEP)
+        : 0;
       setForm({
         event_type: 'refill',
         scent_name: device.scent_name ?? '',
-        liters_added: '0.35',
+        liters_added: String(suggestedMl / 1000),
         level_before_pct: String(device.oil_level_pct ?? ''),
         level_after_pct: '100',
         notes: '',
@@ -618,7 +642,7 @@ function CompleteVisitModal({ open, device, customer, scents, onClose, onSaved }
       setError(null);
       setNoStockNotice(false);
     }
-  }, [open, device]);
+  }, [open, device, suggestedFillMl, sliderMaxMl]);
 
   if (!open || !form) return null;
 
@@ -693,13 +717,23 @@ function CompleteVisitModal({ open, device, customer, scents, onClose, onSaved }
               placeholder="ללא ניחוח ספציפי"
             />
           </Field>
-          <Field label="ליטרים שהוזרמו">
-            <TextInput type="number" step="0.001" min="0" value={form.liters_added} onChange={set('liters_added')} />
-          </Field>
-          <Field label="מפלס לפני (%)">
-            <TextInput type="number" min={0} max={100} value={form.level_before_pct} onChange={set('level_before_pct')} />
-          </Field>
         </div>
+
+        <Field label="מפלס לפני (%)">
+          <TextInput type="number" min={0} max={100} value={form.level_before_pct} onChange={set('level_before_pct')} />
+        </Field>
+
+        <Field
+          label="כמות שנוספה"
+          hint={capacityMl ? `קיבולת ${device.model ?? 'המכשיר'}: ${sliderMaxMl} מ״ל` : 'לא הוגדרה קיבולת לדגם הזה — טווח כללי'}
+        >
+          <MlSlider
+            valueMl={Math.round(Number(form.liters_added || 0) * 1000)}
+            maxMl={sliderMaxMl}
+            step={ML_STEP}
+            onChange={(ml) => setForm((prev) => ({ ...prev, liters_added: String(ml / 1000) }))}
+          />
+        </Field>
 
         <Field label="מפלס אחרי (%)" required>
           <TextInput type="number" min={0} max={100} value={form.level_after_pct} onChange={set('level_after_pct')} required />
