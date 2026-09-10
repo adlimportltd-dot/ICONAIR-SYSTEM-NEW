@@ -307,6 +307,17 @@ function RouteStops({ routeName }) {
   );
 }
 
+/**
+ * כרטיסיית עצירה — פריסה אחת (לא שתי גרסאות נפרדות למובייל/דסקטופ):
+ * נערמת אנכית (מספר סדר+בוצע+שם+כתובת למעלה, תגית מכשירים+3 כפתורי
+ * פעולה למטה) כדי שלעולם לא יהיה מרוץ-רוחב בין שם הלקוח לכפתורים.
+ * 2026-09-10 (תיקון עיצוב אחרי משוב "כפתורים זולגים החוצה"): הגרסה
+ * הקודמת דחסה הכל לשורה אחת (חצי סידור + בוצע + שם flex-1 + תגית +
+ * 3 כפתורים) — ברוחב מובייל צר סכום ה-flex-none לבדו כבר חרג מרוחב
+ * הכרטיס, ובלי overflow-hidden זה גלש שמאלה (ב-RTL, "שמאלה" = כיוון
+ * הגלישה) ודחק את השם לרוחב 0 עד שנעלם לגמרי. פריסה נערמת עם
+ * overflow-hidden על הכרטיס עצמו פותרת את זה מבנית, לא בטלאי-רוחב.
+ */
 function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
@@ -315,98 +326,105 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
   const [cardOpen, setCardOpen] = useState(false);
 
   return (
-    <div className={`inner-row transition-opacity ${done ? 'opacity-55' : ''}`}>
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <div className="flex flex-none flex-col items-center gap-0.5">
+    <div className={`inner-row overflow-hidden transition-opacity ${done ? 'opacity-55' : ''}`}>
+      <div className="flex flex-col gap-3 p-3.5">
+        <div className="flex items-center gap-2.5">
+          <span className="tabular grid h-7 w-7 flex-none place-items-center rounded-full border border-black/[0.09] bg-white font-mono text-[13px] font-bold text-text-dim">
+            {index + 1}
+          </span>
+
           <button
             type="button"
-            onClick={onMoveUp}
-            disabled={disableUp}
-            aria-label="הזז למעלה"
-            className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                       hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
+            onClick={onToggleDone}
+            aria-pressed={done}
+            aria-label={done ? 'סמן כלא בוצע' : 'סמן כבוצע'}
+            className={`grid h-8 w-8 flex-none place-items-center rounded-full border text-[15px] transition-colors ${
+              done
+                ? 'border-ok/40 bg-ok/15 text-ok'
+                : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
+            }`}
           >
-            ▲
+            ✓
           </button>
-          <span className="tabular font-mono text-[13px] text-text-faint">{index + 1}</span>
-          <button
-            type="button"
-            onClick={onMoveDown}
-            disabled={disableDown}
-            aria-label="הזז למטה"
-            className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                       hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
-          >
-            ▼
-          </button>
-        </div>
 
-        <button
-          type="button"
-          onClick={onToggleDone}
-          aria-pressed={done}
-          aria-label={done ? 'סמן כלא בוצע' : 'סמן כבוצע'}
-          className={`grid h-7 w-7 flex-none place-items-center rounded-full border text-[14px] transition-colors ${
-            done
-              ? 'border-ok/40 bg-ok/15 text-ok'
-              : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
-          }`}
-        >
-          ✓
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCardOpen(true)}
-          className="min-w-0 flex-1 text-start"
-          aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
-        >
-          <div className={`truncate text-[15px] font-semibold transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
-            {customer.name}
-          </div>
-          <div className="truncate text-[13.5px] text-text-faint">{customer.address || '—'}</div>
-        </button>
-
-        {devices.length > 0 && (
           <button
             type="button"
             onClick={() => setCardOpen(true)}
-            className="flex flex-none items-center gap-1.5 rounded-[7px] border border-black/[0.075]
-                       px-[9px] py-[3px] text-[13px] font-semibold text-text-dim transition-colors
-                       hover:border-gold-500/30 hover:text-gold-600"
+            className="min-w-0 flex-1 text-start"
+            aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
           >
-            {devices.length} מכשירים
+            <div className={`truncate text-[16px] font-bold leading-tight transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
+              {customer.name}
+            </div>
+            <div className="truncate text-[13px] text-text-faint">{customer.address || '—'}</div>
           </button>
-        )}
 
-        <div className="flex flex-none gap-2">
-          <SecondaryButton
-            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
-            disabled={!call}
-            onClick={() => call && (window.location.href = call)}
-            aria-label={`התקשר אל ${customer.name}`}
-          >
-            <PhoneIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">התקשר</span>
-          </SecondaryButton>
-          <SecondaryButton
-            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
-            disabled={!waze}
-            onClick={() => waze && window.open(waze, '_blank', 'noopener')}
-            aria-label={`נווט לוויז אל ${customer.name}`}
-          >
-            <NavigationIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">וייז</span>
-          </SecondaryButton>
-          <SecondaryButton
-            className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
-            disabled={!maps}
-            onClick={() => maps && window.open(maps, '_blank', 'noopener')}
-            aria-label={`נווט ב-Google Maps אל ${customer.name}`}
-          >
-            <NavigationIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Maps</span>
-          </SecondaryButton>
+          <div className="flex flex-none flex-col items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={disableUp}
+              aria-label="הזז למעלה"
+              className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
+                         hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={disableDown}
+              aria-label="הזז למטה"
+              className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
+                         hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
+            >
+              ▼
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {devices.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setCardOpen(true)}
+              className="flex flex-none items-center gap-1.5 rounded-[7px] border border-black/[0.075]
+                         bg-white px-[9px] py-[6px] text-[13px] font-semibold text-text-dim transition-colors
+                         hover:border-gold-500/30 hover:text-gold-600"
+            >
+              {devices.length} מכשירים
+            </button>
+          )}
+
+          <div className="flex min-w-0 flex-1 gap-2">
+            <SecondaryButton
+              className="!flex-1 !px-2 min-w-0 justify-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+              disabled={!call}
+              onClick={() => call && (window.location.href = call)}
+              aria-label={`התקשר אל ${customer.name}`}
+            >
+              <PhoneIcon className="h-4 w-4 flex-none" />
+              <span className="truncate">התקשר</span>
+            </SecondaryButton>
+            <SecondaryButton
+              className="!flex-1 !px-2 min-w-0 justify-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+              disabled={!waze}
+              onClick={() => waze && window.open(waze, '_blank', 'noopener')}
+              aria-label={`נווט לוויז אל ${customer.name}`}
+            >
+              <NavigationIcon className="h-4 w-4 flex-none" />
+              <span className="truncate">וייז</span>
+            </SecondaryButton>
+            <SecondaryButton
+              className="!flex-1 !px-2 min-w-0 justify-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
+              disabled={!maps}
+              onClick={() => maps && window.open(maps, '_blank', 'noopener')}
+              aria-label={`נווט ב-Google Maps אל ${customer.name}`}
+            >
+              <NavigationIcon className="h-4 w-4 flex-none" />
+              <span className="truncate">Maps</span>
+            </SecondaryButton>
+          </div>
         </div>
       </div>
 
