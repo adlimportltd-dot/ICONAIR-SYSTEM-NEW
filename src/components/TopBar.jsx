@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Sidebar';
-import { SearchIcon, BellIcon, PlusIcon, DropIcon } from './ui/Icons';
+import { SearchIcon, BellIcon, PlusIcon, DropIcon, MenuIcon, iconMap } from './ui/Icons';
 import { relativeTime, OIL_EVENT_LABEL } from '../lib/mappers';
 import { serviceReportUrl, sendServiceReportToCustomer } from '../lib/queries';
 import { describeError } from '../lib/supabase';
+import { navItems, settingsNavItem } from '../config/navigation';
+import { useAuth } from '../context/AuthContext';
 
 /** שם עצירה קריא: שם הלקוח, ועם תווית הבניין אם זו עצירת-אתר (אוורסט וכו') */
 function stopLabel(visit) {
@@ -199,6 +201,76 @@ function NotificationsBell({
 }
 
 /**
+ * תפריט "כל המסכים" — פתרון לבעיה שנוצרה כש-BottomNav צומצם ל-4 כפתורים
+ * קבועים לטכנאי שטח (מסלולים/לקוחות/הכנה לקו/קריאות שירות): מנהל שנכנס
+ * מהנייד איבד גישה לדשבורד/מכשירים/שמנים/דוחות/ניהול מלאי/הגדרות לגמרי
+ * — אין להם בכלל כפתור בנייד. זה פותח את זה חזרה, רק למנהל (`lg:hidden`
+ * כי בדסקטופ ה-Sidebar כבר מציג הכול תמיד), בלי לגעת ב-4 הכפתורים של
+ * הטכנאי. הרשימה זהה לזו שה-Sidebar מציג לאדמין — כולל 'reports', לא
+ * מסונן כמו אצל טכנאי (ר' Sidebar.jsx `visibleNavItems`).
+ */
+function MobileMenu({ activeId, onNavigate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDocClick(event) {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const items = [...navItems, settingsNavItem];
+
+  return (
+    <div ref={ref} className="relative lg:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-label="כל המסכים"
+        className="grid h-10 w-10 flex-none place-items-center rounded-pill
+                   border border-white/10 bg-white/[0.05] text-slate-100
+                   transition-colors hover:border-amber-400/40 hover:text-amber-300"
+      >
+        <MenuIcon className="h-[18px] w-[18px]" />
+      </button>
+
+      {open && (
+        <div className="glass absolute end-0 top-[calc(100%+8px)] z-30 w-[230px] rounded-panel p-2 shadow-lift">
+          <div className="px-2.5 py-2 text-[13px] font-semibold tracking-wide text-text-faint">
+            כל המסכים
+          </div>
+          {items.map((item) => {
+            const Icon = iconMap[item.icon];
+            const isActive = item.id === activeId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => { onNavigate(item.id); setOpen(false); }}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex w-full items-center gap-2.5 rounded-row px-3 py-2.5 text-[14.5px]
+                            font-semibold transition-colors ${
+                              isActive
+                                ? 'bg-gold-500/[0.12] text-gold-600'
+                                : 'text-text-dim hover:bg-black/[0.03]'
+                            }`}
+              >
+                <Icon className="h-[18px] w-[18px] flex-none" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * שורה עליונה דביקה: זהות המסך, חיפוש, מצב הצי בזמן אמת ופעולות מהירות.
  * בנייד הלוגו מחליף את כותרת המסך כדי לחסוך רוחב.
  * 2026-09-09 Full Design Overhaul #2: עוברת ל"שבב כהה" (bg-navy-900),
@@ -209,8 +281,10 @@ export default function TopBar({
   title, meta, online, total, alerts = 0, isLive = false, isConnected = true,
   completedVisits = [], completedVisitsLoading = false,
   serviceReports = [], serviceReportsLoading = false,
+  activeId, onNavigate,
   onOpenNotifications, onNewCall, onSearch, onLogoClick,
 }) {
+  const { isAdmin } = useAuth();
   const allOnline = total > 0 && online === total;
 
   return (
@@ -289,6 +363,8 @@ export default function TopBar({
         serviceReportsLoading={serviceReportsLoading}
         onOpen={onOpenNotifications}
       />
+
+      {isAdmin && <MobileMenu activeId={activeId} onNavigate={onNavigate} />}
 
       <button
         type="button"

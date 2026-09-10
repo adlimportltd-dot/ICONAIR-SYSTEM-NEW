@@ -294,6 +294,8 @@ function Shell() {
             online={kpis?.devices_online ?? 0}
             total={kpis?.devices_total ?? 0}
             alerts={kpis?.calls_critical ?? 0}
+            activeId={activeId}
+            onNavigate={navigate}
             isLive={isLive}
             completedVisits={completedVisits.data ?? []}
             completedVisitsLoading={completedVisits.loading}

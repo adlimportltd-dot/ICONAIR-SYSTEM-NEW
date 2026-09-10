@@ -214,6 +214,15 @@ export function TrashIcon(props) {
   );
 }
 
+/** המבורגר — תפריט "כל המסכים" למנהל בנייד, ר' TopBar.jsx */
+export function MenuIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
 /** לוגו ICON AIR — שלושה זרמי אוויר מתפתלים */
 export function AirMarkIcon(props) {
   return (
