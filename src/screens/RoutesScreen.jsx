@@ -239,6 +239,26 @@ function RouteStops({ routeName }) {
     }
   }
 
+  /**
+   * קביעה מפורשת ל"בוצע" (לא toggle) — 2026-09-10, לכפתור "סיום ביקור"
+   * החדש בכרטיסיית המכשיר: הטכנאי שסיים למלא את המכשיר האחרון אצל
+   * הלקוח לא צריך לחזור לשורת העצירה וללחוץ שוב על סימון הבוצע — זה
+   * עושה את שתי הפעולות (שמירת המילוי + סגירת הביקור) בלחיצה אחת.
+   */
+  async function markDone(id) {
+    const prevStatus = statusById[id] ?? 'pending';
+    if (prevStatus === 'done') return;
+    setStatusById((prev) => ({ ...prev, [id]: 'done' }));
+
+    try {
+      setSaveError(null);
+      await setStopStatus(id, 'done');
+    } catch (caught) {
+      setStatusById((prev) => ({ ...prev, [id]: prevStatus }));
+      setSaveError(describeError(caught));
+    }
+  }
+
   const fullRouteLink = googleMapsRouteLink(ordered.map((c) => c.address));
   const deviceTotal = ordered.reduce((sum, c) => sum + (c.devices?.length ?? 0), 0);
   const doneCount = ordered.filter((c) => statusById[c.id] === 'done').length;
@@ -292,6 +312,7 @@ function RouteStops({ routeName }) {
               customer={customer}
               done={statusById[customer.id] === 'done'}
               onToggleDone={() => toggleStatus(customer.id)}
+              onMarkDone={() => markDone(customer.id)}
               onMoveUp={() => move(customer.id, -1)}
               onMoveDown={() => move(customer.id, 1)}
               disableUp={index === 0}
@@ -318,7 +339,7 @@ function RouteStops({ routeName }) {
  * הגלישה) ודחק את השם לרוחב 0 עד שנעלם לגמרי. פריסה נערמת עם
  * overflow-hidden על הכרטיס עצמו פותרת את זה מבנית, לא בטלאי-רוחב.
  */
-function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
+function StopRow({ index, customer, done, onToggleDone, onMarkDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
   const call = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
@@ -435,6 +456,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
         callHref={call}
         wazeHref={waze}
         mapsHref={maps}
+        onMarkDone={onMarkDone}
         deviceModels={deviceModels}
         scents={scents}
         onVisitCompleted={onVisitCompleted}
@@ -449,7 +471,7 @@ function StopRow({ index, customer, done, onToggleDone, onMoveUp, onMoveDown, di
  * היסטוריית השמן האחרונה שלהם — כדי שהטכנאי לא יצטרך לנחש מה קרה
  * בביקורים הקודמים. אין כאן שום נתון כספי בכוונה (ר' דרישת המשתמש).
  */
-function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, deviceModels, scents, onVisitCompleted }) {
+function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, onMarkDone, deviceModels, scents, onVisitCompleted }) {
   const devices = stop.devices ?? [];
   const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
   const history = useQuery(() => listOilHistoryForDevices(deviceIds, 20), [deviceIds.join(',')], { enabled: open });
@@ -512,6 +534,7 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
                 customer={stop}
                 deviceModels={deviceModels}
                 scents={scents}
+                onMarkDone={onMarkDone}
                 onVisitCompleted={() => { onVisitCompleted?.(); history.refetch(); }}
               />
             ))}
@@ -554,7 +577,14 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
  * "עדכון שמן" פותח את אותו סיום-ביקור שיש במסך "מעקב שמנים" — כאן
  * בלי בחירת מכשיר (כבר ידוע מההקשר), כדי שהטכנאי יעדכן מהמסלול עצמו.
  */
-function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitCompleted }) {
+/**
+ * 2026-09-10 (redesign מלא אחרי משוב): שורה נערמת ברורה במקום flex-wrap
+ * דחוס אחד (ניחוח+דגם+מד-שמן+רמז-מילוי+כפתור הכל ביחד) — כל קבוצת מידע
+ * בשורה משלה, ריווח אמיתי (p-3.5), כדי שלא ייחתך/יידחס במסכי אייפון
+ * קטנים. הכפתור היחיד כאן רק *פותח* את הטופס — הפיצול "שמור מילוי" /
+ * "סיום ביקור" עצמו קורה בתוך CompleteVisitModal (ר' שם), לא כאן.
+ */
+function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
   const fillMl = model?.capacity_ml
@@ -562,7 +592,7 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
     : null;
 
   return (
-    <div className="rounded-row border border-black/[0.06] bg-black/[0.015] px-3 py-2.5">
+    <div className="rounded-row border border-black/[0.06] bg-black/[0.015] p-3.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px]">
         <EditableField
           label="ניחוח"
@@ -578,26 +608,31 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
           field="model"
           device={device}
         />
-        <div className="flex min-w-[140px] flex-1 items-center gap-2">
-          <span className="flex-none text-text-faint">שמן</span>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2.5">
+        <span className="flex-none text-[13.5px] text-text-faint">שמן</span>
+        <div className="min-w-0 flex-1">
           <MiniMeter value={device.oil_level_pct ?? 0} tone={oilTone(device.oil_level_pct ?? 0)} />
         </div>
-        {fillMl != null && (
-          <span className="flex-none text-text-faint">
-            למילוי: <b className="tabular font-semibold text-gold-600">{fillMl} מ״ל</b>
-          </span>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setOilModalOpen(true)}
-          className="ms-auto flex-none rounded-[8px] border border-gold-500/30 bg-gold-500/[0.1]
-                     px-2.5 py-1 text-[13px] font-semibold text-gold-600 transition-colors
-                     hover:border-gold-500/50"
-        >
-          עדכון שמן / סיום ביקור
-        </button>
+        <span className="tabular flex-none text-[13.5px] font-bold text-text-dim">{device.oil_level_pct ?? 0}%</span>
       </div>
+
+      {fillMl != null && (
+        <div className="mt-1.5 text-[13px] text-text-faint">
+          למילוי: <b className="tabular font-semibold text-gold-600">{fillMl} מ״ל</b>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setOilModalOpen(true)}
+        className="mt-3 w-full rounded-[10px] border border-gold-500/30 bg-gold-500/[0.1]
+                   px-3 py-2.5 text-[14px] font-bold text-gold-600 transition-colors
+                   hover:border-gold-500/50 hover:bg-gold-500/[0.16]"
+      >
+        עדכון שמן
+      </button>
 
       <CompleteVisitModal
         open={oilModalOpen}
@@ -606,6 +641,7 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onVisitComple
         scents={scents}
         capacityMl={model?.capacity_ml ?? null}
         onClose={() => setOilModalOpen(false)}
+        onMarkDone={onMarkDone}
         onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
       />
     </div>
@@ -636,13 +672,22 @@ const ML_STEP = 10;
  * בקצה הימני/מקסימום) — הטכנאי רוצה לגרור בעצמו מנמוך לגבוה, לא לקבל
  * ערך מוכן-מראש. הקיבולת עדיין מוצגת כרמז (hint מתחת לכותרת השדה),
  * רק לא כערך פתיחה של הסליידר.
+ *
+ * שני כפתורים נפרדים, לא אחד (2026-09-10, בקשה מפורשת "הכפתור המאוחד
+ * מבלבל"): "שמור מילוי" שומר את נתוני המילוי בלבד — למכשיר אמצעי מתוך
+ * כמה אצל אותו לקוח, שהטכנאי ימשיך לטפל באחרים. "סיום ביקור ✓" עושה
+ * בדיוק אותה שמירה ועוד קורא ל-onMarkDone (מגיע עד ל-markDone ב-
+ * RouteStops) כדי לסמן את כל העצירה כבוצעה בלחיצה אחת — לא צריך לחזור
+ * לשורת הלקוח ולסמן שם בנפרד. submit מקבל markVisitDone כדי שאותה
+ * לוגיקת שמירה (completeVisit/createOilEntry fallback) תשרת את שניהם.
  */
-function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClose, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClose, onMarkDone, onSaved }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(null); // null | 'save' | 'complete' — איזה כפתור בטעינה
   const [noStockNotice, setNoStockNotice] = useState(false);
+  const [pendingMarkDone, setPendingMarkDone] = useState(false);
 
   const sliderMaxMl = capacityMl && capacityMl > 0 ? Math.round(capacityMl / ML_STEP) * ML_STEP : DEFAULT_SLIDER_MAX_ML;
 
@@ -658,6 +703,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
       });
       setError(null);
       setNoStockNotice(false);
+      setPendingMarkDone(false);
     }
   }, [open, device]);
 
@@ -666,10 +712,9 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const after = Number(form.level_after_pct || 0);
 
-  async function submit(event) {
-    event.preventDefault();
+  async function submit(markVisitDone) {
     setError(null);
-    setBusy(true);
+    setBusy(markVisitDone ? 'complete' : 'save');
 
     const payload = {
       device_id: device.id,
@@ -699,25 +744,27 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
       });
 
       if (usedFallback) {
+        setPendingMarkDone(markVisitDone);
         setNoStockNotice(true);
       } else {
+        if (markVisitDone) onMarkDone?.();
         onSaved();
       }
     } catch (caught) {
       setError(describeError(caught));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <Modal
       open={open}
-      title="עדכון שמן / סיום ביקור"
+      title="עדכון שמן"
       subtitle={`${device.model ?? 'מכשיר'} · ${device.scent_name || 'ללא ניחוח משויך'}`}
       onClose={onClose}
     >
-      <form onSubmit={submit} className="flex flex-col gap-3.5">
+      <form onSubmit={(event) => { event.preventDefault(); submit(false); }} className="flex flex-col gap-3.5">
         <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
           <Field label="סוג רישום">
             <Select
@@ -777,16 +824,32 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
           </div>
         )}
 
-        <div className="mt-1 flex gap-2.5">
-          {noStockNotice ? (
-            <PrimaryButton type="button" onClick={onSaved}>הבנתי, סגירה</PrimaryButton>
-          ) : (
-            <>
-              <PrimaryButton type="submit" loading={busy}>סיום ביקור / בוצע</PrimaryButton>
-              <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
-            </>
-          )}
-        </div>
+        {noStockNotice ? (
+          <PrimaryButton
+            type="button"
+            onClick={() => { if (pendingMarkDone) onMarkDone?.(); onSaved(); }}
+          >
+            הבנתי, סגירה
+          </PrimaryButton>
+        ) : (
+          <div className="mt-1 flex flex-col gap-2.5">
+            <div className="flex gap-2.5">
+              <PrimaryButton type="submit" className="flex-1" loading={busy === 'save'} disabled={busy === 'complete'}>
+                שמור מילוי
+              </PrimaryButton>
+              <button
+                type="button"
+                onClick={() => submit(true)}
+                disabled={busy !== null}
+                className="flex-1 rounded-pill bg-ok px-5 py-3 text-[15px] font-extrabold text-white
+                           shadow-lift transition-colors hover:bg-ok/90 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {busy === 'complete' ? 'שומר…' : 'סיום ביקור ✓'}
+              </button>
+            </div>
+            <SecondaryButton onClick={onClose} disabled={busy !== null}>ביטול</SecondaryButton>
+          </div>
+        )}
       </form>
     </Modal>
   );
