@@ -14,34 +14,20 @@ import {
   resetRouteInitialFill,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { getCycleInfo } from '../lib/mappers';
+import { getCycleInfo, containersLabel } from '../lib/mappers';
+import { exportLoadPlanPdf } from '../lib/loadPlanReport';
 
 const LOW_STOCK = 2;
 const PREP_ROUTE_KEY = 'iconair:prepRoute';
+// סנטינל לבחירת "כל הקווים יחד" בפילטר — לא שם קו אמיתי, אף פעם לא
+// יתנגש עם routes.name (מ-listRoutes). נבחר במפורש, לא null/undefined,
+// כדי שיישאר מובחן מ"עדיין לא נבחר קו" (activeRoute===undefined) בכל
+// מקום שבודק Boolean(activeRoute)/localStorage.
+const ALL_ROUTES = '__all__';
 // תקרה קבועה על "מכשירים חדשים" — המסך צריך להישאר "במבט אחד" גם אם
 // אירעה קליטה מרוכזת (עשרות/מאות מכשירים בבת אחת), לא רק ביום רגיל
 // עם אחד-שניים חדשים.
 const NEW_DEVICES_SHOWN = 8;
-
-// 5 ל'/0.5 ל' — גדלי האריזה הפיזיים שבפועל נטענים לרכב (גלון גדול +
-// בקבוק קטן). ממיר ליטרים גולמיים לרשימת-לקיחה שהטכנאי יכול לבצע
-// ליד המדף בלי לחשב בעצמו — ומכוון-מעלה בכוונה (אף פעם לא מעגל למטה),
-// כדי שלעולם לא "יחסר" ליום העבודה.
-const JUG_L = 5;
-const BOTTLE_L = 0.5;
-function toContainers(liters) {
-  const jugs = Math.floor(liters / JUG_L);
-  const remainder = Math.round((liters - jugs * JUG_L) * 100) / 100;
-  const bottles = remainder > 0 ? Math.ceil(remainder / BOTTLE_L) : 0;
-  return { jugs, bottles };
-}
-function containersLabel(liters) {
-  const { jugs, bottles } = toContainers(liters);
-  const parts = [];
-  if (jugs > 0) parts.push(`${jugs} גלון${jugs > 1 ? 'ים' : ''} (5 ל')`);
-  if (bottles > 0) parts.push(`${bottles} בקבוק${bottles > 1 ? 'ים' : ''} (0.5 ל')`);
-  return parts.join(' + ') || 'אין צורך';
-}
 
 /** שורה בלי ניחוח = מכשירים ביחידות שלמות; שורה עם ניחוח = שמן בליטרים. */
 const isDeviceRow = (scentName) => !scentName;
@@ -60,7 +46,7 @@ function formatQty(quantity, scentName) {
  * 2026-09-09 — תגובה לדרישה מפורשת: "בלי לחפור במספרים או לגלול מיותר".
  */
 function TodayLoadCard() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const routes = useQuery(listRoutes, []);
   const [activeRoute, setActiveRoute] = useState(() => {
     try { return localStorage.getItem(PREP_ROUTE_KEY) || undefined; } catch { return undefined; }
@@ -76,7 +62,14 @@ function TodayLoadCard() {
     try { localStorage.setItem(PREP_ROUTE_KEY, activeRoute); } catch { /* לא קריטי אם החיסון חסום */ }
   }, [activeRoute]);
 
-  const plan = useQuery(() => getRouteLoadPlan(activeRoute), [activeRoute], { enabled: Boolean(activeRoute) });
+  const isAllRoutes = activeRoute === ALL_ROUTES;
+  // getRouteLoadPlan(null) = "כל הקווים" מאוחד (ר' ההערה על הפונקציה
+  // ב-queries.js) — routeName===null זה סימן מפורש, לא סתם "לא נבחר".
+  const plan = useQuery(
+    () => getRouteLoadPlan(isAllRoutes ? null : activeRoute),
+    [activeRoute],
+    { enabled: Boolean(activeRoute) }
+  );
   useRealtime(['devices', 'oil_tracking'], plan.refetch, { enabled: Boolean(activeRoute) });
 
   const [resetBusy, setResetBusy] = useState(false);
@@ -100,8 +93,38 @@ function TodayLoadCard() {
 
   const routeOptions = (routes.data ?? []).filter((r) => r.name);
   const activeRouteObj = routeOptions.find((r) => r.name === activeRoute);
+  // "כל הקווים" נופל לברירת המחדל 1–12 (כל שלושת הקווים האמיתיים
+  // חולקים היום את אותו מחזור בכל מקרה) — ר' getCycleInfo ב-mappers.js.
   const cycleInfo = useMemo(() => getCycleInfo(activeRouteObj), [activeRouteObj]);
   const cycle = cycleInfo[viewingCycle];
+  const routeLabel = isAllRoutes ? 'כל הקווים' : (activeRoute ?? '');
+
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
+
+  async function handleExportPdf() {
+    if (!plan.data) return;
+    setPdfError(null);
+    setPdfBusy(true);
+    try {
+      await exportLoadPlanPdf({
+        routeLabel,
+        cycleLabel: cycle.label,
+        viewingNextCycle: viewingCycle === 'next',
+        technicianName: profile?.full_name,
+        deviceCount: plan.data.deviceCount,
+        items: plan.data.items,
+        bufferPct: plan.data.bufferPct,
+        missingCount: plan.data.missing.length,
+        newDevices: plan.data.newDevices,
+        showRouteColumn: isAllRoutes,
+      });
+    } catch (caught) {
+      setPdfError(describeError(caught));
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   return (
     <GlassCard className="mb-3.5">
@@ -114,7 +137,15 @@ function TodayLoadCard() {
             ? `הכנה מוקדמת למחזור הבא — ${cycle.label} (${cycle.start.getDate()}–${cycle.end.getDate()} לחודש)`
             : `המחזור הפעיל — ${cycle.label} (עד ${cycle.end.getDate()} לחודש) — לפי מצב השמן הנוכחי בכל מכשיר`
         }
+        action={plan.data ? (pdfBusy ? 'מייצא…' : 'ייצוא ל-PDF') : undefined}
+        onAction={pdfBusy ? undefined : handleExportPdf}
       />
+
+      {pdfError && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          ייצוא ה-PDF נכשל: {pdfError}
+        </div>
+      )}
 
       {/*
         2026-09-09 (דרישה מפורשת: "התראה אוטומטית סביב ה-25 לחודש"):
@@ -139,6 +170,17 @@ function TodayLoadCard() {
 
       {routeOptions.length > 1 && (
         <div className="mb-3.5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveRoute(ALL_ROUTES)}
+            className={`rounded-pill border px-4 py-2.5 text-[15px] font-bold transition-colors ${
+              isAllRoutes
+                ? 'border-gold-500/45 bg-gold-500/[0.14] text-gold-600'
+                : 'border-black/[0.09] text-text-dim hover:border-black/[0.18] hover:text-text'
+            }`}
+          >
+            כל הקווים
+          </button>
           {routeOptions.map((r) => (
             <button
               key={r.name}
@@ -188,7 +230,9 @@ function TodayLoadCard() {
           <>
             <div className="mb-5 grid grid-cols-2 gap-3">
               <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
-                <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">מכשירים בקו</div>
+                <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">
+                  {isAllRoutes ? 'מכשירים בכל הקווים' : 'מכשירים בקו'}
+                </div>
                 <div className="tabular mt-1 font-display text-[30px] font-bold leading-none">{plan.data.deviceCount}</div>
               </div>
               <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
@@ -304,6 +348,7 @@ function TodayLoadCard() {
                         <div className="mt-0.5 text-[13.5px] text-text-faint">{d.address || 'ללא כתובת ספציפית'}</div>
                       </div>
                       <div className="flex flex-none items-center gap-2">
+                        {isAllRoutes && d.route_name && <StatusChip tone="gold">{d.route_name}</StatusChip>}
                         <StatusChip tone="slate">{d.model}</StatusChip>
                         <span dir="ltr" className="font-mono text-[13px] font-semibold text-text-dim">{d.serial}</span>
                       </div>

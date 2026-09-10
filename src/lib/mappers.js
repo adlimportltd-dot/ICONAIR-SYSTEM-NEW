@@ -151,6 +151,28 @@ export function formatDate(value) {
   return new Date(value).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+// 5 ל'/0.5 ל' — גדלי האריזה הפיזיים שבפועל נטענים לרכב (גלון גדול +
+// בקבוק קטן). ממיר ליטרים גולמיים לרשימת-לקיחה שהטכנאי יכול לבצע ליד
+// המדף בלי לחשב בעצמו — ומכוון-מעלה בכוונה (אף פעם לא מעגל למטה), כדי
+// שלעולם לא "יחסר" ליום העבודה. מיוצא מכאן (לא רק StockScreen) כי גם
+// דוח ה-PDF של תכנון ההעמסה (loadPlanReport.js) חייב להציג בדיוק אותם
+// מספרים כמו המסך — אין להכפיל את הנוסחה בשני מקומות.
+export const JUG_L = 5;
+export const BOTTLE_L = 0.5;
+export function toContainers(liters) {
+  const jugs = Math.floor(liters / JUG_L);
+  const remainder = Math.round((liters - jugs * JUG_L) * 100) / 100;
+  const bottles = remainder > 0 ? Math.ceil(remainder / BOTTLE_L) : 0;
+  return { jugs, bottles };
+}
+export function containersLabel(liters) {
+  const { jugs, bottles } = toContainers(liters);
+  const parts = [];
+  if (jugs > 0) parts.push(`${jugs} גלון${jugs > 1 ? 'ים' : ''} (5 ל')`);
+  if (bottles > 0) parts.push(`${bottles} בקבוק${bottles > 1 ? 'ים' : ''} (0.5 ל')`);
+  return parts.join(' + ') || 'אין צורך';
+}
+
 /**
  * מחזוריות חודשית של קו: מ-1 לחודש עד cycle_end_day (10–12, ר'
  * routes.cycle_end_day). מחזירה את המחזור הנוכחי והבא, ואם התאריך

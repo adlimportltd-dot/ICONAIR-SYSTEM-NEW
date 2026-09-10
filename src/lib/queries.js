@@ -443,6 +443,13 @@ async function loadCityRoutesMap() {
  * newDevices (2026-09-09, ל"הכנה לקו"): מכשירים בקו שאף פעם לא קיבלו
  * רישום ב-oil_tracking — סימן שהם נוספו למערכת אבל עדיין לא הותקנו
  * בפועל בשטח. הטכנאי צריך לקחת אותם פיזית מהמחסן/מהמדף לפני שיוצא.
+ *
+ * routeName === null (2026-09-10, "כל הקווים"): מרכז את כל המכשירים
+ * הפעילים במערכת לדוח העמסה אחיד אחד — לא רק קו ספציפי. שימושי כשיש
+ * טכנאי אחד שמעמיס רכב יחיד לכל הקווים באותו יום. כולל גם מכשירים בלי
+ * שיוך-קו כלל (route_name null בלקוח) — "הכל" אומר הכל, לא רק הקווים
+ * בעלי שם. missing/newDevices מקבלים route_name פר-מכשיר כדי שאפשר
+ * יהיה להבדיל בתצוגה מאיזה קו כל שורה הגיעה כשהכול מאוחד יחד.
  */
 export async function getRouteLoadPlan(routeName) {
   const [devicesRows, models, cityRoutes, settings] = await Promise.all([
@@ -468,7 +475,9 @@ export async function getRouteLoadPlan(routeName) {
 
   const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
 
-  const routeDevices = devicesRows.filter((d) => effectiveDeviceRoute(d, cityRoutes) === routeName);
+  const routeDevices = routeName === null
+    ? devicesRows
+    : devicesRows.filter((d) => effectiveDeviceRoute(d, cityRoutes) === routeName);
 
   const neverServiced = routeDevices.length
     ? await supabase
@@ -484,6 +493,8 @@ export async function getRouteLoadPlan(routeName) {
   const newDevices = [];
 
   for (const device of routeDevices) {
+    const deviceRoute = effectiveDeviceRoute(device, cityRoutes);
+
     if (!servicedIds.has(device.id)) {
       newDevices.push({
         id: device.id,
@@ -491,6 +502,7 @@ export async function getRouteLoadPlan(routeName) {
         model: device.model,
         customer_name: device.customer?.name ?? '—',
         address: [device.site?.label, device.site?.city ?? device.city].filter(Boolean).join(' · ') || device.city || null,
+        route_name: deviceRoute,
       });
     }
 
@@ -498,7 +510,10 @@ export async function getRouteLoadPlan(routeName) {
     const scent = device.scent_name?.trim();
 
     if (!scent || !capacity) {
-      missing.push({ serial: device.serial, model: device.model, scent_name: device.scent_name, reason: !scent ? 'no_scent' : 'no_capacity' });
+      missing.push({
+        serial: device.serial, model: device.model, scent_name: device.scent_name,
+        reason: !scent ? 'no_scent' : 'no_capacity', route_name: deviceRoute,
+      });
       continue;
     }
 
