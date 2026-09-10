@@ -457,7 +457,7 @@ export async function getRouteLoadPlan(routeName) {
       .from('devices')
       .select(`
         id, model, oil_level_pct, scent_name, serial, city, location_note, created_at,
-        customer:customers(name, route_name),
+        customer:customers(id, name, route_name, address, city),
         site:customer_sites(label, city)
       `)
       .neq('status', 'uninstalled')
@@ -491,9 +491,18 @@ export async function getRouteLoadPlan(routeName) {
   const byScent = new Map();
   const missing = [];
   const newDevices = [];
+  const deviceRows = [];
 
   for (const device of routeDevices) {
     const deviceRoute = effectiveDeviceRoute(device, cityRoutes);
+    // כתובת קצרה למכשיר: אתר (ריבוי-כתובות) קודם, אחרת עיר/כתובת
+    // הלקוח עצמו (חד-כתובתי, הרוב המכריע) — אותה קדימות בדיוק כמו
+    // בחישוב הקו עצמו (effectiveDeviceRoute), רק לשדה תצוגה.
+    const shortAddress =
+      [device.site?.label, device.site?.city ?? device.city].filter(Boolean).join(' · ')
+      || device.city
+      || [device.customer?.address, device.customer?.city].filter(Boolean).join(', ')
+      || null;
 
     if (!servicedIds.has(device.id)) {
       newDevices.push({
@@ -509,6 +518,21 @@ export async function getRouteLoadPlan(routeName) {
     const capacity = capacityByModel.get(device.model);
     const scent = device.scent_name?.trim();
 
+    // דוח ה-PDF (loadPlanReport.js) צריך שורה לכל מכשיר בהיקף — גם
+    // מכשיר שנפל ל-missing למטה (בלי ניחוח/קיבולת) עדיין מוצג שם
+    // עם needed_ml=null, לא נעלם בשקט מהטבלה המפורטת.
+    deviceRows.push({
+      id: device.id,
+      customer_id: device.customer?.id ?? null,
+      customer_name: device.customer?.name ?? '—',
+      address: shortAddress,
+      model: device.model,
+      oil_level_pct: Number(device.oil_level_pct ?? 0),
+      scent_name: scent || null,
+      needed_ml: capacity ? Math.round(capacity * (100 - Number(device.oil_level_pct ?? 0)) / 100) : null,
+      route_name: deviceRoute,
+    });
+
     if (!scent || !capacity) {
       missing.push({
         serial: device.serial, model: device.model, scent_name: device.scent_name,
@@ -521,6 +545,8 @@ export async function getRouteLoadPlan(routeName) {
     byScent.set(scent, (byScent.get(scent) ?? 0) + neededMl);
   }
 
+  deviceRows.sort((a, b) => a.customer_name.localeCompare(b.customer_name, 'he') || (a.address ?? '').localeCompare(b.address ?? '', 'he'));
+
   const items = [...byScent.entries()]
     .map(([scent_name, ml]) => {
       const exactLiters = Math.round((ml / 1000) * 100) / 100;
@@ -531,7 +557,7 @@ export async function getRouteLoadPlan(routeName) {
     .sort((a, b) => b.liters - a.liters);
 
   return {
-    items, missing, newDevices, deviceCount: routeDevices.length,
+    items, missing, newDevices, deviceRows, deviceCount: routeDevices.length,
     deviceIds: routeDevices.map((d) => d.id),
     bufferPct: Number(settings?.route_load_buffer_pct ?? 0),
   };

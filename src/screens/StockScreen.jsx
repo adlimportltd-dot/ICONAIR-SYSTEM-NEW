@@ -116,7 +116,7 @@ function TodayLoadCard() {
         items: plan.data.items,
         bufferPct: plan.data.bufferPct,
         missingCount: plan.data.missing.length,
-        newDevices: plan.data.newDevices,
+        deviceRows: plan.data.deviceRows,
         showRouteColumn: isAllRoutes,
       });
     } catch (caught) {
