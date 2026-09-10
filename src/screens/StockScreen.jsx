@@ -312,7 +312,7 @@ function StockBulkActions({ isAdmin, profile, technicianOptions, onReset, onRefe
           disabled={!selectedTech}
           className="ghost-btn !px-3.5 !py-2 text-[13.5px] !border-crit/30 !text-crit-soft disabled:opacity-40"
         >
-          איפוס מלאי (פעימה ראשונה)
+          איפוס מלאי לתחילת מחזור
         </button>
       )}
 
@@ -706,10 +706,12 @@ function ReturnStockModal({ row, onClose, onSaved }) {
 }
 
 /**
- * איפוס מלאי-נוזל של טכנאי — מיועד לפעימה ראשונה בלבד, לפני תחילת
- * מחזור עבודה שוטף (ר' phase25). מציג במפורש אילו שורות ניחוח ובאיזו
- * כמות יאופסו ל-0 לפני שמבקש אישור — אף פעם לא איפוס "עיוור". לא נוגע
- * ביחידות-מכשיר (אלה לא תלויות-מחזור) ולעולם לא במפלס שמן במכשיר עצמו.
+ * איפוס מלאי-נוזל של טכנאי — לתחילת כל מחזור חדש (חודשי, ר' phase25),
+ * לא רק פעם אחת: לוחצים בכל פעם שרוצים "לסגור" את המונה הרץ ולהתחיל
+ * ספירה נקייה, למשל סביב ה-1 לחודש. מציג במפורש אילו שורות ניחוח
+ * ובאיזו כמות יאופסו ל-0 לפני שמבקש אישור — אף פעם לא איפוס "עיוור".
+ * לא נוגע ביחידות-מכשיר (אלה לא תלויות-מחזור) ולעולם לא במפלס שמן
+ * במכשיר עצמו אצל הלקוח — זה נשאר תמיד המצב האמיתי בשטח.
  */
 function ResetStockModal({ technicianId, technicianOptions, stockRows, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
@@ -736,8 +738,8 @@ function ResetStockModal({ technicianId, technicianOptions, stockRows, onClose, 
   return (
     <Modal
       open
-      title="איפוס מלאי נוזלי — פעימה ראשונה"
-      subtitle={`${technicianName} · מיועד להתחלת מחזור עבודה ראשון בלבד, לא לשימוש שוטף`}
+      title="איפוס מלאי נוזלי — תחילת מחזור חדש"
+      subtitle={`${technicianName} · לשימוש בתחילת כל מחזור עבודה חדש (לרוב סביב ה-1 לחודש)`}
       onClose={onClose}
     >
       <div className="flex flex-col gap-3.5">

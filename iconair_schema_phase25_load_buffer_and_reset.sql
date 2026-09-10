@@ -26,9 +26,9 @@ alter table public.stock_movements drop constraint if exists stock_movements_mov
 alter table public.stock_movements add constraint stock_movements_movement_type_check
   check (movement_type = any (array['allocate', 'return', 'field_use', 'reset']));
 
--- (1) איפוס מלאי-נוזל (לא יחידות-מכשיר!) לטכנאי — מיועד לפעימה ראשונה
--- בלבד, לפני שהמחזור השוטף מתחיל. מנהל בלבד. מתעד כל שורה שאופסה
--- כתנועת 'reset' לפני האיפוס, כדי שהמספר הישן לעולם לא ילך לאיבוד.
+-- (1) איפוס מלאי-נוזל (לא יחידות-מכשיר!) לטכנאי — לתחילת כל מחזור חדש
+-- (חודשי), לא רק פעם אחת. מנהל בלבד. מתעד כל שורה שאופסה כתנועת
+-- 'reset' לפני האיפוס, כדי שהמספר הישן לעולם לא ילך לאיבוד.
 create or replace function public.reset_technician_stock(p_technician_id uuid)
 returns void
 language plpgsql
