@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import { SecondaryButton, TextInput, PrimaryButton, Field } from '../components/ui/Field';
@@ -14,6 +14,7 @@ import {
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { Brand } from '../components/Sidebar';
+import { isPushSupported, getPushState, subscribeToPush, unsubscribeFromPush } from '../lib/webPush';
 
 export default function SettingsScreen() {
   const { profile, session, isAdmin, signOut } = useAuth();
@@ -98,6 +99,7 @@ export default function SettingsScreen() {
 
         {isAdmin && <RouteCyclesCard routeCycles={routeCycles} />}
         {isAdmin && <NotificationSettingsCard notificationSettings={notificationSettings} />}
+        {isAdmin && <PushNotificationsCard vapidPublicKey={notificationSettings.data?.vapid_public_key} />}
         {isAdmin && <BrandingCard />}
         {isAdmin && <DeviceModelsCard deviceModels={deviceModels} />}
         {isAdmin && <ScentsCard scents={scents} />}
@@ -369,6 +371,93 @@ function NotificationSettingsCard({ notificationSettings }) {
           </div>
         </div>
       </Async>
+    </GlassCard>
+  );
+}
+
+const PUSH_STATE_LABEL = {
+  unsupported: 'הדפדפן הזה לא תומך בהתראות Push',
+  denied: 'ההרשאה נחסמה בדפדפן — צריך לאפשר התראות להאתר הזה בהגדרות הדפדפן/הטלפון',
+  subscribed: 'התראות פעילות בטלפון/דפדפן הזה',
+  'not-subscribed': 'לא מופעל בטלפון/דפדפן הזה',
+};
+
+/**
+ * הרשמה להתראות Web Push אמיתיות (phase24) — קופצות גם כשהאפליקציה
+ * סגורה/הטלפון נעול. המצב הוא per-device: כל טלפון/דפדפן שמנהל נכנס
+ * ממנו צריך להפעיל בנפרד (ר' isPushSupported ב-webPush.js למגבלת iOS).
+ */
+function PushNotificationsCard({ vapidPublicKey }) {
+  const { session } = useAuth();
+  const [state, setState] = useState('not-subscribed');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getPushState().then(setState);
+  }, []);
+
+  async function toggle() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (state === 'subscribed') {
+        await unsubscribeFromPush();
+        setState('not-subscribed');
+      } else {
+        await subscribeToPush(vapidPublicKey, session?.user?.id);
+        setState('subscribed');
+      }
+    } catch (caught) {
+      setError(describeError(caught));
+      setState(await getPushState());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const supported = isPushSupported();
+
+  return (
+    <GlassCard>
+      <CardHead
+        icon={BellIcon}
+        tone="slate"
+        title="התראות פוש בטלפון"
+        subtitle="קפיצה מיידית למסך הטלפון כשטכנאי מסיים ביקור — גם כשהאפליקציה סגורה"
+      />
+
+      {error && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`h-2.5 w-2.5 flex-none rounded-full ${state === 'subscribed' ? 'bg-ok' : 'bg-text-faint'}`} />
+        <span className="min-w-0 flex-1 text-[14.5px] text-text-dim">{PUSH_STATE_LABEL[state]}</span>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={!supported || busy || !vapidPublicKey}
+          className="ghost-btn !px-4 !py-2 text-[14px] disabled:opacity-40"
+        >
+          {busy ? '…' : state === 'subscribed' ? 'כיבוי בטלפון הזה' : 'הפעל בטלפון הזה'}
+        </button>
+      </div>
+
+      {!vapidPublicKey && (
+        <div className="mt-3.5 text-[13px] text-text-faint">
+          עדיין לא הוגדר מפתח VAPID פרטי ב-Vault (בשם{' '}
+          <span className="font-mono text-text-dim">vapid_private_key</span>) — עד אז ההפעלה חסומה.
+        </div>
+      )}
+
+      <div className="mt-3.5 rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[13px] leading-relaxed text-text-faint">
+        ב-iPhone זה עובד רק אם האפליקציה הותקנה כ"הוסף למסך הבית" (לא
+        מתוך טאב ספארי רגיל), ורק ב-iOS 16.4 ומעלה — זו מגבלה של אפל.
+        ב-Android/Chrome זה עובד גם מתוך הדפדפן הרגיל.
+      </div>
     </GlassCard>
   );
 }
