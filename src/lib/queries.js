@@ -445,7 +445,7 @@ async function loadCityRoutesMap() {
  * בפועל בשטח. הטכנאי צריך לקחת אותם פיזית מהמחסן/מהמדף לפני שיוצא.
  */
 export async function getRouteLoadPlan(routeName) {
-  const [devicesRows, models, cityRoutes] = await Promise.all([
+  const [devicesRows, models, cityRoutes, settings] = await Promise.all([
     supabase
       .from('devices')
       .select(`
@@ -457,7 +457,14 @@ export async function getRouteLoadPlan(routeName) {
       .then(unwrap),
     listAllDeviceModels(),
     loadCityRoutesMap(),
+    getNotificationSettings(),
   ]);
+
+  // מרווח ביטחון (2026-09-10, בקשה מפורשת): הטכנאי לא טוען בדיוק את
+  // המינימום המתמטי — אם לקוח שינה תוכנית או מכשיר צרך יותר מהצפוי,
+  // הוא לא אמור להיתקע בשטח בלי גיבוי. אחוז קבוע-לעריכה (Settings),
+  // לא הערכה סטטיסטית — אין למערכת הזו נתוני שונות-צריכה להתבסס עליהם.
+  const bufferMultiplier = 1 + (Number(settings?.route_load_buffer_pct ?? 0) / 100);
 
   const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
 
@@ -500,11 +507,18 @@ export async function getRouteLoadPlan(routeName) {
   }
 
   const items = [...byScent.entries()]
-    .map(([scent_name, ml]) => ({ scent_name, liters: Math.round((ml / 1000) * 100) / 100 }))
+    .map(([scent_name, ml]) => {
+      const exactLiters = Math.round((ml / 1000) * 100) / 100;
+      const liters = Math.round(exactLiters * bufferMultiplier * 100) / 100;
+      return { scent_name, exactLiters, liters };
+    })
     .filter((row) => row.liters > 0)
     .sort((a, b) => b.liters - a.liters);
 
-  return { items, missing, newDevices, deviceCount: routeDevices.length };
+  return {
+    items, missing, newDevices, deviceCount: routeDevices.length,
+    bufferPct: Number(settings?.route_load_buffer_pct ?? 0),
+  };
 }
 
 /** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
@@ -1002,6 +1016,24 @@ export const returnStockToWarehouse = ({ technician_id, model, scent_name, quant
     p_scent_name: scent_name || '',
     p_quantity: quantity,
   }).then(unwrap);
+
+/**
+ * מחזיר בבת אחת את כל מלאי הטכנאי (נוזל + יחידות) למחסן — עטיפה נוחה
+ * מעל returnStockToWarehouse לכל שורה, ר' iconair_schema_phase25.
+ * שורה בודדת שלא תואמת לצורת ה-XOR התקנית (data issue קיים, לא נוצר
+ * ע"י הפונקציה הזו) פשוט מדולגת בצד השרת, לא מפילה את שאר ההחזרה.
+ */
+export const returnAllStockToWarehouse = (technicianId) =>
+  supabase.rpc('return_all_stock_to_warehouse', { p_technician_id: technicianId }).then(unwrap);
+
+/**
+ * איפוס מלאי-נוזל (לא יחידות-מכשיר) של טכנאי לאפס, עם רישום מלא
+ * ב-stock_movements ('reset', לא 'return') — לפעימה ראשונה בלבד, לפני
+ * תחילת מחזור עבודה שוטף. מנהל בלבד. לעולם לא נוגע ב-devices.oil_level_pct
+ * — זה תמיד נשאר המצב האמיתי בשטח, ר' iconair_schema_phase25.
+ */
+export const resetTechnicianStock = (technicianId) =>
+  supabase.rpc('reset_technician_stock', { p_technician_id: technicianId }).then(unwrap);
 
 /* =====================================================================
    ניחוחות (scents) — רשימה גלובלית קבועה. כל שדה "ניחוח" באפליקציה

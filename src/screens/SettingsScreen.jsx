@@ -98,6 +98,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         {isAdmin && <RouteCyclesCard routeCycles={routeCycles} />}
+        {isAdmin && <RouteLoadBufferCard notificationSettings={notificationSettings} />}
         {isAdmin && <NotificationSettingsCard notificationSettings={notificationSettings} />}
         {isAdmin && <PushNotificationsCard vapidPublicKey={notificationSettings.data?.vapid_public_key} />}
         {isAdmin && <BrandingCard />}
@@ -273,6 +274,85 @@ function RouteCyclesCard({ routeCycles }) {
               </div>
             );
           })}
+        </div>
+      </Async>
+    </GlassCard>
+  );
+}
+
+/**
+ * מרווח הביטחון על חישוב "מה להעמיס היום" (phase25) — אחוז קבוע מעל
+ * החישוב המדויק (getRouteLoadPlan), כדי שטכנאי לא ייתקע בשטח אם לקוח
+ * שינה תוכנית או מכשיר צרך יותר ניחוח מהצפוי. שדה יחיד על אותה שורת
+ * notification_settings שכבר משמשת הגדרות מייל/פוש — לא סוד, בלי Vault.
+ */
+function RouteLoadBufferCard({ notificationSettings }) {
+  const row = notificationSettings.data;
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  const current = draft ?? String(row?.route_load_buffer_pct ?? 15);
+  const dirty = row && current !== String(row.route_load_buffer_pct ?? 15);
+
+  async function save() {
+    const value = Number(current);
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      setError('מרווח הביטחון חייב להיות מספר בין 0 ל-100');
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await updateNotificationSettings({ route_load_buffer_pct: value });
+      notificationSettings.refetch();
+      setDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <CardHead
+        icon={RouteIcon}
+        tone="slate"
+        title="מרווח ביטחון בטעינת קו"
+        subtitle="אחוז קבוע מעל הכמות המדויקת ב'הכנה לקו' — כדי שתמיד יהיה גיבוי ברכב"
+      />
+
+      {error && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          {error}
+        </div>
+      )}
+
+      <Async loading={notificationSettings.loading} error={notificationSettings.error} onRetry={notificationSettings.refetch}>
+        <div className="flex items-center gap-2.5">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={current}
+            onChange={(e) => setDraft(e.target.value)}
+            aria-label="אחוז מרווח ביטחון"
+            className="w-[80px] rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-center text-[15px] text-text focus:border-gold-500/45 focus:outline-none"
+          />
+          <span className="text-[14px] text-text-faint">% מעל החישוב המדויק</span>
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || saving}
+            className="ghost-btn !px-3.5 !py-2 text-[14px] disabled:opacity-40"
+          >
+            {saving ? 'שומר…' : 'שמירה'}
+          </button>
+          {saved && <span className="text-[13.5px] font-semibold text-ok">נשמר</span>}
         </div>
       </Async>
     </GlassCard>

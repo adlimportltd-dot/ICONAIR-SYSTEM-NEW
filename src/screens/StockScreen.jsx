@@ -10,7 +10,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import {
   listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
-  returnStockToWarehouse, listRoutes, getRouteLoadPlan,
+  returnStockToWarehouse, returnAllStockToWarehouse, resetTechnicianStock, listRoutes, getRouteLoadPlan,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { getCycleInfo } from '../lib/mappers';
@@ -178,6 +178,13 @@ function TodayLoadCard() {
               </div>
             </div>
 
+            {plan.data.bufferPct > 0 && plan.data.items.length > 0 && (
+              <div className="mb-3.5 rounded-row border border-gold-300/25 bg-gold-500/[0.06] px-4 py-2.5 text-[13.5px] text-text-dim">
+                הכמויות כוללות מרווח ביטחון של <b className="font-bold text-gold-600">{plan.data.bufferPct}%</b> מעבר
+                לחישוב המדויק — כדי שלא תיתקע בשטח אם מכשיר צרך יותר מהצפוי.
+              </div>
+            )}
+
             {plan.data.items.length === 0 ? (
               <div className="rounded-row border border-dashed border-black/[0.1] px-4 py-6 text-center text-[15px] text-text-faint">
                 כל המכשירים בקו הזה מלאים — אין צורך להעמיס שמן היום.
@@ -188,7 +195,12 @@ function TodayLoadCard() {
                   <div key={item.scent_name} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
                     <div className="min-w-0">
                       <div className="text-[17px] font-bold">{item.scent_name}</div>
-                      <div className="tabular mt-0.5 text-[13.5px] text-text-faint">סה״כ {item.liters.toLocaleString('he-IL')} ל׳</div>
+                      <div className="tabular mt-0.5 text-[13.5px] text-text-faint">
+                        סה״כ {item.liters.toLocaleString('he-IL')} ל׳
+                        {plan.data.bufferPct > 0 && (
+                          <span className="text-text-faint"> (מדויק: {item.exactLiters.toLocaleString('he-IL')} ל׳)</span>
+                        )}
+                      </div>
                     </div>
                     <div className="tabular rounded-pill border border-gold-300/[0.4] bg-gold-500/[0.1] px-3.5 py-2 text-[15px] font-bold text-gold-600">
                       {containersLabel(item.liters)}
@@ -241,6 +253,76 @@ function TodayLoadCard() {
 }
 
 /**
+ * שתי פעולות מרוכזות על מלאי-רכב, מעל טבלת "מה כבר יש ברכב":
+ * "החזר הכל למחסן" (טכנאי — על עצמו; מנהל — על מי שבחר, ר' בורר) פשוט
+ * מריץ return_all_stock_to_warehouse ומרענן; "איפוס מלאי" (מנהל בלבד)
+ * פותח מודל אישור עם תצוגה מלאה של מה בדיוק יאופס לפני ביצוע — ר'
+ * ResetStockModal. לטכנאי שאינו מנהל אין בורר טכנאים כלל, רק כפתור
+ * החזרה יחיד על המלאי שלו-עצמו.
+ */
+function StockBulkActions({ isAdmin, profile, technicianOptions, onReset, onRefetch }) {
+  const [selectedTech, setSelectedTech] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  const targetTechnicianId = isAdmin ? selectedTech : profile?.id;
+
+  async function returnAll() {
+    if (!targetTechnicianId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await returnAllStockToWarehouse(targetTechnicianId);
+      onRefetch();
+      setDone(true);
+      setTimeout(() => setDone(false), 3000);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-row border border-black/[0.06] bg-black/[0.015] px-3.5 py-3">
+      {isAdmin && (
+        <Select
+          value={selectedTech}
+          onChange={(e) => setSelectedTech(e.target.value)}
+          options={technicianOptions}
+          placeholder="בחר טכנאי לפעולה מרוכזת"
+          className="max-w-[220px]"
+        />
+      )}
+
+      <button
+        type="button"
+        onClick={returnAll}
+        disabled={!targetTechnicianId || busy}
+        className="ghost-btn !px-3.5 !py-2 text-[13.5px] disabled:opacity-40"
+      >
+        {busy ? 'מחזיר…' : 'החזר הכל למחסן'}
+      </button>
+
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => selectedTech && onReset(selectedTech)}
+          disabled={!selectedTech}
+          className="ghost-btn !px-3.5 !py-2 text-[13.5px] !border-crit/30 !text-crit-soft disabled:opacity-40"
+        >
+          איפוס מלאי (פעימה ראשונה)
+        </button>
+      )}
+
+      {done && <span className="text-[13.5px] font-semibold text-ok">הוחזר בהצלחה</span>}
+      {error && <span className="text-[13.5px] text-crit-soft">{error}</span>}
+    </div>
+  );
+}
+
+/**
  * מלאי נייד — "מה יש ברכב עכשיו" לכל טכנאי. complete_visit (סיום ביקור
  * ב-OilScreen) צורך מכאן אוטומטית את הליטרים/יחידות המדויקים בכל ביקור
  * (ר' phase19); המסך הזה הוא המקום שמנהל טוען/מעדכן את הכמות מולה
@@ -257,6 +339,7 @@ export default function StockScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
   const [returnRow, setReturnRow] = useState(null);
+  const [resetTechnicianId, setResetTechnicianId] = useState(null);
 
   const stock = useQuery(listTechnicianStock, []);
   const technicians = useQuery(listTechnicianOptions, [], { enabled: isAdmin });
@@ -325,6 +408,14 @@ export default function StockScreen() {
           onAction={isAdmin ? () => { setEditRow(null); setFormOpen(true); } : undefined}
         />
 
+        <StockBulkActions
+          isAdmin={isAdmin}
+          profile={profile}
+          technicianOptions={technicianOptions}
+          onReset={(technicianId) => setResetTechnicianId(technicianId)}
+          onRefetch={stock.refetch}
+        />
+
         <Async
           loading={stock.loading}
           error={stock.error}
@@ -364,6 +455,17 @@ export default function StockScreen() {
         onClose={() => setReturnRow(null)}
         onSaved={() => {
           setReturnRow(null);
+          stock.refetch();
+        }}
+      />
+
+      <ResetStockModal
+        technicianId={resetTechnicianId}
+        technicianOptions={technicianOptions}
+        stockRows={stock.data ?? []}
+        onClose={() => setResetTechnicianId(null)}
+        onSaved={() => {
+          setResetTechnicianId(null);
           stock.refetch();
         }}
       />
@@ -599,6 +701,85 @@ function ReturnStockModal({ row, onClose, onSaved }) {
           <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/**
+ * איפוס מלאי-נוזל של טכנאי — מיועד לפעימה ראשונה בלבד, לפני תחילת
+ * מחזור עבודה שוטף (ר' phase25). מציג במפורש אילו שורות ניחוח ובאיזו
+ * כמות יאופסו ל-0 לפני שמבקש אישור — אף פעם לא איפוס "עיוור". לא נוגע
+ * ביחידות-מכשיר (אלה לא תלויות-מחזור) ולעולם לא במפלס שמן במכשיר עצמו.
+ */
+function ResetStockModal({ technicianId, technicianOptions, stockRows, onClose, onSaved }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (!technicianId) return null;
+
+  const technicianName = technicianOptions.find((t) => t.value === technicianId)?.label ?? 'הטכנאי';
+  const rowsToReset = stockRows.filter((r) => r.technician_id === technicianId && !r.model && r.quantity > 0);
+
+  async function confirm() {
+    setError(null);
+    setBusy(true);
+    try {
+      await resetTechnicianStock(technicianId);
+      onSaved();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="איפוס מלאי נוזלי — פעימה ראשונה"
+      subtitle={`${technicianName} · מיועד להתחלת מחזור עבודה ראשון בלבד, לא לשימוש שוטף`}
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-3.5">
+        <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
+          זה לא נוגע במפלס השמן האמיתי של אף מכשיר אצל לקוח — זה תמיד
+          נשאר המצב האמיתי בשטח. הפעולה הזו מאפסת רק את מה שרשום כ"נוזל
+          ברכב" של הטכנאי, עם תיעוד מלא בהיסטוריית המלאי.
+        </div>
+
+        {rowsToReset.length === 0 ? (
+          <div className="text-[14.5px] text-text-faint">אין לטכנאי הזה מלאי נוזלי רשום כרגע — אין מה לאפס.</div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-[13px] font-semibold text-text-faint">השורות הבאות יאופסו ל-0:</div>
+            {rowsToReset.map((r) => (
+              <div key={r.id} className="inner-row flex items-center justify-between gap-2 px-3.5 py-2.5 text-[14.5px]">
+                <span>{r.scent_name}</span>
+                <span className="tabular font-mono font-semibold">{formatQty(r.quantity, r.scent_name)} ← 0</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={busy || rowsToReset.length === 0}
+            className="rounded-pill border border-crit/40 bg-crit/10 px-4 py-2.5 text-[14.5px]
+                       font-bold text-crit-soft transition-colors hover:border-crit/60 disabled:opacity-40"
+          >
+            {busy ? 'מאפס…' : 'אשר איפוס'}
+          </button>
+          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        </div>
+      </div>
     </Modal>
   );
 }
