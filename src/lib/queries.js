@@ -1413,6 +1413,14 @@ export const getNotificationSettings = () =>
 export const updateNotificationSettings = (patch) =>
   supabase.from('notification_settings').update(patch).eq('id', true).select().single().then(unwrap);
 
+/**
+ * שליחה ידנית של דוח שירות ללקוח (phase23) — ביוזמת מנהל בלבד, כשהלקוח
+ * מבקש את הדוח במפורש. השליחה האוטומטית (הטריגר ב-DB) שולחת רק לכתובת
+ * הניהולית המרכזית, לעולם לא ללקוח — זו הדרך היחידה שהלקוח מקבל מייל.
+ */
+export const sendServiceReportToCustomer = (reportId) =>
+  supabase.rpc('send_service_report_to_customer', { p_report_id: reportId }).then(unwrap);
+
 /** היסטוריית שמן לרשימת מכשירים נתונה (הכרטיסייה המלאה של עצירה במסלול) */
 export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
   deviceIds.length === 0

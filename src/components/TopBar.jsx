@@ -2,12 +2,104 @@ import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Sidebar';
 import { SearchIcon, BellIcon, PlusIcon, DropIcon } from './ui/Icons';
 import { relativeTime, OIL_EVENT_LABEL } from '../lib/mappers';
-import { serviceReportUrl } from '../lib/queries';
+import { serviceReportUrl, sendServiceReportToCustomer } from '../lib/queries';
+import { describeError } from '../lib/supabase';
 
 /** שם עצירה קריא: שם הלקוח, ועם תווית הבניין אם זו עצירת-אתר (אוורסט וכו') */
 function stopLabel(visit) {
   const name = visit.customer?.name ?? visit.site?.label ?? 'לקוח';
   return visit.site?.label ? `${name} — ${visit.site.label}` : name;
+}
+
+/**
+ * שורת דוח שירות בפעמון: קישור לפתיחת ה-PDF, ✉ שפותח טיוטה במייל
+ * האישי (עובד תמיד, גם בלי מפתח Resend מוגדר), ו"שלח ללקוח" שמפעיל את
+ * ה-RPC הידני send_service_report_to_customer — השליחה האוטומטית
+ * (הטריגר ב-DB) הולכת רק לכתובת הניהולית המרכזית, לעולם לא ללקוח;
+ * זו הדרך היחידה שדוח בכל זאת מגיע ללקוח, וביוזמת מנהל בלבד.
+ */
+function ServiceReportRow({ report }) {
+  const [sendState, setSendState] = useState('idle'); // idle | sending | sent | error
+  const [sendError, setSendError] = useState(null);
+
+  const pdfUrl = serviceReportUrl(report.file_path);
+  const mailtoHref = report.customer_email
+    ? `mailto:${report.customer_email}` +
+      `?subject=${encodeURIComponent(`דוח שירות ICON AIR — ${report.customer_name}`)}` +
+      `&body=${encodeURIComponent(`שלום,\n\nמצורף קישור לדוח השירות מהביקור האחרון:\n${pdfUrl}\n\nבברכה,\nICON AIR`)}`
+    : null;
+
+  async function sendToCustomer() {
+    setSendState('sending');
+    setSendError(null);
+    try {
+      await sendServiceReportToCustomer(report.id);
+      setSendState('sent');
+    } catch (caught) {
+      setSendState('error');
+      setSendError(describeError(caught));
+    }
+  }
+
+  return (
+    <div
+      className="inner-row mb-1.5 flex flex-col gap-1.5 px-3 py-2.5 last:mb-0
+                 transition-colors hover:border-gold-300/30 hover:bg-gold-500/[0.07]"
+    >
+      <div className="flex items-center gap-2.5">
+        <a
+          href={pdfUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-w-0 flex-1 items-center gap-2.5"
+          title="פתח את דוח ה-PDF"
+        >
+          <span className="grid h-8 w-8 flex-none place-items-center rounded-lg
+                            border border-gold-300/25 bg-gold-500/[0.1] text-gold-600">
+            <DropIcon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[14px] font-semibold">
+              {report.technician_name ?? 'טכנאי'} · {report.customer_name}
+            </div>
+            <div className="mt-0.5 truncate text-[13px] text-text-faint">
+              {OIL_EVENT_LABEL[report.event_type] ?? report.event_type}
+              {report.device_model ? ` · ${report.device_model}` : ''} · {relativeTime(report.created_at)}
+            </div>
+          </div>
+        </a>
+        {mailtoHref && (
+          <a
+            href={mailtoHref}
+            className="flex-none rounded-[8px] border border-black/[0.09] px-2 py-1
+                       text-[12px] font-semibold text-text-dim transition-colors
+                       hover:border-gold-300/40 hover:text-gold-600"
+            title={`פתח מייל אישי ללקוח (${report.customer_email})`}
+          >
+            ✉
+          </a>
+        )}
+      </div>
+
+      {report.customer_email && (
+        <div className="flex items-center gap-2 ps-[42px]">
+          <button
+            type="button"
+            onClick={sendToCustomer}
+            disabled={sendState === 'sending' || sendState === 'sent'}
+            className="flex-none rounded-[7px] border border-gold-300/30 bg-gold-500/[0.08] px-2.5 py-1
+                       text-[12px] font-semibold text-gold-600 transition-colors
+                       hover:border-gold-300/50 disabled:opacity-50"
+          >
+            {sendState === 'sending' ? 'שולח…' : sendState === 'sent' ? 'נשלח ✓' : 'שלח ללקוח במייל'}
+          </button>
+          {sendState === 'error' && (
+            <span className="truncate text-[12px] text-crit-soft" title={sendError}>{sendError}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -97,54 +189,9 @@ function NotificationsBell({
             <div className="px-2.5 py-3 text-[14px] text-text-faint">אין עדיין דוחות שירות.</div>
           )}
 
-          {!serviceReportsLoading && serviceReports.map((report) => {
-            const pdfUrl = serviceReportUrl(report.file_path);
-            const mailtoHref = report.customer_email
-              ? `mailto:${report.customer_email}` +
-                `?subject=${encodeURIComponent(`דוח שירות ICON AIR — ${report.customer_name}`)}` +
-                `&body=${encodeURIComponent(`שלום,\n\nמצורף קישור לדוח השירות מהביקור האחרון:\n${pdfUrl}\n\nבברכה,\nICON AIR`)}`
-              : null;
-            return (
-              <div
-                key={report.id}
-                className="inner-row mb-1.5 flex items-center gap-2.5 px-3 py-2.5 last:mb-0
-                           transition-colors hover:border-gold-300/30 hover:bg-gold-500/[0.07]"
-              >
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-w-0 flex-1 items-center gap-2.5"
-                  title="פתח את דוח ה-PDF"
-                >
-                  <span className="grid h-8 w-8 flex-none place-items-center rounded-lg
-                                    border border-gold-300/25 bg-gold-500/[0.1] text-gold-600">
-                    <DropIcon className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-semibold">
-                      {report.technician_name ?? 'טכנאי'} · {report.customer_name}
-                    </div>
-                    <div className="mt-0.5 truncate text-[13px] text-text-faint">
-                      {OIL_EVENT_LABEL[report.event_type] ?? report.event_type}
-                      {report.device_model ? ` · ${report.device_model}` : ''} · {relativeTime(report.created_at)}
-                    </div>
-                  </div>
-                </a>
-                {mailtoHref && (
-                  <a
-                    href={mailtoHref}
-                    className="flex-none rounded-[8px] border border-black/[0.09] px-2 py-1
-                               text-[12px] font-semibold text-text-dim transition-colors
-                               hover:border-gold-300/40 hover:text-gold-600"
-                    title={`פתח מייל ללקוח (${report.customer_email})`}
-                  >
-                    ✉
-                  </a>
-                )}
-              </div>
-            );
-          })}
+          {!serviceReportsLoading && serviceReports.map((report) => (
+            <ServiceReportRow key={report.id} report={report} />
+          ))}
         </div>
       )}
     </div>
