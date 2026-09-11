@@ -27,6 +27,7 @@ import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
+import { optimizeStopOrder } from '../lib/googleMaps';
 
 /**
  * מסלולים — עצירות לפי קו הפצה ותאריך, עם ניווט חד-לחיצה לכל תחנה.
@@ -284,6 +285,27 @@ function RouteStops({ routeName }) {
     applyOrder(smartSortStops(ordered).map((c) => c.id));
   }
 
+  /**
+   * "אופטימיזציית מסלול חכמה" — Google Directions API (optimizeWaypoints),
+   * ר' googleMaps.js. שונה מ-autoSort (heuristic עיר/רחוב): זו קריאה
+   * אמיתית ל-Google שמחשבת מרחקי-נהיגה בפועל, לא רק מיון אלפביתי.
+   */
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState(null);
+
+  async function runGoogleOptimize() {
+    setGoogleError(null);
+    setGoogleBusy(true);
+    try {
+      const nextIds = await optimizeStopOrder(ordered.map((c) => ({ id: c.id, address: c.address })));
+      await applyOrder(nextIds);
+    } catch (caught) {
+      setGoogleError(caught.message || String(caught));
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
   async function toggleStatus(id) {
     const prevStatus = statusById[id] ?? 'pending';
     const nextStatus = prevStatus === 'done' ? 'pending' : 'done';
@@ -348,16 +370,35 @@ function RouteStops({ routeName }) {
           title="ממיין לפי עיר ואז רחוב+מספר בית — לא ניתוב GPS אמיתי, רק סדר הגיוני מהנתונים הקיימים"
         >
           <SortIcon className="h-4 w-4" />
-          סדר קו אוטומטי
+          מיון לפי עיר/רחוב
         </SecondaryButton>
 
-        <PrimaryButton
+        <SecondaryButton
           disabled={!fullRouteLink}
           onClick={() => fullRouteLink && window.open(fullRouteLink, '_blank', 'noopener')}
         >
           פתח מסלול מלא ב-Google Maps
+        </SecondaryButton>
+
+        <PrimaryButton
+          className="inline-flex items-center gap-1.5"
+          disabled={ordered.length < 3 || googleBusy}
+          onClick={runGoogleOptimize}
+          title={
+            ordered.length > 25
+              ? 'מעל 25 תחנות — Google Directions לא תומך באופטימיזציה חד-פעמית מעבר לזה'
+              : 'שולח את כתובות הקו ל-Google Directions API ומסדר מחדש לפי מרחק נהיגה אמיתי'
+          }
+        >
+          {googleBusy ? 'מחשב מסלול…' : '✨ אופטימיזציית מסלול חכמה'}
         </PrimaryButton>
       </div>
+
+      {googleError && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          האופטימיזציה נכשלה: {googleError}
+        </div>
+      )}
 
       {saveError && (
         <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
