@@ -633,7 +633,7 @@ export async function listRouteAssignments(routeName, visitDate) {
 
   const existing = await supabase
     .from('route_assignments')
-    .select('id, customer_id, site_id, stop_order, status')
+    .select('id, customer_id, site_id, stop_order, status, sub_route_id')
     .eq('visit_date', visitDate)
     .or([
       customerIds.length ? `and(site_id.is.null,customer_id.in.(${customerIds.join(',')}))` : null,
@@ -664,10 +664,54 @@ export async function listRouteAssignments(routeName, visitDate) {
   return stops
     .map((s) => {
       const a = byKey.get(stopKey(s));
-      return { ...s, id: a.id, stopOrder: a.stop_order, status: a.status };
+      return { ...s, id: a.id, stopOrder: a.stop_order, status: a.status, sub_route_id: a.sub_route_id ?? null };
     })
     .sort((a, b) => a.stopOrder - b.stopOrder);
 }
+
+/* =====================================================================
+   תתי-קווים (sub_routes, phase28) — אשכולות גיאוגרפיים בתוך קו, כדי
+   לפצל קו גדול (למשל קו חיפה, 68+ עצירות) להיקפים קטנים מ-25 עצירות
+   שכל אחד ניתן לאופטימיזציה נפרדת מול Google (ר' googleMaps.js —
+   optimizeStopOrder זורק שגיאה מעל 25). "לא משויך" (sub_route_id null)
+   הוא מצב תקין ונשאר ברירת המחדל — זו תוספת, לא שינוי-שובר להתנהגות
+   הקיימת של קו בלי תתי-קווים בכלל.
+   ===================================================================== */
+
+export async function listSubRoutesForRoute(routeName) {
+  if (!routeName) return [];
+  const routeId = await ensureRouteId(routeName);
+  return supabase
+    .from('sub_routes')
+    .select('id, route_id, name, sort_order')
+    .eq('route_id', routeId)
+    .order('sort_order')
+    .order('name')
+    .then(unwrap);
+}
+
+export async function createSubRoute(routeName, name) {
+  const routeId = await ensureRouteId(routeName);
+  return supabase
+    .from('sub_routes')
+    .insert({ route_id: routeId, name: name.trim() })
+    .select('id, route_id, name, sort_order')
+    .single()
+    .then(unwrap);
+}
+
+export const deleteSubRoute = (id) =>
+  supabase.from('sub_routes').delete().eq('id', id).then(unwrap);
+
+/** משייך/מוציא-משיוך (subRouteId=null) עצירה בודדת לתת-קו, לפי מזהה שורת route_assignments. */
+export const assignStopToSubRoute = (assignmentId, subRouteId) =>
+  supabase
+    .from('route_assignments')
+    .update({ sub_route_id: subRouteId })
+    .eq('id', assignmentId)
+    .select('id, sub_route_id')
+    .single()
+    .then(unwrap);
 
 /**
  * שומר סדר עצירות חדש (אחרי גרירה/חצים) — כל העצירות כבר קיימות
