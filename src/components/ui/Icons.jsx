@@ -223,6 +223,30 @@ export function MenuIcon(props) {
   );
 }
 
+/** ידית גרירה (שש נקודות) — לסידור מסלולים בגרירה-ושחרור */
+export function GripIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+      <circle cx="9" cy="6" r="1.6" />
+      <circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" />
+      <circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" />
+      <circle cx="15" cy="18" r="1.6" />
+    </svg>
+  );
+}
+
+/** מיון (חץ למעלה + חץ למטה, כל אחד עם קו) — ל"סדר קו אוטומטי" */
+export function SortIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 20V4M7 4 4 7M7 4l3 3" />
+      <path d="M17 4v16M17 20l-3-3M17 20l3-3" />
+    </svg>
+  );
+}
+
 /** לוגו ICON AIR — שלושה זרמי אוויר מתפתלים */
 export function AirMarkIcon(props) {
   return (

@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
 import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } from '../components/ui/Field';
-import { RouteIcon, NavigationIcon, PhoneIcon } from '../components/ui/Icons';
+import { RouteIcon, NavigationIcon, PhoneIcon, GripIcon, SortIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
 import MlSlider from '../components/ui/MlSlider';
 import { useQuery } from '../hooks/useQuery';
@@ -181,6 +188,32 @@ function RouteLoadPlanCard({ routeName }) {
   );
 }
 
+/**
+ * "סדר קו אוטומטי" — 2026-09-11, בקשה מפורשת. אין לנו אינטגרציית
+ * ניתוב/מרחקים אמיתית (ר' הכלל ב-CLAUDE.md: לא לבנות מול אינטגרציה
+ * שלא קיימת) — זה מיון הגיוני לפי הנתונים שכבר יש: עיר קודם (אשכולות
+ * שכונתיים — "כל חיפה ביחד, כל נשר ביחד"), ואז שם רחוב + מספר בית
+ * בתוך אותה עיר, כדי שהליכה/נסיעה ברחוב תהיה ברצף עולה, לא מדלגת.
+ */
+function parseStreetAndNumber(address) {
+  if (!address) return { street: '', number: 0 };
+  const match = address.match(/^(.*?)\s+(\d+)/);
+  if (match) return { street: match[1].trim(), number: Number(match[2]) };
+  return { street: address.trim(), number: 0 };
+}
+
+function smartSortStops(stops) {
+  return [...stops].sort((a, b) => {
+    const cityCmp = (a.city || '').localeCompare(b.city || '', 'he');
+    if (cityCmp !== 0) return cityCmp;
+    const pa = parseStreetAndNumber(a.address);
+    const pb = parseStreetAndNumber(b.address);
+    const streetCmp = pa.street.localeCompare(pb.street, 'he');
+    if (streetCmp !== 0) return streetCmp;
+    return pa.number - pb.number;
+  });
+}
+
 function RouteStops({ routeName }) {
   const [visitDate, setVisitDate] = useState(todayISO);
   const stops = useQuery(() => listRouteAssignments(routeName, visitDate), [routeName, visitDate]);
@@ -206,16 +239,19 @@ function RouteStops({ routeName }) {
   const byId = new Map((stops.data ?? []).map((c) => [c.id, c]));
   const ordered = order.map((id) => byId.get(id)).filter(Boolean);
 
-  async function move(id, dir) {
+  // 2026-09-11 (בקשה מפורשת: "החצים הקטנים זה סיוט"): שלוש דרכים לסדר
+  // מחדש — גרירה-ושחרור, קפיצה למספר-סדר מוקלד, ומיון גאוגרפי אוטומטי —
+  // כולן מסתיימות באותה פונקציית שמירה יחידה (אופטימי + rollback בכשל),
+  // בדיוק אותו דפוס שהיה ל-move() הישן, רק לא קשור יותר לכפתור-חץ ספציפי.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  async function applyOrder(next) {
     const prevOrder = order;
-    const i = prevOrder.indexOf(id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= prevOrder.length) return;
-
-    const next = [...prevOrder];
-    [next[i], next[j]] = [next[j], next[i]];
     setOrder(next); // אופטימי — המסך מגיב מיד, לפני שהשמירה חוזרת
-
     try {
       setSaveError(null);
       await saveRouteOrder(next);
@@ -223,6 +259,29 @@ function RouteStops({ routeName }) {
       setOrder(prevOrder); // השמירה נכשלה — חוזרים לסדר הקודם
       setSaveError(describeError(caught));
     }
+  }
+
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return;
+    const from = order.indexOf(active.id);
+    const to = order.indexOf(over.id);
+    if (from < 0 || to < 0) return;
+    applyOrder(arrayMove(order, from, to));
+  }
+
+  /** קפיצה למיקום מוקלד (1-based, כמו שהטכנאי רואה על המסך) */
+  function jumpTo(id, targetPosition) {
+    const from = order.indexOf(id);
+    const to = Math.min(Math.max(0, targetPosition - 1), order.length - 1);
+    if (from < 0 || from === to) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    applyOrder(next);
+  }
+
+  function autoSort() {
+    applyOrder(smartSortStops(ordered).map((c) => c.id));
   }
 
   async function toggleStatus(id) {
@@ -282,8 +341,17 @@ function RouteStops({ routeName }) {
           aria-label="תאריך ביקור"
         />
 
+        <SecondaryButton
+          className="ms-auto inline-flex items-center gap-1.5"
+          disabled={ordered.length < 2}
+          onClick={autoSort}
+          title="ממיין לפי עיר ואז רחוב+מספר בית — לא ניתוב GPS אמיתי, רק סדר הגיוני מהנתונים הקיימים"
+        >
+          <SortIcon className="h-4 w-4" />
+          סדר קו אוטומטי
+        </SecondaryButton>
+
         <PrimaryButton
-          className="ms-auto"
           disabled={!fullRouteLink}
           onClick={() => fullRouteLink && window.open(fullRouteLink, '_blank', 'noopener')}
         >
@@ -304,25 +372,28 @@ function RouteStops({ routeName }) {
         isEmpty={ordered.length === 0}
         empty={<EmptyState title="אין לקוחות פעילים על הקו הזה" />}
       >
-        <div className="flex flex-col gap-[9px]">
-          {ordered.map((customer, index) => (
-            <StopRow
-              key={customer.id}
-              index={index}
-              customer={customer}
-              done={statusById[customer.id] === 'done'}
-              onToggleDone={() => toggleStatus(customer.id)}
-              onMarkDone={() => markDone(customer.id)}
-              onMoveUp={() => move(customer.id, -1)}
-              onMoveDown={() => move(customer.id, 1)}
-              disableUp={index === 0}
-              disableDown={index === ordered.length - 1}
-              deviceModels={deviceModels.data ?? []}
-              scents={scents.data ?? []}
-              onVisitCompleted={stops.refetch}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-[9px]">
+              {ordered.map((customer, index) => (
+                <StopRow
+                  key={customer.id}
+                  id={customer.id}
+                  index={index}
+                  total={ordered.length}
+                  customer={customer}
+                  done={statusById[customer.id] === 'done'}
+                  onToggleDone={() => toggleStatus(customer.id)}
+                  onMarkDone={() => markDone(customer.id)}
+                  onJump={(position) => jumpTo(customer.id, position)}
+                  deviceModels={deviceModels.data ?? []}
+                  scents={scents.data ?? []}
+                  onVisitCompleted={stops.refetch}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </Async>
     </GlassCard>
   );
@@ -330,29 +401,57 @@ function RouteStops({ routeName }) {
 
 /**
  * כרטיסיית עצירה — פריסה אחת (לא שתי גרסאות נפרדות למובייל/דסקטופ):
- * נערמת אנכית (מספר סדר+בוצע+שם+כתובת למעלה, תגית מכשירים+3 כפתורי
- * פעולה למטה) כדי שלעולם לא יהיה מרוץ-רוחב בין שם הלקוח לכפתורים.
+ * נערמת אנכית (ידית גרירה+מספר סדר+בוצע+שם+כתובת למעלה, תגית מכשירים+3
+ * כפתורי פעולה למטה) כדי שלעולם לא יהיה מרוץ-רוחב בין שם הלקוח לכפתורים.
  * 2026-09-10 (תיקון עיצוב אחרי משוב "כפתורים זולגים החוצה"): הגרסה
- * הקודמת דחסה הכל לשורה אחת (חצי סידור + בוצע + שם flex-1 + תגית +
- * 3 כפתורים) — ברוחב מובייל צר סכום ה-flex-none לבדו כבר חרג מרוחב
- * הכרטיס, ובלי overflow-hidden זה גלש שמאלה (ב-RTL, "שמאלה" = כיוון
- * הגלישה) ודחק את השם לרוחב 0 עד שנעלם לגמרי. פריסה נערמת עם
+ * הקודמת דחסה הכל לשורה אחת — ברוחב מובייל צר סכום ה-flex-none לבדו כבר
+ * חרג מרוחב הכרטיס, ובלי overflow-hidden זה גלש שמאלה (ב-RTL, "שמאלה" =
+ * כיוון הגלישה) ודחק את השם לרוחב 0 עד שנעלם לגמרי. פריסה נערמת עם
  * overflow-hidden על הכרטיס עצמו פותרת את זה מבנית, לא בטלאי-רוחב.
+ *
+ * 2026-09-11 (בקשה מפורשת "החצים זה סיוט בשטח"): חצי למעלה/למטה
+ * הוחלפו בידית גרירה (useSortable, ר' @dnd-kit) + תג-מספר לחיץ שנהיה
+ * שדה-מספר להקלדת יעד ("קפיצה מהירה"). הידית היא היחידה שנושאת את
+ * attributes/listeners של dnd-kit — לא כל הכרטיס — כדי שגרירה לא תתנגש
+ * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
-function StopRow({ index, customer, done, onToggleDone, onMarkDone, onMoveUp, onMoveDown, disableUp, disableDown, deviceModels, scents, onVisitCompleted }) {
+function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
   const call = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
   const devices = customer.devices ?? [];
   const [cardOpen, setCardOpen] = useState(false);
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const dragStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 20 : undefined,
+    position: isDragging ? 'relative' : undefined,
+  };
+
   return (
-    <div className={`inner-row overflow-hidden transition-opacity ${done ? 'opacity-55' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={dragStyle}
+      className={`inner-row overflow-hidden transition-opacity ${done ? 'opacity-55' : ''}`}
+    >
       <div className="flex flex-col gap-3 p-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="tabular grid h-7 w-7 flex-none place-items-center rounded-full border border-black/[0.09] bg-white font-mono text-[13px] font-bold text-text-dim">
-            {index + 1}
-          </span>
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`גרור כדי לשנות את המיקום של ${customer.name} במסלול`}
+            className="grid h-8 w-8 flex-none touch-none place-items-center rounded-full text-text-faint
+                       transition-colors hover:bg-black/[0.05] hover:text-gold-600 active:cursor-grabbing"
+            style={{ cursor: 'grab' }}
+          >
+            <GripIcon className="h-5 w-5" />
+          </button>
+
+          <OrderBadge index={index} total={total} onJump={onJump} />
 
           <button
             type="button"
@@ -379,29 +478,6 @@ function StopRow({ index, customer, done, onToggleDone, onMarkDone, onMoveUp, on
             </div>
             <div className="truncate text-[13px] text-text-faint">{customer.address || '—'}</div>
           </button>
-
-          <div className="flex flex-none flex-col items-center gap-0.5">
-            <button
-              type="button"
-              onClick={onMoveUp}
-              disabled={disableUp}
-              aria-label="הזז למעלה"
-              className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                         hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              onClick={onMoveDown}
-              disabled={disableDown}
-              aria-label="הזז למטה"
-              className="grid h-6 w-6 place-items-center rounded-full text-text-faint transition-colors
-                         hover:text-gold-600 disabled:opacity-25 disabled:hover:text-text-faint"
-            >
-              ▼
-            </button>
-          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -462,6 +538,63 @@ function StopRow({ index, customer, done, onToggleDone, onMarkDone, onMoveUp, on
         onVisitCompleted={onVisitCompleted}
       />
     </div>
+  );
+}
+
+/**
+ * תג המספר הסידורי — לחיצה עליו הופכת אותו לשדה-מספר ("קפיצה מהירה"):
+ * מקלידים יעד (1-based, כמו המספור על המסך) ו-Enter/יציאה-מהשדה מזיזים
+ * את התחנה לשם ישר, בלי גרירה. עוצר את ה-click מלהגיע לכרטיס שמאחורי
+ * (stopPropagation) כדי שפתיחת השדה לא תיפתח בטעות גם את כרטיס הלקוח.
+ */
+function OrderBadge({ index, total, onJump }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(index + 1));
+
+  useEffect(() => {
+    setValue(String(index + 1));
+  }, [index]);
+
+  function commit() {
+    setEditing(false);
+    const n = Math.min(Math.max(1, Number(value) || index + 1), total);
+    if (n !== index + 1) onJump(n);
+  }
+
+  if (editing) {
+    return (
+      <input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={total}
+        autoFocus
+        value={value}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { setValue(String(index + 1)); setEditing(false); }
+        }}
+        className="tabular h-8 w-12 flex-none rounded-full border border-gold-500/45 bg-white
+                   text-center font-mono text-[13px] font-bold text-gold-600 focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      title="לחץ כדי לקפוץ למיקום מסוים"
+      aria-label={`מיקום ${index + 1} מתוך ${total} — לחץ כדי להקליד יעד אחר`}
+      className="tabular grid h-8 w-8 flex-none place-items-center rounded-full border border-black/[0.09]
+                 bg-white font-mono text-[13px] font-bold text-text-dim transition-colors
+                 hover:border-gold-500/45 hover:text-gold-600"
+    >
+      {index + 1}
+    </button>
   );
 }
 
