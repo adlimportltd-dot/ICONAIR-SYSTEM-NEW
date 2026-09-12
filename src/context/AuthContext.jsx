@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured, describeError } from '../lib/supabase';
+import { setSentryUser } from '../lib/sentry';
 
 const AuthContext = createContext(null);
 
@@ -79,6 +80,24 @@ export function AuthProvider({ children }) {
       clearTimeout(timeoutId);
     };
   }, [userId]);
+
+  // מקשר שגיאות שנתפסות ב-Sentry למשתמש המחובר בפועל — כדי שדיווח
+  // שגיאה יגיד "זה קרה לנתנאל אייקון", לא רק "שגיאה אנונימית". profile
+  // עדיין לא נטען = עדיין רק ה-uid בלי שם (עדיף על כלום); סטטוס
+  // מנותק מנקה את ההקשר לגמרי, כדי שמשתמש הבא על אותו מכשיר לא "יירש"
+  // את הזהות הקודמת בדיווחים.
+  useEffect(() => {
+    if (!session?.user) {
+      setSentryUser(null);
+      return;
+    }
+    setSentryUser({
+      id: session.user.id,
+      email: session.user.email,
+      username: profile?.full_name ?? undefined,
+      role: profile?.role ?? undefined,
+    });
+  }, [session, profile]);
 
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

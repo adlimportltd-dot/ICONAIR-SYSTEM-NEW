@@ -1,7 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import ErrorFallback from './components/ErrorFallback';
+import { initSentry, Sentry } from './lib/sentry';
 import './index.css';
+
+initSentry();
 
 const container = document.getElementById('root');
 
@@ -11,6 +15,8 @@ const root = (container._reactRoot ??= ReactDOM.createRoot(container));
 
 root.render(
   <React.StrictMode>
-    <App />
+    <Sentry.ErrorBoundary fallback={ErrorFallback}>
+      <App />
+    </Sentry.ErrorBoundary>
   </React.StrictMode>
 );
