@@ -548,26 +548,32 @@ function RouteStops({ routeName }) {
         </div>
       )}
 
+      {/* 2026-09-13 (תיקון רגרסיה): הסיידבר עצמו כבר יודע לצמצם את
+          עצמו נכון למשתמש לא-מנהל (יצירה/מחיקה/שיוך-מהיר מוצגים רק אם
+          isAdmin, בדיוק כמו ב-SubRoutePicker למובייל) — לכן הוא מוצג
+          לכולם ב-xl+, לא רק למנהל. עטיפה קודמת ב-{isAdmin && ...} הייתה
+          מסתירה כל ממשק תתי-הקווים לגמרי במסך רחב למשתמש לא-מנהל, כי
+          פסי-הבחירה למובייל כבר מוסתרים שם (xl:hidden) — אף תצוגה לא
+          נשארה גלויה. גרירה/מיון/Google-optimize מעולם לא היו תלויים
+          ב-isAdmin, אז לא נגעו כאן. */}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {isAdmin && (
-          <div className="hidden xl:block xl:w-[248px] xl:flex-none">
-            <SubRouteSidebar
-              subRoutes={subRoutes.data ?? []}
-              ordered={ordered}
-              filter={subRouteFilter}
-              onFilterChange={setSubRouteFilter}
-              isAdmin={isAdmin}
-              onCreate={handleCreateSubRoute}
-              busy={subRouteBusy}
-              selectedCount={selectedIds.size}
-              onClearSelection={() => setSelectedIds(new Set())}
-              onBulkAssign={bulkAssign}
-              bulkBusy={bulkBusy}
-              onDelete={handleDeleteSubRoute}
-              deleteArmedId={deleteArmedId}
-            />
-          </div>
-        )}
+        <div className="hidden xl:block xl:w-[248px] xl:flex-none">
+          <SubRouteSidebar
+            subRoutes={subRoutes.data ?? []}
+            ordered={ordered}
+            filter={subRouteFilter}
+            onFilterChange={setSubRouteFilter}
+            isAdmin={isAdmin}
+            onCreate={handleCreateSubRoute}
+            busy={subRouteBusy}
+            selectedCount={selectedIds.size}
+            onClearSelection={() => setSelectedIds(new Set())}
+            onBulkAssign={bulkAssign}
+            bulkBusy={bulkBusy}
+            onDelete={handleDeleteSubRoute}
+            deleteArmedId={deleteArmedId}
+          />
+        </div>
 
         <div className="min-w-0 flex-1">
           <Async
