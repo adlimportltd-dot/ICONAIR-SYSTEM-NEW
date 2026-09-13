@@ -350,10 +350,10 @@ export async function updateRouteCycle(routeName, cycleEndDay) {
 export async function listStopsByRoute(routeName) {
   const [customers, sites, cityRoutes] = await Promise.all([
     supabase.from('customers')
-      .select('id, name, address, city, phone, email, notes, route_name, devices(id, serial, model, scent_name, oil_level_pct)')
+      .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct)')
       .eq('status', 'active').then(unwrap),
     supabase.from('customer_sites')
-      .select('id, customer_id, label, city, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct)')
+      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct)')
       .then(unwrap),
     loadCityRoutesMap(),
   ]);
@@ -374,6 +374,8 @@ export async function listStopsByRoute(routeName) {
       email: c.email,
       notes: c.notes,
       devices: c.devices,
+      permanentSubRouteId: c.sub_route_id,
+      permanentPosition: c.route_position,
     }));
 
   const siteStops = sites
@@ -389,6 +391,8 @@ export async function listStopsByRoute(routeName) {
       email: s.customer?.email,
       notes: s.customer?.notes,
       devices: s.devices,
+      permanentSubRouteId: s.sub_route_id,
+      permanentPosition: s.route_position,
     }));
 
   return [...customerStops, ...siteStops].sort((a, b) => a.name.localeCompare(b.name, 'he'));
@@ -648,13 +652,18 @@ export async function listRouteAssignments(routeName, visitDate) {
     const routeId = await ensureRouteId(routeName);
     const maxOrder = existing.reduce((max, a) => Math.max(max, a.stop_order), 0);
 
+    // עצירה חדשה (תאריך שנפתח לראשונה) נזרעת מהשיוך/סדר ה*קבועים* של
+    // הלקוח/האתר (sub_route_id/route_position, ר' phase29) אם הוגדרו,
+    // ולא מברירת מחדל שרירותית — כך שחלוקה לתתי-קווים שנקבעה פעם אחת
+    // ממשיכה לחול בכל יום חדש, בלי שמישהו יצטרך לגרור מחדש כל בוקר.
     const created = await Promise.all(missing.map((s, i) =>
       supabase.rpc('upsert_route_stop', {
         p_customer_id: s.customer_id,
         p_site_id: s.site_id,
         p_route_id: routeId,
         p_visit_date: visitDate,
-        p_stop_order: maxOrder + i + 1,
+        p_stop_order: s.permanentPosition ?? (maxOrder + i + 1),
+        p_sub_route_id: s.permanentSubRouteId ?? null,
       }).then(unwrap)
     ));
 
@@ -703,26 +712,57 @@ export async function createSubRoute(routeName, name) {
 export const deleteSubRoute = (id) =>
   supabase.from('sub_routes').delete().eq('id', id).then(unwrap);
 
-/** משייך/מוציא-משיוך (subRouteId=null) עצירה בודדת לתת-קו, לפי מזהה שורת route_assignments. */
-export const assignStopToSubRoute = (assignmentId, subRouteId) =>
-  supabase
-    .from('route_assignments')
-    .update({ sub_route_id: subRouteId })
-    .eq('id', assignmentId)
-    .select('id, sub_route_id')
-    .single()
-    .then(unwrap);
+/**
+ * משייך/מוציא-משיוך (subRouteId=null) עצירה בודדת לתת-קו — גם לשורת
+ * route_assignments של היום (מה שהמסך רואה מיד) וגם לשדה ה*קבוע* על
+ * הלקוח/האתר עצמו (sub_route_id, ר' phase29), כדי שהשיוך יישאר בתוקף
+ * גם בתאריכים עתידיים שעוד לא נפתחו, לא רק להיום. `stop` הוא אובייקט
+ * עצירה מלא (מ-listRouteAssignments) — צריך גם id (assignment) וגם
+ * customer_id/site_id כדי לדעת איזו טבלה קבועה לעדכן.
+ *
+ * עדכון השדה הקבוע הוא "best effort" (נבלע בשקט אם נכשל): RLS מתיר
+ * כתיבה ל-customer_sites/customers רק למנהל (או ליוצר הרשומה) — טכנאי
+ * שאין לו הרשאה כזו עדיין יצליח לעדכן את route_assignments של היום
+ * (מה שהוא רואה על המסך), רק בלי לקבוע מדיניות-על לתאריכים עתידיים.
+ * זה גם ההתנהגות הרצויה, לא רק מגבלה: שינוי ארעי-לרגע של טכנאי לא
+ * אמור לדרוס את התכנון ה"רשמי" שמנהל קבע.
+ */
+export async function assignStopToSubRoute(stop, subRouteId) {
+  const assignmentRow = await supabase
+    .from('route_assignments').update({ sub_route_id: subRouteId }).eq('id', stop.id)
+    .select('id, sub_route_id').single().then(unwrap);
+
+  if (stop.site_id) {
+    supabase.from('customer_sites').update({ sub_route_id: subRouteId }).eq('id', stop.site_id).then(unwrap).catch(() => null);
+  } else if (stop.customer_id) {
+    supabase.from('customers').update({ sub_route_id: subRouteId }).eq('id', stop.customer_id).then(unwrap).catch(() => null);
+  }
+  return assignmentRow;
+}
 
 /**
- * שומר סדר עצירות חדש (אחרי גרירה/חצים) — כל העצירות כבר קיימות
- * כשורות route_assignments (ר' listRouteAssignments), אז זה עדכון
- * רגיל לפי id, לא upsert.
+ * שומר סדר עצירות חדש (אחרי גרירה/חצים/מיון/Google) — גם ל-stop_order
+ * של route_assignments להיום (מה שהמסך רואה מיד), וגם ל-route_position
+ * ה*קבוע* על הלקוח/האתר (ר' phase29), כדי שהסדר הזה יהיה ברירת המחדל
+ * גם בתאריכים עתידיים שעוד לא נפתחו — לא יתאפס מחר לסדר אלפביתי שרירותי.
+ * `rows` הם אובייקטי עצירה מלאים (id/customer_id/site_id), לא רק מזהים.
+ *
+ * עדכון route_position הקבוע הוא "best effort" (לא await-ed, שגיאה
+ * נבלעת) מאותה סיבה כמו ב-assignStopToSubRoute למעלה — RLS מתיר כתיבה
+ * ל-customer_sites/customers רק למנהל, וסידור-יומי ארעי של טכנאי לא
+ * אמור להיכשל (או לדרוס בטעות מדיניות-על) רק כי אין לו הרשאה כזו.
  */
-export async function saveRouteOrder(orderedRowIds) {
+export async function saveRouteOrder(rows) {
   await Promise.all(
-    orderedRowIds.map((id, i) =>
-      supabase.from('route_assignments').update({ stop_order: i + 1 }).eq('id', id).then(unwrap)
-    )
+    rows.map(async (row, i) => {
+      const position = i + 1;
+      await supabase.from('route_assignments').update({ stop_order: position }).eq('id', row.id).then(unwrap);
+      if (row.site_id) {
+        supabase.from('customer_sites').update({ route_position: position }).eq('id', row.site_id).then(unwrap).catch(() => null);
+      } else if (row.customer_id) {
+        supabase.from('customers').update({ route_position: position }).eq('id', row.customer_id).then(unwrap).catch(() => null);
+      }
+    })
   );
 }
 

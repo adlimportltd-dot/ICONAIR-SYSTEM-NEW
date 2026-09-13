@@ -274,7 +274,11 @@ function RouteStops({ routeName }) {
     setOrder(next); // אופטימי — המסך מגיב מיד, לפני שהשמירה חוזרת
     try {
       setSaveError(null);
-      await saveRouteOrder(next);
+      const rows = next.map((id) => {
+        const stop = byId.get(id);
+        return { id, customer_id: stop?.customer_id ?? null, site_id: stop?.site_id ?? null };
+      });
+      await saveRouteOrder(rows);
     } catch (caught) {
       setOrder(prevOrder); // השמירה נכשלה — חוזרים לסדר הקודם
       setSaveError(describeError(caught));
@@ -358,10 +362,10 @@ function RouteStops({ routeName }) {
     }
   }
 
-  async function handleAssignSubRoute(assignmentId, subRouteId) {
+  async function handleAssignSubRoute(stop, subRouteId) {
     try {
       setSubRouteError(null);
-      await assignStopToSubRoute(assignmentId, subRouteId);
+      await assignStopToSubRoute(stop, subRouteId);
       stops.refetch();
     } catch (caught) {
       setSubRouteError(describeError(caught));
@@ -390,7 +394,7 @@ function RouteStops({ routeName }) {
     setBulkBusy(true);
     setSubRouteError(null);
     try {
-      await Promise.all([...selectedIds].map((id) => assignStopToSubRoute(id, subRouteId)));
+      await Promise.all([...selectedIds].map((id) => assignStopToSubRoute(byId.get(id), subRouteId)));
       setSelectedIds(new Set());
       stops.refetch();
     } catch (caught) {
@@ -592,7 +596,7 @@ function RouteStops({ routeName }) {
                       onVisitCompleted={stops.refetch}
                       isAdmin={isAdmin}
                       subRoutes={subRoutes.data ?? []}
-                      onAssignSubRoute={(subRouteId) => handleAssignSubRoute(customer.id, subRouteId)}
+                      onAssignSubRoute={(subRouteId) => handleAssignSubRoute(customer, subRouteId)}
                       selected={selectedIds.has(customer.id)}
                       onToggleSelect={
                         isAdmin && (subRoutes.data?.length ?? 0) > 0
