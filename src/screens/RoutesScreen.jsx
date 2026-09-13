@@ -10,7 +10,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import { StatusChip, MiniMeter, oilTone } from '../components/ui/DataTable';
 import { Async, EmptyState } from '../components/ui/States';
 import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } from '../components/ui/Field';
-import { RouteIcon, NavigationIcon, PhoneIcon, GripIcon, SortIcon } from '../components/ui/Icons';
+import { RouteIcon, NavigationIcon, PhoneIcon, GripIcon, SortIcon, TrashIcon, PlusIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
 import MlSlider from '../components/ui/MlSlider';
 import { useQuery } from '../hooks/useQuery';
@@ -22,7 +22,7 @@ import {
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
   completeVisit, createOilEntry, listOilHistoryForDevices,
-  listSubRoutesForRoute, createSubRoute, assignStopToSubRoute,
+  listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime } from '../lib/mappers';
@@ -368,6 +368,56 @@ function RouteStops({ routeName }) {
     }
   }
 
+  // בחירה מרובה + שיוך בכפתור אחד — 2026-09-13 (בקשה מפורשת: ניהול מהיר
+  // של תתי-קווים מהדסקטופ בלי לפתוח כרטיסייה לכל לקוח בנפרד). קיים רק
+  // בסיידבר הרחב (xl+, ר' SubRouteSidebar למטה) — במובייל/טאבלט ממשיכים
+  // לשייך דרך ה-Select בכרטיסיית הלקוח, כמו קודם.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  useEffect(() => { setSelectedIds(new Set()); }, [routeName, subRouteFilter]);
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function bulkAssign(subRouteId) {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setSubRouteError(null);
+    try {
+      await Promise.all([...selectedIds].map((id) => assignStopToSubRoute(id, subRouteId)));
+      setSelectedIds(new Set());
+      stops.refetch();
+    } catch (caught) {
+      setSubRouteError(describeError(caught));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const [deleteArmedId, setDeleteArmedId] = useState(null);
+
+  async function handleDeleteSubRoute(id) {
+    if (deleteArmedId !== id) { setDeleteArmedId(id); return; }
+    setDeleteArmedId(null);
+    setSubRouteBusy(true);
+    setSubRouteError(null);
+    try {
+      await deleteSubRoute(id);
+      if (subRouteFilter === id) setSubRouteFilter('__all__');
+      await subRoutes.refetch();
+    } catch (caught) {
+      setSubRouteError(describeError(caught));
+    } finally {
+      setSubRouteBusy(false);
+    }
+  }
+
   async function toggleStatus(id) {
     const prevStatus = statusById[id] ?? 'pending';
     const nextStatus = prevStatus === 'done' ? 'pending' : 'done';
@@ -456,15 +506,19 @@ function RouteStops({ routeName }) {
         </PrimaryButton>
       </div>
 
-      <SubRoutePicker
-        subRoutes={subRoutes.data ?? []}
-        ordered={ordered}
-        filter={subRouteFilter}
-        onFilterChange={setSubRouteFilter}
-        isAdmin={isAdmin}
-        onCreate={handleCreateSubRoute}
-        busy={subRouteBusy}
-      />
+      {/* מובייל/טאבלט: פסי-בחירה. דסקטופ רחב (xl+): מוחלף בסיידבר תתי-קווים
+          קבוע לצד הרשימה (ר' SubRouteSidebar למטה) — אותו state, שתי תצוגות */}
+      <div className="xl:hidden">
+        <SubRoutePicker
+          subRoutes={subRoutes.data ?? []}
+          ordered={ordered}
+          filter={subRouteFilter}
+          onFilterChange={setSubRouteFilter}
+          isAdmin={isAdmin}
+          onCreate={handleCreateSubRoute}
+          busy={subRouteBusy}
+        />
+      </div>
 
       {visibleOrdered.length > 25 && (
         <div className="mb-3.5 rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[13.5px] text-warn">
@@ -490,39 +544,69 @@ function RouteStops({ routeName }) {
         </div>
       )}
 
-      <Async
-        loading={stops.loading}
-        error={stops.error}
-        onRetry={stops.refetch}
-        isEmpty={visibleOrdered.length === 0}
-        empty={<EmptyState title={subRouteFilter === '__all__' ? 'אין לקוחות פעילים על הקו הזה' : 'אין תחנות בהיקף הזה'} />}
-      >
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-[9px]">
-              {visibleOrdered.map((customer, index) => (
-                <StopRow
-                  key={customer.id}
-                  id={customer.id}
-                  index={index}
-                  total={visibleOrdered.length}
-                  customer={customer}
-                  done={statusById[customer.id] === 'done'}
-                  onToggleDone={() => toggleStatus(customer.id)}
-                  onMarkDone={() => markDone(customer.id)}
-                  onJump={(position) => jumpTo(customer.id, position)}
-                  deviceModels={deviceModels.data ?? []}
-                  scents={scents.data ?? []}
-                  onVisitCompleted={stops.refetch}
-                  isAdmin={isAdmin}
-                  subRoutes={subRoutes.data ?? []}
-                  onAssignSubRoute={(subRouteId) => handleAssignSubRoute(customer.id, subRouteId)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      </Async>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        {isAdmin && (
+          <div className="hidden xl:block xl:w-[248px] xl:flex-none">
+            <SubRouteSidebar
+              subRoutes={subRoutes.data ?? []}
+              ordered={ordered}
+              filter={subRouteFilter}
+              onFilterChange={setSubRouteFilter}
+              isAdmin={isAdmin}
+              onCreate={handleCreateSubRoute}
+              busy={subRouteBusy}
+              selectedCount={selectedIds.size}
+              onClearSelection={() => setSelectedIds(new Set())}
+              onBulkAssign={bulkAssign}
+              bulkBusy={bulkBusy}
+              onDelete={handleDeleteSubRoute}
+              deleteArmedId={deleteArmedId}
+            />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <Async
+            loading={stops.loading}
+            error={stops.error}
+            onRetry={stops.refetch}
+            isEmpty={visibleOrdered.length === 0}
+            empty={<EmptyState title={subRouteFilter === '__all__' ? 'אין לקוחות פעילים על הקו הזה' : 'אין תחנות בהיקף הזה'} />}
+          >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-[9px]">
+                  {visibleOrdered.map((customer, index) => (
+                    <StopRow
+                      key={customer.id}
+                      id={customer.id}
+                      index={index}
+                      total={visibleOrdered.length}
+                      customer={customer}
+                      done={statusById[customer.id] === 'done'}
+                      onToggleDone={() => toggleStatus(customer.id)}
+                      onMarkDone={() => markDone(customer.id)}
+                      onJump={(position) => jumpTo(customer.id, position)}
+                      deviceModels={deviceModels.data ?? []}
+                      scents={scents.data ?? []}
+                      onVisitCompleted={stops.refetch}
+                      isAdmin={isAdmin}
+                      subRoutes={subRoutes.data ?? []}
+                      onAssignSubRoute={(subRouteId) => handleAssignSubRoute(customer.id, subRouteId)}
+                      selected={selectedIds.has(customer.id)}
+                      onToggleSelect={
+                        isAdmin && (subRoutes.data?.length ?? 0) > 0
+                          ? () => toggleSelect(customer.id)
+                          : null
+                      }
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </Async>
+        </div>
+      </div>
     </GlassCard>
   );
 }
@@ -610,6 +694,170 @@ function SubRoutePicker({ subRoutes, ordered, filter, onFilterChange, isAdmin, o
   );
 }
 
+/**
+ * סיידבר תתי-קווים לדסקטופ רחב (xl ומעלה, ר' `xl:hidden`/`hidden xl:block`
+ * ב-RouteStops) — טור קבוע לצד רשימת התחנות, במקום פסי-הבחירה
+ * (SubRoutePicker) שנשארים למובייל/טאבלט. אותו state בדיוק (filter/
+ * subRoutes/onCreate) — רק תצוגה שונה, מותאמת לרוחב פנוי אמיתי.
+ *
+ * "ניהול מהיר" (בקשה מפורשת 2026-09-13): מסמנים תחנות בעזרת התיבה
+ * הקטנה שמופיעה בכל שורה ברשימה מימין (ר' StopRow — onToggleSelect),
+ * ואז לוחצים "שייך לכאן" ליד תת-הקו הרצוי — בלי לפתוח כרטיסייה לכל
+ * לקוח בנפרד ובלי הצורך לגלול אינסופית ברשימה במובייל.
+ */
+function SubRouteSidebar({
+  subRoutes, ordered, filter, onFilterChange, isAdmin,
+  onCreate, busy, selectedCount, onClearSelection, onBulkAssign, bulkBusy, onDelete, deleteArmedId,
+}) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+
+  const unassignedCount = ordered.filter((s) => !s.sub_route_id).length;
+  const countBySubRoute = new Map();
+  for (const s of ordered) {
+    if (s.sub_route_id) countBySubRoute.set(s.sub_route_id, (countBySubRoute.get(s.sub_route_id) ?? 0) + 1);
+  }
+
+  function submitCreate() {
+    if (!name.trim()) { setCreating(false); return; }
+    onCreate(name);
+    setName('');
+    setCreating(false);
+  }
+
+  return (
+    <div className="inner-row flex flex-col gap-1 p-3">
+      <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+        <div className="text-[13px] font-bold tracking-wide text-text-faint">תתי-קווים</div>
+        {selectedCount > 0 && (
+          <button
+            type="button"
+            onClick={onClearSelection}
+            title="בטל את הבחירה הנוכחית"
+            className="tabular rounded-pill border border-gold-500/40 bg-gold-500/[0.14] px-2.5 py-1
+                       text-[12px] font-bold text-gold-600 transition-colors hover:bg-gold-500/[0.22]"
+          >
+            {selectedCount} נבחרו ×
+          </button>
+        )}
+      </div>
+
+      <SidebarRow
+        label="כל התחנות"
+        count={ordered.length}
+        active={filter === '__all__'}
+        onClick={() => onFilterChange('__all__')}
+      />
+
+      {(unassignedCount > 0 || selectedCount > 0) && (
+        <SidebarRow
+          label="לא משויך"
+          count={unassignedCount}
+          active={filter === '__unassigned__'}
+          onClick={() => onFilterChange('__unassigned__')}
+          onAssignHere={selectedCount > 0 ? () => onBulkAssign(null) : null}
+          assignBusy={bulkBusy}
+        />
+      )}
+
+      {subRoutes.map((sr) => (
+        <SidebarRow
+          key={sr.id}
+          label={sr.name}
+          count={countBySubRoute.get(sr.id) ?? 0}
+          active={filter === sr.id}
+          onClick={() => onFilterChange(sr.id)}
+          onAssignHere={selectedCount > 0 ? () => onBulkAssign(sr.id) : null}
+          assignBusy={bulkBusy}
+          onDelete={isAdmin ? () => onDelete(sr.id) : null}
+          deleteArmed={deleteArmedId === sr.id}
+        />
+      ))}
+
+      {isAdmin && (
+        creating ? (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <TextInput
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); submitCreate(); }
+                if (e.key === 'Escape') { setName(''); setCreating(false); }
+              }}
+              placeholder="שם תת-הקו"
+              className="!h-9 !py-1.5 !text-[13.5px]"
+            />
+            <button
+              type="button"
+              onClick={submitCreate}
+              disabled={busy}
+              className="flex-none rounded-[8px] border border-gold-500/40 bg-gold-500/10 px-3 py-1.5 text-[13px] font-bold text-gold-600"
+            >
+              {busy ? '…' : 'הוסף'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="mt-1.5 flex items-center justify-center gap-1.5 rounded-[8px] border border-dashed
+                       border-black/[0.18] px-3 py-2 text-[13.5px] font-medium text-text-faint transition-colors
+                       hover:border-gold-500/45 hover:text-gold-600"
+          >
+            <PlusIcon className="h-4 w-4" />
+            תת-קו חדש
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+/** שורה בסיידבר: שם + ספירה, כפתור "שייך לכאן" (רק כשיש בחירה פעילה), ומחיקה (רק למנהל, עם חימוש-לחיצה-שנייה) */
+function SidebarRow({ label, count, active, onClick, onAssignHere, assignBusy, onDelete, deleteArmed }) {
+  return (
+    <div
+      className={`group flex items-center gap-1.5 rounded-[8px] px-2 py-2 text-[14px] transition-colors ${
+        active ? 'bg-gold-500/[0.14] text-gold-600' : 'text-text-dim hover:bg-black/[0.03] hover:text-text'
+      }`}
+    >
+      <button type="button" onClick={onClick} className="min-w-0 flex-1 text-start">
+        <span className="truncate font-medium">{label}</span>
+        <span className="tabular ms-1.5 font-mono text-[12.5px] text-text-faint">{count}</span>
+      </button>
+
+      {onAssignHere && (
+        <button
+          type="button"
+          onClick={onAssignHere}
+          disabled={assignBusy}
+          title="שייך את התחנות שנבחרו לתת-קו הזה"
+          className="flex-none rounded-[6px] border border-gold-500/40 bg-gold-500/10 px-2 py-1 text-[12px]
+                     font-bold text-gold-600 transition-colors hover:bg-gold-500/20 disabled:opacity-50"
+        >
+          שייך לכאן
+        </button>
+      )}
+
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          title="מחק תת-קו (התחנות עצמן נשארות, רק השיוך מתבטל)"
+          className={`flex-none rounded-[6px] p-1.5 transition-colors ${
+            deleteArmed
+              ? 'bg-crit/10 text-crit-soft'
+              : 'text-text-faint opacity-0 group-hover:opacity-100 hover:text-crit-soft'
+          }`}
+        >
+          <TrashIcon className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PillButton({ active, onClick, children }) {
   return (
     <button
@@ -642,7 +890,7 @@ function PillButton({ active, onClick, children }) {
  * attributes/listeners של dnd-kit — לא כל הכרטיס — כדי שגרירה לא תתנגש
  * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
-function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute }) {
+function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect }) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
   const call = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
@@ -666,6 +914,23 @@ function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, o
     >
       <div className="flex flex-col gap-3 p-3.5">
         <div className="flex items-center gap-2.5">
+          {onToggleSelect && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+              aria-pressed={selected}
+              aria-label={selected ? `בטל בחירת ${customer.name} לשיוך תת-קו` : `בחר את ${customer.name} לשיוך תת-קו מהיר`}
+              title="בחירה מרובה לשיוך תת-קו מהסיידבר (דסקטופ)"
+              className={`grid h-8 w-8 flex-none place-items-center rounded-[8px] border text-[13px] font-bold transition-colors ${
+                selected
+                  ? 'border-gold-500/50 bg-gold-500/[0.16] text-gold-600'
+                  : 'border-black/[0.12] text-transparent hover:border-gold-500/35 hover:text-gold-300'
+              }`}
+            >
+              ✓
+            </button>
+          )}
+
           <button
             type="button"
             {...attributes}
