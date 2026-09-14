@@ -1,17 +1,31 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * חלון קופץ על משטח הזכוכית של המערכת.
  * Esc סוגר, לחיצה על הרקע סוגרת, והפוקוס עובר לשדה הראשון בפתיחה
  * כדי שאפשר יהיה למלא טופס בלי לגעת בעכבר.
  * בנייד החלון נצמד לתחתית המסך — קרוב לאגודל.
+ *
+ * 2026-09-14 (בקשה מפורשת, תקלה אמיתית בשטח): המודל היה מרונדר
+ * *inline* בעץ הקומפוננטות (לא ב-portal) — position:fixed אמור
+ * למקם יחסית ל-viewport, אבל כל אב עם transform/filter/will-change
+ * (dnd-kit על שורת-עצירה נגררת, אנימציית .animate-rise על GlassCard
+ * וכו') הופך את עצמו ל-containing-block עבור צאצא fixed, ומזיז את
+ * המודל למקום הלא-נכון יחסית לאב הזה במקום ל-viewport האמיתי — בדיוק
+ * מה שנראה כ"חלונות נערמים אחד על השני" בצילום שנשלח. createPortal
+ * ל-document.body עוקף את זה לגמרי, בלי תלות באיזה אב ספציפי אשם.
  */
 // ערימת החלונות הפתוחים. כשכרטיס לקוח פותח מעליו טופס "מכשיר חדש",
 // Esc צריך לסגור רק את הטופס — בלי זה שני החלונות היו נסגרים יחד.
+// אותה ערימה גם קובעת z-index: מודל מקונן (למשל "עדכון שמן" שנפתח
+// מעל כרטיס לקוח שכבר פתוח) חייב לקבל z-index גבוה יותר מהאב שלו,
+// לא להסתמך על סדר-DOM מקרי בין שני עצים נפרדים.
 const openModals = [];
 
 export default function Modal({ open, title, subtitle, onClose, children, footer }) {
   const panel = useRef(null);
+  const [stackDepth, setStackDepth] = useState(0);
 
   // onClose מגיע כמעט תמיד כ-arrow function מוטבע אצל הקורא
   // (onClose={() => setX(null)}), שמקבל זהות חדשה בכל רינדור של
@@ -27,11 +41,15 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  // useLayoutEffect (לא useEffect) — רץ סינכרונית לפני שהדפדפן מצייר
+  // פריים ראשון, כדי ש-stackDepth (וה-z-index שתלוי בו) יהיה נכון
+  // מהצביעה הראשונה של מודל מקונן, בלי הבהוב-רגע ב-z-index ברירת המחדל.
+  useLayoutEffect(() => {
     if (!open) return undefined;
 
     const token = {};
     openModals.push(token);
+    setStackDepth(openModals.length);
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape' && openModals[openModals.length - 1] === token) onCloseRef.current();
@@ -55,9 +73,14 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
 
   if (!open) return null;
 
-  return (
+  // 50 = בסיס (מעל תוכן הדף), +20 לכל רמת קינון — מודל שנפתח מעל מודל
+  // אחר תמיד מעל, בלי קשר לסדר-DOM בין שני עצי-קומפוננטות נפרדים.
+  const baseZ = 50 + Math.max(0, stackDepth - 1) * 20;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6"
+      className="fixed inset-0 flex items-end justify-center p-0 sm:items-center sm:p-6"
+      style={{ zIndex: baseZ }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -66,13 +89,14 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
         type="button"
         aria-label="סגור"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/65 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-black/80 backdrop-blur-sm"
       />
 
       <div
         ref={panel}
-        className="glass relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-card
+        className="glass relative max-h-[92vh] w-full overflow-y-auto rounded-t-card
                    p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
+        style={{ zIndex: baseZ + 1 }}
       >
         <div className="mb-4 flex items-start gap-3">
           <div className="min-w-0">
@@ -98,6 +122,7 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
 
         {footer && <div className="mt-5 flex flex-wrap gap-2.5">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
