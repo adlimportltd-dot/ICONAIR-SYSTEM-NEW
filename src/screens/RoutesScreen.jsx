@@ -1245,6 +1245,20 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
 
   return (
     <div className="rounded-row border border-black/[0.06] bg-black/[0.015] p-3.5">
+      {/* 2026-09-14 (בקשה מפורשת: "שהטכנאי ידע בדיוק לאן לגשת בלי לנחש") —
+          מיקום/קומה של המכשיר (devices.location_note, כבר קיים בכרטיס
+          הלקוח) הוצג עד עכשיו רק שם, לא בכרטיסיית העצירה במסלול עצמו.
+          מוצג ראשון ומודגש — זה מה שהטכנאי צריך *לפני* שהוא בכלל מגיע
+          לניחוח/דגם/שמן. */}
+      {device.location_note ? (
+        <div className="mb-3 flex items-center gap-1.5 rounded-[8px] border border-gold-300/25 bg-gold-500/[0.06] px-3 py-2 text-[14px]">
+          <span className="flex-none text-text-faint">מיקום:</span>
+          <b className="font-bold text-text">{device.location_note}</b>
+        </div>
+      ) : (
+        <div className="mb-3 text-[13px] text-text-faint">מיקום: לא צוין</div>
+      )}
+
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px]">
         <EditableField
           label="ניחוח"
