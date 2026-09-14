@@ -1274,6 +1274,13 @@ function CustomerCardModal({ open, onClose, stop, done, callHref, wazeHref, maps
                   <div className="tabular">
                     <b className="font-bold text-gold-600">{Math.round(Number(entry.liters_added ?? 0) * 1000)} מ״ל</b>
                     <span className="text-text-faint"> · {entry.level_before_pct ?? '—'}% ← {entry.level_after_pct}%</span>
+                    {/* 2026-09-14: החלפת סוללות בביקור — מוצג רק כשבאמת הוחלפה
+                        סוללה (batteries_replaced>0), לא לכל ביקור בדגם-סוללות */}
+                    {entry.batteries_replaced > 0 && (
+                      <span className="text-text-faint"> · <b className="font-semibold text-text-dim">
+                        {entry.batteries_replaced === 1 ? 'הוחלפה סוללה 1' : `הוחלפו ${entry.batteries_replaced} סוללות`}
+                      </b></span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1354,6 +1361,15 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         </div>
       )}
 
+      {/* 2026-09-14 (בקשה מפורשת: ניהול והחלפת סוללות לדגמים שפועלים
+          עליהן — Icon 50/70/90) — רמז קבוע לפני פתיחת הטופס, בדיוק כמו
+          "למילוי" למעלה, כדי שהטכנאי ידע מראש שיש כאן גם סוללות. */}
+      {model?.battery_count > 0 && (
+        <div className="mt-1 text-[13px] text-text-faint">
+          סוללות בדגם: <b className="tabular font-semibold text-text-dim">{model.battery_count}</b>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setOilModalOpen(true)}
@@ -1370,6 +1386,7 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         customer={customer}
         scents={scents}
         capacityMl={model?.capacity_ml ?? null}
+        batteryCount={model?.battery_count ?? null}
         onClose={() => setOilModalOpen(false)}
         onMarkDone={onMarkDone}
         onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
@@ -1411,7 +1428,7 @@ const ML_STEP = 10;
  * לשורת הלקוח ולסמן שם בנפרד. submit מקבל markVisitDone כדי שאותה
  * לוגיקת שמירה (completeVisit/createOilEntry fallback) תשרת את שניהם.
  */
-function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClose, onMarkDone, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, capacityMl, batteryCount, onClose, onMarkDone, onSaved }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
@@ -1429,6 +1446,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
         liters_added: '0',
         level_before_pct: String(device.oil_level_pct ?? ''),
         level_after_pct: '100',
+        batteries_replaced: '0',
         notes: '',
       });
       setError(null);
@@ -1453,6 +1471,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
       liters_added: Number(form.liters_added || 0),
       level_before_pct: form.level_before_pct === '' ? null : Number(form.level_before_pct),
       level_after_pct: after,
+      batteries_replaced: batteryCount > 0 ? Number(form.batteries_replaced || 0) : null,
       notes: form.notes || null,
     };
 
@@ -1537,6 +1556,25 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, onClos
           <div className="mb-1.5 text-[13px] text-text-faint">המפלס שיישמר במכשיר</div>
           <MiniMeter value={Math.min(Math.max(after, 0), 100)} tone={oilTone(after)} />
         </div>
+
+        {/* 2026-09-14 (בקשה מפורשת: ניהול והחלפת סוללות ל-Icon 50/70/90) —
+            מוצג רק לדגמים שיש להם battery_count בקטלוג (ר' phase32);
+            לשאר הדגמים השדה פשוט לא קיים, לא "0 סוללות" חסר-משמעות. */}
+        {batteryCount > 0 && (
+          <Field label="סוללות שהוחלפו" hint={`הדגם הזה פועל על ${batteryCount === 1 ? 'סוללה אחת' : `${batteryCount} סוללות`} בסה"כ`}>
+            <div className="flex flex-wrap gap-1.5">
+              {Array.from({ length: batteryCount + 1 }, (_, n) => n).map((n) => (
+                <PillButton
+                  key={n}
+                  active={Number(form.batteries_replaced) === n}
+                  onClick={() => setForm((prev) => ({ ...prev, batteries_replaced: String(n) }))}
+                >
+                  {n === 0 ? 'לא הוחלפו' : n === 1 ? 'הוחלפה סוללה 1' : `הוחלפו ${n} סוללות`}
+                </PillButton>
+              ))}
+            </div>
+          </Field>
+        )}
 
         <Field label="הערות">
           <TextArea value={form.notes} onChange={set('notes')} rows={2} />

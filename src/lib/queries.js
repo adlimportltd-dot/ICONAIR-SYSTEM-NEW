@@ -1040,7 +1040,7 @@ export async function createOilEntry(payload) {
  * לנכות כלום. ר' iconair_schema_phase19_stock_visit_sync.sql.
  */
 const completeVisitRemote = ({
-  device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, notes,
+  device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, notes, batteries_replaced,
 }) =>
   supabase
     .rpc('complete_visit', {
@@ -1051,6 +1051,7 @@ const completeVisitRemote = ({
       p_level_before_pct: level_before_pct,
       p_level_after_pct: level_after_pct,
       p_notes: notes,
+      p_batteries_replaced: batteries_replaced ?? null,
     })
     .single()
     .then(unwrap);
@@ -1218,11 +1219,11 @@ export const setScentActive = (id, active) =>
    ===================================================================== */
 
 export const listDeviceModels = () =>
-  supabase.from('device_models').select('id, name, active, capacity_ml').eq('active', true).order('name').then(unwrap);
+  supabase.from('device_models').select('id, name, active, capacity_ml, battery_count').eq('active', true).order('name').then(unwrap);
 
 /** למסך הניהול בהגדרות — כולל דגמים מושבתים */
 export const listAllDeviceModels = () =>
-  supabase.from('device_models').select('id, name, active, capacity_ml').order('name').then(unwrap);
+  supabase.from('device_models').select('id, name, active, capacity_ml, battery_count').order('name').then(unwrap);
 
 export const createDeviceModel = (name) =>
   supabase.from('device_models').insert({ name: name.trim() }).select('id, name, active').single().then(unwrap);
@@ -1617,7 +1618,7 @@ export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
     ? Promise.resolve([])
     : supabase
         .from('oil_tracking')
-        .select('id, device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, recorded_at, notes')
+        .select('id, device_id, event_type, scent_name, liters_added, level_before_pct, level_after_pct, batteries_replaced, recorded_at, notes')
         .in('device_id', deviceIds)
         .order('recorded_at', { ascending: false })
         .limit(limit)
