@@ -242,6 +242,12 @@ function RouteStops({ routeName }) {
   const [statusById, setStatusById] = useState({});
   const [saveError, setSaveError] = useState(null);
 
+  // 2026-09-14 (בקשה מפורשת: "שהעבודה תתקתק ברצף בלי עצירות מיותרות
+  // בשטח") — איזו כרטיסיית-לקוח פתוחה, מנוהל כאן ולא מקומית בכל
+  // StopRow, כדי שסיום ביקור יוכל "לקפוץ" ולפתוח את הכרטיסייה של
+  // התחנה הבאה בלי שהטכנאי יצטרך לסגור ולחפש אותה ברשימה בעצמו.
+  const [openStopId, setOpenStopId] = useState(null);
+
   useEffect(() => {
     setOrder((stops.data ?? []).map((c) => c.id));
     setStatusById(Object.fromEntries((stops.data ?? []).map((c) => [c.id, c.status])));
@@ -425,6 +431,20 @@ function RouteStops({ routeName }) {
     }
   }
 
+  /**
+   * "לנקודה הבאה" — 2026-09-14, בקשה מפורשת: אחרי סיום ביקור, הטכנאי
+   * לא אמור לחפש ידנית ברשימה הארוכה מי הלקוח הבא. מדלג על תחנות
+   * שכבר בוצעו (אין טעם "לעצור" בהן שוב) ונשאר בתוך ההיקף המסונן כרגע
+   * (visibleIds) — אם הטכנאי מסנן לפי תת-קו, הקפיצה נשארת באותו תת-קו.
+   * לא נמצאה עוד תחנה פתוחה בהיקף → סוגר את הכרטיסייה (המסלול/ההיקף הזה הושלם).
+   */
+  function goToNextStop(currentId) {
+    const from = visibleIds.indexOf(currentId);
+    if (from < 0) { setOpenStopId(null); return; }
+    const next = visibleIds.slice(from + 1).find((id) => statusById[id] !== 'done');
+    setOpenStopId(next ?? null);
+  }
+
   async function toggleStatus(id) {
     const prevStatus = statusById[id] ?? 'pending';
     const nextStatus = prevStatus === 'done' ? 'pending' : 'done';
@@ -433,6 +453,7 @@ function RouteStops({ routeName }) {
     try {
       setSaveError(null);
       await setStopStatus(id, nextStatus);
+      if (nextStatus === 'done') goToNextStop(id);
     } catch (caught) {
       setStatusById((prev) => ({ ...prev, [id]: prevStatus }));
       setSaveError(describeError(caught));
@@ -444,6 +465,8 @@ function RouteStops({ routeName }) {
    * החדש בכרטיסיית המכשיר: הטכנאי שסיים למלא את המכשיר האחרון אצל
    * הלקוח לא צריך לחזור לשורת העצירה וללחוץ שוב על סימון הבוצע — זה
    * עושה את שתי הפעולות (שמירת המילוי + סגירת הביקור) בלחיצה אחת.
+   * 2026-09-14: ועכשיו גם פעולה שלישית — קופץ ישר לכרטיסיית התחנה
+   * הבאה ברצף, ר' goToNextStop למעלה.
    */
   async function markDone(id) {
     const prevStatus = statusById[id] ?? 'pending';
@@ -453,6 +476,7 @@ function RouteStops({ routeName }) {
     try {
       setSaveError(null);
       await setStopStatus(id, 'done');
+      goToNextStop(id);
     } catch (caught) {
       setStatusById((prev) => ({ ...prev, [id]: prevStatus }));
       setSaveError(describeError(caught));
@@ -612,6 +636,11 @@ function RouteStops({ routeName }) {
                           ? () => toggleSelect(customer.id)
                           : null
                       }
+                      cardOpen={openStopId === customer.id}
+                      onOpenCard={() => setOpenStopId(customer.id)}
+                      onCloseCard={() => setOpenStopId(null)}
+                      onGoToNext={() => goToNextStop(customer.id)}
+                      hasNext={visibleIds.slice(index + 1).some((id) => statusById[id] !== 'done')}
                     />
                   ))}
                 </div>
@@ -903,12 +932,15 @@ function PillButton({ active, onClick, children }) {
  * attributes/listeners של dnd-kit — לא כל הכרטיס — כדי שגרירה לא תתנגש
  * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
-function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect }) {
+function StopRow({
+  id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted,
+  isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect,
+  cardOpen, onOpenCard, onCloseCard, onGoToNext, hasNext,
+}) {
   const waze = wazeLink(customer.address);
   const maps = googleMapsLink(customer.address);
   const call = customer.phone ? `tel:${String(customer.phone).replace(/[^\d+]/g, '')}` : null;
   const devices = customer.devices ?? [];
-  const [cardOpen, setCardOpen] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const dragStyle = {
@@ -974,7 +1006,7 @@ function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, o
 
           <button
             type="button"
-            onClick={() => setCardOpen(true)}
+            onClick={onOpenCard}
             className="min-w-0 flex-1 text-start"
             aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
           >
@@ -989,7 +1021,7 @@ function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, o
           {devices.length > 0 && (
             <button
               type="button"
-              onClick={() => setCardOpen(true)}
+              onClick={onOpenCard}
               className="flex flex-none items-center gap-1.5 rounded-[7px] border border-black/[0.075]
                          bg-white px-[9px] py-[6px] text-[13px] font-semibold text-text-dim transition-colors
                          hover:border-gold-500/30 hover:text-gold-600"
@@ -1032,8 +1064,9 @@ function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, o
 
       <CustomerCardModal
         open={cardOpen}
-        onClose={() => setCardOpen(false)}
+        onClose={onCloseCard}
         stop={customer}
+        done={done}
         callHref={call}
         wazeHref={waze}
         mapsHref={maps}
@@ -1044,6 +1077,8 @@ function StopRow({ id, index, total, customer, done, onToggleDone, onMarkDone, o
         isAdmin={isAdmin}
         subRoutes={subRoutes}
         onAssignSubRoute={onAssignSubRoute}
+        onGoToNext={onGoToNext}
+        hasNext={hasNext}
       />
     </div>
   );
@@ -1112,7 +1147,7 @@ function OrderBadge({ index, total, onJump }) {
  * היסטוריית השמן האחרונה שלהם — כדי שהטכנאי לא יצטרך לנחש מה קרה
  * בביקורים הקודמים. אין כאן שום נתון כספי בכוונה (ר' דרישת המשתמש).
  */
-function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, onMarkDone, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute }) {
+function CustomerCardModal({ open, onClose, stop, done, callHref, wazeHref, mapsHref, onMarkDone, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, onGoToNext, hasNext }) {
   const devices = stop.devices ?? [];
   const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
   const history = useQuery(() => listOilHistoryForDevices(deviceIds, 20), [deviceIds.join(',')], { enabled: open });
@@ -1127,6 +1162,26 @@ function CustomerCardModal({ open, onClose, stop, callHref, wazeHref, mapsHref, 
       subtitle={stop.address || undefined}
     >
       <div className="flex flex-col gap-4">
+        {done && (
+          <div className="flex items-center gap-2">
+            <StatusChip tone="ok">✓ הביקור הושלם</StatusChip>
+          </div>
+        )}
+
+        {/* 2026-09-14 (בקשה מפורשת: "כפתור מהיר ונגיש... שהעבודה תתקתק
+            ברצף בלי עצירות מיותרות בשטח") — קופץ לכרטיסיית התחנה הבאה
+            שעוד לא בוצעה בהיקף הנוכחי (ר' goToNextStop ב-RouteStops),
+            בלי לחכות לסיום ביקור. תמיד גלוי למעלה, בלי צורך לגלול. */}
+        {onGoToNext && (
+          <PrimaryButton
+            className="w-full inline-flex items-center justify-center gap-1.5"
+            onClick={onGoToNext}
+            disabled={!hasNext}
+          >
+            {hasNext ? 'לתחנה הבאה ←' : 'זו התחנה האחרונה בהיקף הנוכחי'}
+          </PrimaryButton>
+        )}
+
         <div className="flex flex-wrap gap-2">
           <SecondaryButton
             className="!px-3 inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40"
