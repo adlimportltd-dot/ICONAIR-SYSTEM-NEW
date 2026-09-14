@@ -141,9 +141,12 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
   const { profile, isAdmin } = useAuth();
   const initials = (profile?.full_name ?? '?').trim().charAt(0);
 
-  // דוחות חושפים סיכומים ומספרים על כלל העסק — רק מנהל אמור לראות את
-  // הלשונית הזו בתפריט. ה-RLS כבר מגן על הנתונים עצמם; זה חוסם רק את התצוגה.
-  const visibleNavItems = isAdmin ? navItems : navItems.filter((item) => item.id !== 'reports');
+  // דוחות/מלאי-ראשי/לידים חושפים מידע ניהולי — רק מנהל אמור לראות את
+  // הלשוניות האלה בתפריט. 'reports' לא מסומן adminOnly (יש לו חסימה
+  // ייעודית משלו ב-App.jsx), אז הוא נבדק כאן במפורש לצד הדגל הגנרי;
+  // ה-RLS כבר מגן על הנתונים עצמם בכל מקרה, זה חוסם רק את התצוגה.
+  // תואם עכשיו ל-BottomNav.jsx, שכבר סינן לפי item.adminOnly גנרית.
+  const visibleNavItems = navItems.filter((item) => (isAdmin || (item.id !== 'reports' && !item.adminOnly)));
 
   return (
     <aside

@@ -247,6 +247,15 @@ export function SortIcon(props) {
   );
 }
 
+/** משפך — ליד/פרוספקט בתהליך, מהרחב (חדש) לצר (הומר) */
+export function FunnelIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 4.5h16l-6 7.5v6l-4 2v-8Z" />
+    </svg>
+  );
+}
+
 /** לוגו ICON AIR — שלושה זרמי אוויר מתפתלים */
 export function AirMarkIcon(props) {
   return (
@@ -270,4 +279,5 @@ export const iconMap = {
   route: RouteIcon,
   box: BoxIcon,
   tag: TagIcon,
+  funnel: FunnelIcon,
 };

@@ -936,6 +936,39 @@ export const updateCustomerSite = (siteId, patch) =>
 export const deleteCustomerSite = (siteId) =>
   supabase.from('customer_sites').delete().eq('id', siteId).then(unwrap);
 
+/* =====================================================================
+   לידים (Prospects / קמפיין פייסבוק) — phase36/37. טבלה+ממשק ידניים
+   בלבד, בלי שום אינטגרציה אוטומטית עם Meta (ר' CLAUDE.md).
+   ===================================================================== */
+
+/** כל הלידים, מיון חדש→ישן. status/date מסוננים בשרת כדי שהמונה בכותרת ישקף רק את הנבחר. */
+export function listLeads({ status = '', date = '' } = {}) {
+  let query = supabase.from('leads').select('*, converted_customer:customers(id, name)').order('created_at', { ascending: false });
+  if (status) query = query.eq('status', status);
+  if (date) {
+    const start = new Date(`${date}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    query = query.gte('created_at', start.toISOString()).lt('created_at', end.toISOString());
+  }
+  return query.then(unwrap);
+}
+
+export const createLead = (payload) => supabase.from('leads').insert(payload).select().single().then(unwrap);
+
+/** טוגל מהיר של סטטוס ליד — ישירות מהטבלה, כמו setCustomerPaid */
+export const updateLeadStatus = (id, status) =>
+  supabase.from('leads').update({ status }).eq('id', id).select().single().then(unwrap);
+
+/**
+ * "הפוך ללקוח במסלול" — קורא ל-RPC אטומי (convert_lead_to_customer,
+ * phase37) שיוצר את הלקוח ומסמן את הליד כ-converted באותה טרנזקציה,
+ * כדי שלא יישאר ליד "converted" בלי לקוח בפועל אם משהו נופל באמצע.
+ * routeName הוא route_name חופשי (בדיוק כמו בטופס לקוח רגיל) — ריק=ללא שיוך לקו עדיין.
+ */
+export const convertLeadToCustomer = (leadId, routeName) =>
+  supabase.rpc('convert_lead_to_customer', { p_lead_id: leadId, p_route_name: routeName || null }).then(unwrap);
+
 /**
  * קביעת מחיר ליחידה לדגם מסוים בכתובת מסוימת — upsert לפי (site_id, model),
  * כדי שאפשר יהיה לקרוא לזה גם בפעם הראשונה (אין עדיין שורה) וגם בעדכון.
