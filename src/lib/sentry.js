@@ -19,6 +19,17 @@ export function initSentry() {
     return;
   }
 
+  // 2026-09-14 (בעקבות תקלה אמיתית): שרת הפיתוח המקומי היה מדווח
+  // שגיאות לאותו פרויקט Sentry כמו הפרודקשן — קריסה בזמן בדיקה ידנית
+  // של קומפוננטה (למשל בדיקת CompleteVisitModal בלי AuthProvider
+  // עוטף) נראתה בדשבורד בדיוק כמו תקלה אמיתית אצל משתמש בשטח, ובלבלה.
+  // הפיתוח המקומי כבר רואה שגיאות ישירות בקונסולת הדפדפן בלי Sentry —
+  // אין צורך לדווח אותן גם לפרויקט שהמנהל עוקב אחריו.
+  if (import.meta.env.DEV) {
+    console.info('Sentry: סביבת פיתוח מקומית — ניטור שגיאות כבוי בכוונה (ר\' ההערה בקוד).');
+    return;
+  }
+
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE, // 'development' | 'production'
