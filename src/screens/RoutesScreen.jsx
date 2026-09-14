@@ -25,7 +25,7 @@ import {
   listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { OIL_EVENT_LABEL, formatDateTime } from '../lib/mappers';
+import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
 import { optimizeStopOrder } from '../lib/googleMaps';
@@ -487,6 +487,21 @@ function RouteStops({ routeName }) {
   const deviceTotal = visibleOrdered.reduce((sum, c) => sum + (c.devices?.length ?? 0), 0);
   const doneCount = visibleOrdered.filter((c) => statusById[c.id] === 'done').length;
 
+  // 2026-09-14 (בקשה מפורשת: "לראות איפה הטכנאי נמצא כרגע... בזמן
+  // אמת") — נגזר מאותם ordered/statusById שכבר קיימים ומתעדכנים חי
+  // דרך ה-useRealtime למעלה, לא שאילתה נפרדת. "בוצע לאחרונה" הוא
+  // התחנה עם ה-updated_at הכי מאוחר מבין הבוצעו (לא רק stop_order הכי
+  // גבוה — טכנאי יכול לדלג ולחזור), "הבא בתור" הוא הראשונה שעדיין
+  // pending לפי סדר המסלול.
+  const doneStopsForProgress = visibleOrdered.filter((c) => statusById[c.id] === 'done');
+  const lastDoneStop = doneStopsForProgress.reduce((latest, c) => {
+    if (!latest) return c;
+    const t = c.statusUpdatedAt ? new Date(c.statusUpdatedAt).getTime() : 0;
+    const tLatest = latest.statusUpdatedAt ? new Date(latest.statusUpdatedAt).getTime() : 0;
+    return t > tLatest ? c : latest;
+  }, null);
+  const nextPendingStop = visibleOrdered.find((c) => statusById[c.id] !== 'done') ?? null;
+
   return (
     <GlassCard>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -536,6 +551,46 @@ function RouteStops({ routeName }) {
           {googleBusy ? 'מחשב מסלול…' : '✨ אופטימיזציית מסלול חכמה'}
         </PrimaryButton>
       </div>
+
+      {/* 2026-09-14 (בקשה מפורשת: מעקב חי אחרי הטכנאי בשטח מהדסקטופ/טלפון) —
+          מנהל בלבד, בדיוק כמו "תכנון העמסה" — זו פעולת-פיקוח, לא משהו
+          שטכנאי צריך לראות על עצמו. חי אוטומטית דרך אותו useRealtime
+          שכבר מרענן את stops למעלה, בלי לוגיקה נוספת. */}
+      {isAdmin && (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="inner-row px-3.5 py-3">
+            <div className="mb-1 text-[12px] font-semibold uppercase tracking-[0.6px] text-text-faint">
+              ✓ בוצע לאחרונה
+            </div>
+            {lastDoneStop ? (
+              <>
+                <div className="truncate text-[15px] font-bold">{lastDoneStop.name}</div>
+                <div className="truncate text-[13px] text-text-faint">{lastDoneStop.address || '—'}</div>
+                <div className="tabular mt-1 text-[13px] font-semibold text-gold-600">
+                  {relativeTime(lastDoneStop.statusUpdatedAt)}
+                  {lastDoneStop.statusUpdatedAt && ` · ${formatDateTime(lastDoneStop.statusUpdatedAt)}`}
+                </div>
+              </>
+            ) : (
+              <div className="text-[14px] text-text-faint">עדיין לא בוצעה אף תחנה בהיקף הזה היום</div>
+            )}
+          </div>
+
+          <div className="inner-row px-3.5 py-3">
+            <div className="mb-1 text-[12px] font-semibold uppercase tracking-[0.6px] text-text-faint">
+              → התחנה הבאה בתור
+            </div>
+            {nextPendingStop ? (
+              <>
+                <div className="truncate text-[15px] font-bold">{nextPendingStop.name}</div>
+                <div className="truncate text-[13px] text-text-faint">{nextPendingStop.address || '—'}</div>
+              </>
+            ) : (
+              <div className="text-[14px] font-semibold text-ok">כל התחנות בהיקף הזה הושלמו ✓</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* מובייל/טאבלט: פסי-בחירה. דסקטופ רחב (xl+): מוחלף בסיידבר תתי-קווים
           קבוע לצד הרשימה (ר' SubRouteSidebar למטה) — אותו state, שתי תצוגות */}

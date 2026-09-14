@@ -637,7 +637,7 @@ export async function listRouteAssignments(routeName, visitDate) {
 
   const existing = await supabase
     .from('route_assignments')
-    .select('id, customer_id, site_id, stop_order, status, sub_route_id')
+    .select('id, customer_id, site_id, stop_order, status, sub_route_id, updated_at')
     .eq('visit_date', visitDate)
     .or([
       customerIds.length ? `and(site_id.is.null,customer_id.in.(${customerIds.join(',')}))` : null,
@@ -673,7 +673,10 @@ export async function listRouteAssignments(routeName, visitDate) {
   return stops
     .map((s) => {
       const a = byKey.get(stopKey(s));
-      return { ...s, id: a.id, stopOrder: a.stop_order, status: a.status, sub_route_id: a.sub_route_id ?? null };
+      return {
+        ...s, id: a.id, stopOrder: a.stop_order, status: a.status,
+        sub_route_id: a.sub_route_id ?? null, statusUpdatedAt: a.updated_at ?? null,
+      };
     })
     .sort((a, b) => a.stopOrder - b.stopOrder);
 }
