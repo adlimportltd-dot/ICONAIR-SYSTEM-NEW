@@ -8,6 +8,7 @@ import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } fr
 import MlSlider from '../components/ui/MlSlider';
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
+import { useRealtime } from '../hooks/useRealtime';
 import {
   listOilEntries, completeVisit, createOilEntry, listDeviceOptions, getOilByScent, listScents,
   listAllDeviceModels,
@@ -46,6 +47,13 @@ export default function OilScreen() {
   const devices = useQuery(listDeviceOptions, []);
   const scents = useQuery(listScents, []);
   const deviceModels = useQuery(listAllDeviceModels, []);
+
+  // 2026-09-14 (בקשה מפורשת: "שיתעדכן גם במחשב וגם בטלפון, קריטי") —
+  // המסך הזה לא היה מאזין לשום דבר בזמן אמת: עדכון שמן שטכנאי שומר
+  // ממכשיר אחד לא הופיע ברשימה/בגרף אצל מנהל שכבר פתוח על מסך אחר עד
+  // רענון ידני, וניחוח/דגם חדש לא הופיע ברשימות הבחירה כאן.
+  useRealtime(['oil_tracking', 'devices'], () => { entries.refetch(); scentUsage.refetch(); devices.refetch(); });
+  useRealtime(['scents', 'device_models'], () => { scents.refetch(); deviceModels.refetch(); });
 
   // הסינון מקומי: כבר הורדנו 80 שורות, אין טעם לחזור לשרת על כל תו
   const filtered = useMemo(() => {

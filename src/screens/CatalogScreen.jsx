@@ -75,6 +75,8 @@ export default function CatalogScreen() {
   const models = useQuery(listDeviceModels, [], { enabled: isAdmin });
 
   useRealtime(['warehouse_stock'], warehouse.refetch, { enabled: isAdmin });
+  // ניחוח/דגם חדש שנוסף במסך "הגדרות" — מופיע כאן חי, בלי רענון
+  useRealtime(['scents', 'device_models'], () => { scents.refetch(); models.refetch(); }, { enabled: isAdmin });
 
   const technicianOptions = useMemo(
     () => (technicians.data ?? []).map((t) => ({ value: t.id, label: t.full_name ?? 'ללא שם' })),

@@ -228,6 +228,9 @@ function RouteStops({ routeName }) {
   useRealtime(['route_assignments', 'customers', 'customer_sites', 'devices', 'sub_routes'], stops.refetch);
   const deviceModels = useQuery(listAllDeviceModels, []);
   const scents = useQuery(listAllScents, []);
+  // ניחוח/דגם חדש שמנהל מוסיף במסך "הגדרות" יופיע כאן חי, בלי רענון —
+  // ר' הערה מקבילה ב-SettingsScreen.jsx.
+  useRealtime(['scents', 'device_models'], () => { scents.refetch(); deviceModels.refetch(); });
 
   // 2026-09-11 (בקשה מפורשת: קווים גדולים חורגים ממגבלת 25 ה-waypoints
   // של Google) — תתי-קווים: אשכולות גיאוגרפיים בתוך הקו הזה, ר' phase28.
@@ -1576,6 +1579,10 @@ function EditableField({ label, value, options, field, device }) {
 function PendingChangeRequestsCard() {
   const { isAdmin } = useAuth();
   const requests = useQuery(listPendingDeviceChangeRequests, [], { enabled: isAdmin });
+  // 2026-09-14: בלי זה, בקשת-שינוי שטכנאי שולח מהטלפון לא הייתה מופיעה
+  // אצל המנהל במחשב עד רענון ידני של המסך — בדיוק סוג הפער ש"לא
+  // מתעדכן בין מכשירים" שהמשתמש ביקש לסגור.
+  useRealtime(['device_change_requests'], requests.refetch, { enabled: isAdmin });
   const [busyId, setBusyId] = useState(null);
 
   if (!isAdmin) return null;

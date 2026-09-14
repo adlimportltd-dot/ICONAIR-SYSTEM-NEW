@@ -5,6 +5,7 @@ import { SecondaryButton, TextInput, PrimaryButton, Field } from '../components/
 import { Async } from '../components/ui/States';
 import { UsersIcon, RouteIcon, TagIcon, DeviceIcon, DropIcon, SettingsIcon, BellIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
+import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
   listProfiles, getRouteBreakdown, listRoutes, updateRouteCycle,
@@ -25,6 +26,11 @@ export default function SettingsScreen() {
   const notificationSettings = useQuery(getNotificationSettings, [], { enabled: isAdmin });
   const scents = useQuery(listAllScents, [], { enabled: isAdmin });
   const deviceModels = useQuery(listAllDeviceModels, [], { enabled: isAdmin });
+
+  // 2026-09-14 (בקשה מפורשת: "שיתעדכן גם במחשב וגם בטלפון, קריטי") —
+  // בלי זה, ניחוח/דגם שנוסף כאן לא הופיע ברשימות הבחירה (מסלולים/מעקב
+  // שמנים/מכשירים) במכשיר אחר עד רענון ידני של המסך.
+  useRealtime(['scents', 'device_models'], () => { scents.refetch(); deviceModels.refetch(); }, { enabled: isAdmin });
 
   const teamColumns = [
     { key: 'name', label: 'שם', width: 'minmax(0,1fr)', render: (row) => <b className="font-semibold">{row.full_name}</b> },

@@ -29,6 +29,8 @@ export default function DevicesScreen() {
 
   // מכשיר שיוצא מהרשת או שמתמלא לו השמן — מתעדכן כאן בלי רענון
   useRealtime(['devices'], devices.refetch);
+  // ניחוח/דגם חדש שנוסף במסך "הגדרות" — מופיע כאן חי בפילטרים, בלי רענון
+  useRealtime(['scents', 'device_models'], () => { scents.refetch(); models.refetch(); });
 
   const customerOptions = useMemo(
     () => (customers.data ?? []).map((c) => ({ value: c.id, label: c.city ? `${c.name} · ${c.city}` : c.name })),
