@@ -1257,15 +1257,24 @@ function CustomerCardModal({ open, onClose, stop, done, callHref, wazeHref, maps
                  empty={<div className="text-[14px] text-text-faint">אין עדיין היסטוריה למכשירים האלה.</div>}>
             <div className="flex flex-col gap-1.5">
               {(history.data ?? []).map((entry) => (
-                <div key={entry.id} className="inner-row flex items-center gap-3 px-3 py-2 text-[13.5px]">
-                  <span className="tabular flex-none text-text-faint">{formatDateTime(entry.recorded_at)}</span>
-                  <span className="flex-none text-text-dim">{OIL_EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {deviceById.get(entry.device_id)?.model ?? ''} · {entry.scent_name || 'ללא ניחוח'}
-                  </span>
-                  <span className="tabular flex-none text-text-faint">
-                    {entry.level_before_pct ?? '—'}% ← {entry.level_after_pct}%
-                  </span>
+                <div key={entry.id} className="inner-row flex flex-col gap-1 px-3 py-2 text-[13.5px]">
+                  <div className="flex items-center gap-3">
+                    <span className="tabular flex-none text-text-faint">{formatDateTime(entry.recorded_at)}</span>
+                    <span className="flex-none text-text-dim">{OIL_EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {deviceById.get(entry.device_id)?.model ?? ''} · {entry.scent_name || 'ללא ניחוח'}
+                    </span>
+                  </div>
+                  {/* 2026-09-14 (בקשה מפורשת: "רוצים שיהיה רשום כמה מ״ל בוצע
+                      בפועל, לא אחוזים") — liters_added כבר נשמר ונשלף
+                      (ר' listOilHistoryForDevices), רק לא הוצג פה. הכמות
+                      במ״ל היא המידע הראשי עכשיו (מודגש); האחוזים לפני/אחרי
+                      נשארים כפרט משני — עדיין רלוונטי (מראה כמה המכשיר היה
+                      ריק), רק לא הדבר הראשון שבולט. */}
+                  <div className="tabular">
+                    <b className="font-bold text-gold-600">{Math.round(Number(entry.liters_added ?? 0) * 1000)} מ״ל</b>
+                    <span className="text-text-faint"> · {entry.level_before_pct ?? '—'}% ← {entry.level_after_pct}%</span>
+                  </div>
                 </div>
               ))}
             </div>
