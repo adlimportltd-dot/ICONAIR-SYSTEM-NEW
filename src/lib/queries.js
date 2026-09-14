@@ -637,7 +637,7 @@ export async function listRouteAssignments(routeName, visitDate) {
 
   const existing = await supabase
     .from('route_assignments')
-    .select('id, customer_id, site_id, stop_order, status, sub_route_id, updated_at')
+    .select('id, customer_id, site_id, stop_order, status, sub_route_id, updated_at, closed_reason')
     .eq('visit_date', visitDate)
     .or([
       customerIds.length ? `and(site_id.is.null,customer_id.in.(${customerIds.join(',')}))` : null,
@@ -676,6 +676,7 @@ export async function listRouteAssignments(routeName, visitDate) {
       return {
         ...s, id: a.id, stopOrder: a.stop_order, status: a.status,
         sub_route_id: a.sub_route_id ?? null, statusUpdatedAt: a.updated_at ?? null,
+        closedReason: a.closed_reason ?? null,
       };
     })
     .sort((a, b) => a.stopOrder - b.stopOrder);
@@ -772,6 +773,21 @@ export async function saveRouteOrder(rows) {
 /** מסמן עצירה כבוצעה/לא-בוצעה, לפי מזהה שורת route_assignments. מניח שהשורה כבר קיימת (ר' listRouteAssignments). */
 export const setStopStatus = (rowId, status) =>
   supabase.from('route_assignments').update({ status }).eq('id', rowId).then(unwrap);
+
+/**
+ * "העסק סגור / לא נמצא" — 2026-09-14, בקשה מפורשת: לטכנאי צריכה להיות
+ * דרך לסגור עצירה בלי לגעת בכלל בנתוני שמן/מכשיר. status='skipped'
+ * כבר נתמך ב-CHECK constraint מאז ומעולם (ר' phase35), פשוט לא נכתב
+ * אליו קוד עד עכשיו. reason חופשי ואופציונלי — נשמר גם אם ריק/null,
+ * כדי שסימון-חוזר ינקה הערה קודמת אם לא הוזנה חדשה.
+ */
+export const closeVisit = (rowId, reason) =>
+  supabase.from('route_assignments')
+    .update({ status: 'skipped', closed_reason: reason?.trim() || null })
+    .eq('id', rowId)
+    .select('id, status, closed_reason')
+    .single()
+    .then(unwrap);
 
 /* =====================================================================
    לקוחות

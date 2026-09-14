@@ -22,7 +22,7 @@ import {
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
   completeVisit, createOilEntry, listOilHistoryForDevices,
-  listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute,
+  listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute, closeVisit,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
@@ -441,7 +441,7 @@ function RouteStops({ routeName }) {
   function goToNextStop(currentId) {
     const from = visibleIds.indexOf(currentId);
     if (from < 0) { setOpenStopId(null); return; }
-    const next = visibleIds.slice(from + 1).find((id) => statusById[id] !== 'done');
+    const next = visibleIds.slice(from + 1).find((id) => statusById[id] === 'pending');
     setOpenStopId(next ?? null);
   }
 
@@ -483,9 +483,30 @@ function RouteStops({ routeName }) {
     }
   }
 
+  /**
+   * "העסק סגור / לא נמצא" — 2026-09-14, בקשה מפורשת: דרך לסגור עצירה
+   * בלי לגעת בכלל בנתוני שמן/מכשיר (status='skipped', ר' closeVisit
+   * ב-queries.js). מתנהג כמו markDone מבחינת הזרימה — מסמן, קופץ
+   * לתחנה הבאה — רק עם סטטוס וסיבה אחרים לגמרי מ"בוצע".
+   */
+  async function closeStop(id, reason) {
+    const prevStatus = statusById[id] ?? 'pending';
+    setStatusById((prev) => ({ ...prev, [id]: 'skipped' }));
+
+    try {
+      setSaveError(null);
+      await closeVisit(id, reason);
+      goToNextStop(id);
+    } catch (caught) {
+      setStatusById((prev) => ({ ...prev, [id]: prevStatus }));
+      setSaveError(describeError(caught));
+    }
+  }
+
   const fullRouteLink = googleMapsRouteLink(visibleOrdered.map((c) => c.address));
   const deviceTotal = visibleOrdered.reduce((sum, c) => sum + (c.devices?.length ?? 0), 0);
   const doneCount = visibleOrdered.filter((c) => statusById[c.id] === 'done').length;
+  const closedCount = visibleOrdered.filter((c) => statusById[c.id] === 'skipped').length;
 
   // 2026-09-14 (בקשה מפורשת: "לראות איפה הטכנאי נמצא כרגע... בזמן
   // אמת") — נגזר מאותם ordered/statusById שכבר קיימים ומתעדכנים חי
@@ -508,7 +529,9 @@ function RouteStops({ routeName }) {
         <div>
           <div className="font-display text-[17px] font-bold">{routeName ?? 'ללא שיוך לקו'}</div>
           <div className="mt-0.5 text-[14px] text-text-faint">
-            {visibleOrdered.length} תחנות · {doneCount} בוצעו · {deviceTotal} מכשירים
+            {visibleOrdered.length} תחנות · {doneCount} בוצעו
+            {closedCount > 0 && <> · <span className="text-warn">{closedCount} סגורים</span></>}
+            {' '}· {deviceTotal} מכשירים
           </div>
         </div>
 
@@ -676,8 +699,10 @@ function RouteStops({ routeName }) {
                       total={visibleOrdered.length}
                       customer={customer}
                       done={statusById[customer.id] === 'done'}
+                      closed={statusById[customer.id] === 'skipped'}
                       onToggleDone={() => toggleStatus(customer.id)}
                       onMarkDone={() => markDone(customer.id)}
+                      onCloseVisit={(reason) => closeStop(customer.id, reason)}
                       onJump={(position) => jumpTo(customer.id, position)}
                       deviceModels={deviceModels.data ?? []}
                       scents={scents.data ?? []}
@@ -695,7 +720,7 @@ function RouteStops({ routeName }) {
                       onOpenCard={() => setOpenStopId(customer.id)}
                       onCloseCard={() => setOpenStopId(null)}
                       onGoToNext={() => goToNextStop(customer.id)}
-                      hasNext={visibleIds.slice(index + 1).some((id) => statusById[id] !== 'done')}
+                      hasNext={visibleIds.slice(index + 1).some((id) => statusById[id] === 'pending')}
                     />
                   ))}
                 </div>
@@ -988,7 +1013,7 @@ function PillButton({ active, onClick, children }) {
  * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
 function StopRow({
-  id, index, total, customer, done, onToggleDone, onMarkDone, onJump, deviceModels, scents, onVisitCompleted,
+  id, index, total, customer, done, closed, onToggleDone, onMarkDone, onCloseVisit, onJump, deviceModels, scents, onVisitCompleted,
   isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect,
   cardOpen, onOpenCard, onCloseCard, onGoToNext, hasNext,
 }) {
@@ -1010,7 +1035,7 @@ function StopRow({
     <div
       ref={setNodeRef}
       style={dragStyle}
-      className={`inner-row overflow-hidden transition-opacity ${done ? 'opacity-55' : ''}`}
+      className={`inner-row overflow-hidden transition-opacity ${done ? 'opacity-55' : ''} ${closed ? 'border-warn/25 bg-warn/[0.05]' : ''}`}
     >
       <div className="flex flex-col gap-3 p-3.5">
         <div className="flex items-center gap-2.5">
@@ -1049,14 +1074,17 @@ function StopRow({
             type="button"
             onClick={onToggleDone}
             aria-pressed={done}
-            aria-label={done ? 'סמן כלא בוצע' : 'סמן כבוצע'}
+            aria-label={closed ? 'העסק סומן כסגור/לא נמצא — לחץ כדי לסמן כבוצע' : done ? 'סמן כלא בוצע' : 'סמן כבוצע'}
+            title={closed ? 'העסק סגור / לא נמצא' : undefined}
             className={`grid h-8 w-8 flex-none place-items-center rounded-full border text-[15px] transition-colors ${
               done
                 ? 'border-ok/40 bg-ok/15 text-ok'
-                : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
+                : closed
+                  ? 'border-warn/40 bg-warn/15 text-warn'
+                  : 'border-black/[0.12] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
             }`}
           >
-            ✓
+            {closed ? '–' : '✓'}
           </button>
 
           <button
@@ -1065,8 +1093,11 @@ function StopRow({
             className="min-w-0 flex-1 text-start"
             aria-label={`פתח כרטיסייה מלאה של ${customer.name}`}
           >
-            <div className={`truncate text-[16px] font-bold leading-tight transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
-              {customer.name}
+            <div className="flex items-center gap-1.5">
+              <div className={`truncate text-[16px] font-bold leading-tight transition-colors hover:text-gold-600 ${done ? 'line-through' : ''}`}>
+                {customer.name}
+              </div>
+              {closed && <StatusChip tone="warn">סגור</StatusChip>}
             </div>
             <div className="truncate text-[13px] text-text-faint">{customer.address || '—'}</div>
           </button>
@@ -1122,10 +1153,12 @@ function StopRow({
         onClose={onCloseCard}
         stop={customer}
         done={done}
+        closed={closed}
         callHref={call}
         wazeHref={waze}
         mapsHref={maps}
         onMarkDone={onMarkDone}
+        onCloseVisit={onCloseVisit}
         deviceModels={deviceModels}
         scents={scents}
         onVisitCompleted={onVisitCompleted}
@@ -1202,12 +1235,28 @@ function OrderBadge({ index, total, onJump }) {
  * היסטוריית השמן האחרונה שלהם — כדי שהטכנאי לא יצטרך לנחש מה קרה
  * בביקורים הקודמים. אין כאן שום נתון כספי בכוונה (ר' דרישת המשתמש).
  */
-function CustomerCardModal({ open, onClose, stop, done, callHref, wazeHref, mapsHref, onMarkDone, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, onGoToNext, hasNext }) {
+function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHref, mapsHref, onMarkDone, onCloseVisit, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, onGoToNext, hasNext }) {
   const devices = stop.devices ?? [];
   const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
   const history = useQuery(() => listOilHistoryForDevices(deviceIds, 20), [deviceIds.join(',')], { enabled: open });
 
   const deviceById = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+
+  // 2026-09-14 (בקשה מפורשת: "העסק סגור / לא נמצא, בלי לאלץ מילוי
+  // שמן") — שורה-הזנה מהירה מוטבעת בכרטיסייה עצמה (לא מודל מקונן נוסף —
+  // המשתמש ביקש במפורש "או שורה להזנה מהירה" כאלטרנטיבה פשוטה יותר).
+  const [closing, setClosing] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+
+  useEffect(() => {
+    if (open) { setClosing(false); setCloseReason(''); }
+  }, [open, stop.id]);
+
+  function confirmClose() {
+    onCloseVisit?.(closeReason);
+    setClosing(false);
+    setCloseReason('');
+  }
 
   return (
     <Modal
@@ -1263,6 +1312,51 @@ function CustomerCardModal({ open, onClose, stop, done, callHref, wazeHref, maps
             Maps
           </SecondaryButton>
         </div>
+
+        {closed ? (
+          <div className="rounded-row border border-warn/25 bg-warn/[0.06] px-3.5 py-2.5">
+            <div className="flex items-center gap-2 text-[14px] font-semibold text-warn">
+              <StatusChip tone="warn">סגור</StatusChip>
+              העסק סומן כסגור / לא נמצא
+            </div>
+            {stop.closedReason && (
+              <div className="mt-1.5 text-[13.5px] text-text-dim">{stop.closedReason}</div>
+            )}
+          </div>
+        ) : onCloseVisit && (
+          closing ? (
+            <div className="rounded-row border border-warn/25 bg-warn/[0.05] p-3.5">
+              <div className="mb-2 text-[14px] font-semibold text-warn">סימון "העסק סגור / לא נמצא"</div>
+              <TextInput
+                autoFocus
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                placeholder='הערה קצרה (לא חובה) — למשל: "הגיע, הכל היה נעול"'
+              />
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={confirmClose}
+                  className="flex-1 rounded-pill border border-warn/40 bg-warn/10 px-4 py-2.5
+                             text-[14px] font-bold text-warn transition-colors hover:bg-warn/20"
+                >
+                  אישור
+                </button>
+                <SecondaryButton onClick={() => { setClosing(false); setCloseReason(''); }}>ביטול</SecondaryButton>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setClosing(true)}
+              className="flex items-center justify-center gap-1.5 rounded-pill border border-warn/30
+                         bg-warn/[0.06] px-4 py-2.5 text-[14px] font-bold text-warn transition-colors
+                         hover:bg-warn/[0.12]"
+            >
+              העסק סגור / לא נמצא
+            </button>
+          )
+        )}
 
         {isAdmin && subRoutes?.length > 0 && (
           <Field label="תת-קו" hint="שיוך גיאוגרפי בתוך הקו — לניהול ואופטימיזציה נפרדים בקווים גדולים">
