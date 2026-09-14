@@ -11,10 +11,10 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import {
   listOilEntries, completeVisit, createOilEntry, listDeviceOptions, getOilByScent, listScents,
-  listAllDeviceModels,
+  listAllDeviceModels, listProfiles, todayISO,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { OIL_EVENT_LABEL, formatDateTime, formatNumber, mapOilByScent } from '../lib/mappers';
+import { OIL_EVENT_LABEL, formatDate, formatDateTime, formatNumber, mapOilByScent } from '../lib/mappers';
 import { useAuth } from '../context/AuthContext';
 import { generateReportSafely } from '../lib/serviceReport';
 
@@ -42,11 +42,21 @@ export default function OilScreen() {
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
 
-  const entries = useQuery(() => listOilEntries({ limit: 80 }), []);
+  // 2026-09-14 (בקשה מפורשת: "ניהול יומי של הטכנאים") — סינון לפי
+  // תאריך (ברירת מחדל: היום) וטכנאי-רושם, שניהם בשרת (ר' listOilEntries
+  // ב-queries.js) כדי שהמונה בכותרת ישקף את המספר האמיתי ליום/טכנאי
+  // הנבחרים, לא רק את 80 השורות האחרונות שנטענו.
+  const [date, setDate] = useState(todayISO);
+  const [technicianId, setTechnicianId] = useState('');
+
+  const entries = useQuery(() => listOilEntries({ date: date || null, technicianId: technicianId || null }), [date, technicianId]);
   const scentUsage = useQuery(() => getOilByScent({ limit: 8 }), []);
   const devices = useQuery(listDeviceOptions, []);
   const scents = useQuery(listScents, []);
   const deviceModels = useQuery(listAllDeviceModels, []);
+  // רשימת הטכנאים/מי-שרושם לבורר — לא מושפעת מהסינון הנוכחי, כדי
+  // שהאפשרויות ברשימה תמיד יכללו את כולם (גם מי שלא רשם כלום היום).
+  const profiles = useQuery(listProfiles, []);
 
   // 2026-09-14 (בקשה מפורשת: "שיתעדכן גם במחשב וגם בטלפון, קריטי") —
   // המסך הזה לא היה מאזין לשום דבר בזמן אמת: עדכון שמן שטכנאי שומר
@@ -79,6 +89,11 @@ export default function OilScreen() {
   const scentOptions = useMemo(
     () => (scents.data ?? []).map((s) => ({ value: s.name, label: s.name })),
     [scents.data]
+  );
+
+  const technicianOptions = useMemo(
+    () => (profiles.data ?? []).map((p) => ({ value: p.id, label: p.full_name ?? 'ללא שם' })),
+    [profiles.data]
   );
 
   const columns = [
@@ -141,11 +156,48 @@ export default function OilScreen() {
         countLabel="רישומים"
         actionLabel="רישום מילוי"
         onAction={() => setFormOpen(true)}
+        filters={[
+          {
+            key: 'technician',
+            value: technicianId,
+            onChange: setTechnicianId,
+            placeholder: 'כל הטכנאים',
+            options: technicianOptions,
+          },
+        ]}
+        extra={
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2.5 text-[14px]
+                         text-text focus:border-gold-500/45 focus:outline-none"
+              aria-label="סינון לפי תאריך"
+            />
+            {date && (
+              <button
+                type="button"
+                onClick={() => setDate('')}
+                className="rounded-pill border border-black/[0.09] px-2.5 py-2 text-[13px]
+                           text-text-faint transition-colors hover:border-gold-500/35 hover:text-gold-600"
+                title="הצג את כל התאריכים (ללא סינון-יום)"
+              >
+                הכל
+              </button>
+            )}
+          </div>
+        }
       />
 
       <section className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <GlassCard>
-          <CardHead icon={DropIcon} tone="teal" title="יומן מעקב שמנים" subtitle="80 הרישומים האחרונים" />
+          <CardHead
+            icon={DropIcon}
+            tone="teal"
+            title="יומן מעקב שמנים"
+            subtitle={date ? `תאריך: ${formatDate(date)}` : '80 הרישומים האחרונים, כל התאריכים'}
+          />
           <Async
             loading={entries.loading}
             error={entries.error}
@@ -153,7 +205,11 @@ export default function OilScreen() {
             isEmpty={filtered.length === 0}
             empty={
               <EmptyState
-                title={search ? 'אין רישום שתואם את החיפוש' : 'עוד לא נרשמו מילויים'}
+                title={
+                  search ? 'אין רישום שתואם את החיפוש'
+                    : date ? 'אין רישומים בתאריך/טכנאי שנבחרו'
+                    : 'עוד לא נרשמו מילויים'
+                }
                 hint='כל רישום כאן מעדכן אוטומטית את מפלס השמן של המכשיר.'
               />
             }

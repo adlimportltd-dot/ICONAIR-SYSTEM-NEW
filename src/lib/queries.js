@@ -984,17 +984,47 @@ export const updateDevice = (id, patch) =>
    מעקב שמנים
    ===================================================================== */
 
-export const listOilEntries = ({ limit = 60 } = {}) =>
-  supabase
+/**
+ * טווח יממה מקומית (לא UTC) עבור yyyy-mm-dd נתון — ר' todayISO. בלי
+ * 'Z'/אזור-זמן במחרוזת, new Date מפרש כשעון מקומי, כך שהטווח תואם
+ * ל"יום" כפי שהטכנאי/מנהל תופסים אותו, לא לחצות UTC.
+ */
+function localDayRange(dateStr) {
+  const start = new Date(`${dateStr}T00:00:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/**
+ * date (yyyy-mm-dd) — 2026-09-14, בקשה מפורשת: ניהול יומי של מעקב
+ * השמנים, "עד היום" כברירת מחדל. כשמוגדר, מסנן בשרת ליממה המקומית
+ * הזו ומוריד את התקרה הקבועה (80) — יום עמוס לא אמור "להיחתך" מבחור
+ * מלאכותי. technicianId מסנן לפי מי שרשם (recorded_by), גם הוא בשרת
+ * ולא בצד הלקוח — כדי שהמונה בכותרת יהיה מספר אמיתי, לא רק מתוך
+ * 80/60 השורות שכבר הורדו.
+ */
+export const listOilEntries = ({ limit = 60, date = null, technicianId = null } = {}) => {
+  let query = supabase
     .from('oil_tracking')
     .select(`
       *,
       device:devices(id, serial, model, customer:customers(id, name)),
       recorder:profiles(id, full_name)
     `)
-    .order('recorded_at', { ascending: false })
-    .limit(limit)
-    .then(unwrap);
+    .order('recorded_at', { ascending: false });
+
+  if (date) {
+    const { start, end } = localDayRange(date);
+    query = query.gte('recorded_at', start).lt('recorded_at', end);
+  } else {
+    query = query.limit(limit);
+  }
+
+  if (technicianId) query = query.eq('recorded_by', technicianId);
+
+  return query.then(unwrap);
+};
 
 /**
  * רישום מילוי. אין כאן עדכון של devices.oil_level_pct —
