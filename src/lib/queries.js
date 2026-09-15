@@ -584,12 +584,26 @@ export async function getRouteLoadPlan(routeName) {
 export const resetRouteCycle = (deviceIds) =>
   supabase.rpc('reset_route_cycle', { p_device_ids: deviceIds }).then(unwrap);
 
-/** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של מסך המסלולים היא "היום". */
+/** yyyy-mm-dd מקומי (לא UTC) — ברירת המחדל של יומן מעקב שמנים היא "היום". */
 export const todayISO = () => {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+/** yyyy-mm-01 מקומי — ה-1 לחודש הנוכחי. ר' listRouteAssignments: מסך המסלולים עובד במחזור חודשי, לא יומי. */
+export const monthStartISO = (d = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+};
+
+/** מזיז yyyy-mm-01 נתון ב-delta חודשים (יכול להיות שלילי) — חשבון קלנדרי מקומי טהור, בלי עיגול/timezone. */
+function addMonthsISO(monthStartYmd, delta) {
+  const [y, m] = monthStartYmd.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+}
 
 /**
  * מחזיר את מזהה הקו לפי שם, ויוצר אותו אם עוד לא קיים.
@@ -621,47 +635,84 @@ async function ensureRouteId(name) {
 export const stopKey = (stop) => stop.site_id ?? stop.customer_id;
 
 /**
- * עצירות הקו ליום נתון: כל העצירות הפעילות על הקו (מ-listStopsByRoute —
- * לקוחות חד-כתובתיים + אתרים), עם סדר וסטטוס מ-route_assignments אם
- * כבר נשמרו, או ברירת מחדל לחדשות. עצירה חדשה נזרעת דרך ה-RPC
- * upsert_route_stop (לא upsert רגיל — יש שני אינדקסים ייחודיים
- * חלקיים שונים לעצירת-לקוח מול עצירת-אתר, ו-upsert גנרי לא יודע
- * לבחור נכון ביניהם, ר' customer_sites.sql).
+ * עצירות הקו לחודש נתון (monthStart = yyyy-mm-01) — 2026-09-15, בעקבות
+ * בקשה מפורשת: "אנחנו עובדים במחזור שירות חודשי, לא יומי". זה שינוי
+ * משמעות מהותי מהגרסה הקודמת (phase29/30): שם כל תאריך קלנדרי חדש קיבל
+ * שורת route_assignments נפרדת משלו, אז סטטוס "בוצע" התאפס בכל יום.
+ * העמודה visit_date עצמה **לא השתנתה** ואף שורה היסטורית לא נמחקת/
+ * נדרסת (ר' גם CLAUDE.md/ הבטחה מפורשת לשמור על כל נתוני הביקורים) —
+ * מה שהשתנה הוא רק *איזו* שורה נחשבת "השורה החיה" של תחנה: זו עם
+ * visit_date הכי מאוחר בטווח החודש המבוקש (ולא שורה נעולה לתאריך מדויק).
+ * סימון בוצע/סגור על ID של שורה כזו (setStopStatus/closeVisit) ממשיך
+ * לעדכן אותה שורה בדיוק לאורך כל החודש — לא נוצרת שורה נוספת ליום חדש.
+ * ברגע שנפתח חודש קלנדרי חדש (אין עדיין אף שורה לתחנה בטווח החדש) —
+ * נזרעת שורה טרייה 'pending' פעם אחת, בדיוק כמו האיפוס היומי הישן, רק
+ * שעכשיו זה קורה פעם בחודש (לא נדרש שום cron/job — זה קורה באופן טבעי
+ * בפעם הראשונה שמישהו פותח את המסך אחרי שהחודש התחלף, בדיוק כמו שהאיפוס
+ * היומי הישן קרה בפעם הראשונה שמישהו פתח את המסך באותו יום).
  */
-export async function listRouteAssignments(routeName, visitDate) {
+export async function listRouteAssignments(routeName, monthStart) {
   const stops = await listStopsByRoute(routeName);
   if (stops.length === 0) return [];
 
   const siteIds = stops.filter((s) => s.site_id).map((s) => s.site_id);
   const customerIds = stops.filter((s) => !s.site_id).map((s) => s.customer_id);
+  const nextMonthStart = addMonthsISO(monthStart, 1);
 
   const existing = await supabase
     .from('route_assignments')
-    .select('id, customer_id, site_id, stop_order, status, sub_route_id, updated_at, closed_reason')
-    .eq('visit_date', visitDate)
+    .select('id, customer_id, site_id, stop_order, status, sub_route_id, updated_at, closed_reason, visit_date')
+    .gte('visit_date', monthStart)
+    .lt('visit_date', nextMonthStart)
     .or([
       customerIds.length ? `and(site_id.is.null,customer_id.in.(${customerIds.join(',')}))` : null,
       siteIds.length ? `site_id.in.(${siteIds.join(',')})` : null,
     ].filter(Boolean).join(','))
     .then(unwrap);
 
-  const byKey = new Map(existing.map((a) => [a.site_id ?? a.customer_id, a]));
+  // תחנה עלולה להחזיק כמה שורות בטווח החודש (שארית מהמערכת היומית
+  // הישנה, מלפני 2026-09-15 — כל יום קלנדרי קיבל שורה טרייה משלו, אז
+  // תחנה שטופלה ב-14/9 יכולה "לשבת" גם עם שורת pending אוטומטית מ-15/9).
+  // "השורה החיה" אסור שתיבחר לפי visit_date הכי מאוחר סתם — שורה מאוחרת
+  // יותר לא בהכרח אמיתית יותר, היא עלולה להיות בדיוק שריד האיפוס היומי
+  // הישן. הכלל הנכון (ולפי הדרישה המפורשת "בוצע נשאר בוצע לאורך החודש"):
+  // עדיפות סטטוס — done > skipped > pending, בלי קשר לתאריך; רק כשובר-
+  // שוויון בין שתי שורות עם אותו סטטוס-מנצח (למשל "בוצע" גם ב-3/9 וגם
+  // ב-14/9) נבחרת האינסטנס העדכני יותר, כדי שהפרטים (updated_at וכו')
+  // יהיו הכי מדויקים.
+  const STATUS_RANK = { done: 2, skipped: 1, pending: 0 };
+  const byKey = new Map();
+  for (const row of existing) {
+    const key = row.site_id ?? row.customer_id;
+    const prev = byKey.get(key);
+    if (!prev) { byKey.set(key, row); continue; }
+
+    const rowRank = STATUS_RANK[row.status] ?? 0;
+    const prevRank = STATUS_RANK[prev.status] ?? 0;
+    if (rowRank > prevRank) { byKey.set(key, row); continue; }
+    if (rowRank === prevRank && (row.visit_date > prev.visit_date || (row.visit_date === prev.visit_date && row.updated_at > prev.updated_at))) {
+      byKey.set(key, row);
+    }
+  }
+
   const missing = stops.filter((s) => !byKey.has(stopKey(s)));
 
   if (missing.length) {
     const routeId = await ensureRouteId(routeName);
-    const maxOrder = existing.reduce((max, a) => Math.max(max, a.stop_order), 0);
+    const maxOrder = [...byKey.values()].reduce((max, a) => Math.max(max, a.stop_order), 0);
 
-    // עצירה חדשה (תאריך שנפתח לראשונה) נזרעת מהשיוך/סדר ה*קבועים* של
+    // עצירה חדשה (חודש שנפתח לראשונה) נזרעת מהשיוך/סדר ה*קבועים* של
     // הלקוח/האתר (sub_route_id/route_position, ר' phase29) אם הוגדרו,
     // ולא מברירת מחדל שרירותית — כך שחלוקה לתתי-קווים שנקבעה פעם אחת
-    // ממשיכה לחול בכל יום חדש, בלי שמישהו יצטרך לגרור מחדש כל בוקר.
+    // ממשיכה לחול בכל חודש חדש, בלי שמישהו יצטרך לגרור מחדש. p_visit_date
+    // הוא ה-1-לחודש (לא "היום") כדי שהשורה תישאר בטווח החודש הנצפה גם
+    // כשמישהו מעיין בחודש עבר/עתידי דרך בורר החודש במסך.
     const created = await Promise.all(missing.map((s, i) =>
       supabase.rpc('upsert_route_stop', {
         p_customer_id: s.customer_id,
         p_site_id: s.site_id,
         p_route_id: routeId,
-        p_visit_date: visitDate,
+        p_visit_date: monthStart,
         p_stop_order: s.permanentPosition ?? (maxOrder + i + 1),
         p_sub_route_id: s.permanentSubRouteId ?? null,
       }).then(unwrap)

@@ -17,7 +17,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
-  listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, todayISO,
+  listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, monthStartISO,
   getRouteLoadPlan, listTechnicianOptions, allocateStockToTechnician,
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
@@ -31,11 +31,14 @@ import { generateReportSafely } from '../lib/serviceReport';
 import { optimizeStopOrder } from '../lib/googleMaps';
 
 /**
- * מסלולים — עצירות לפי קו הפצה ותאריך, עם ניווט חד-לחיצה לכל תחנה.
+ * מסלולים — עצירות לפי קו הפצה, עם ניווט חד-לחיצה לכל תחנה.
  *
- * סדר העצירות וסטטוס "בוצע" נשמרים ב-route_assignments (לקוח + תאריך).
+ * סדר העצירות וסטטוס "בוצע" נשמרים ב-route_assignments (לקוח + חודש).
  * חברות בקו עדיין נגזרת מ-customers.route_name — route_assignments הוא
- * רק שכבת עריכה של סדר/סטטוס ליום ספציפי, לא רשימת החברים בקו.
+ * רק שכבת עריכה של סדר/סטטוס למחזור השירות החודשי, לא רשימת החברים בקו.
+ * 2026-09-15 (בקשה מפורשת: "מחזור שירות חודשי, לא יומי"): סטטוס תחנה
+ * נשאר תקף לאורך כל החודש ולא מתאפס בכל יום — ר' listRouteAssignments
+ * ב-queries.js לפירוט המלא של השינוי.
  */
 export default function RoutesScreen() {
   const [activeRoute, setActiveRoute] = useState(undefined); // undefined = טרם נבחר
@@ -218,8 +221,11 @@ function smartSortStops(stops) {
 
 function RouteStops({ routeName }) {
   const { isAdmin } = useAuth();
-  const [visitDate, setVisitDate] = useState(todayISO);
-  const stops = useQuery(() => listRouteAssignments(routeName, visitDate), [routeName, visitDate]);
+  // בורר "חודש" (לא "תאריך") — ר' ההערה למעלה: מחזור שירות חודשי, לא יומי.
+  const currentMonthKey = monthStartISO().slice(0, 7);
+  const [monthKey, setMonthKey] = useState(currentMonthKey);
+  const monthStart = `${monthKey}-01`;
+  const stops = useQuery(() => listRouteAssignments(routeName, monthStart), [routeName, monthStart]);
 
   // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
   // כבוצעה על הקו הזה, המסך הזה מתעדכן חי בלי רענון ידני.
@@ -529,20 +535,24 @@ function RouteStops({ routeName }) {
         <div>
           <div className="font-display text-[17px] font-bold">{routeName ?? 'ללא שיוך לקו'}</div>
           <div className="mt-0.5 text-[14px] text-text-faint">
-            {visibleOrdered.length} תחנות · {doneCount} בוצעו
+            {visibleOrdered.length} תחנות · {doneCount} בוצעו החודש
             {closedCount > 0 && <> · <span className="text-warn">{closedCount} סגורים</span></>}
             {' '}· {deviceTotal} מכשירים
           </div>
         </div>
 
         <input
-          type="date"
-          value={visitDate}
-          onChange={(e) => setVisitDate(e.target.value)}
+          type="month"
+          value={monthKey}
+          onChange={(e) => setMonthKey(e.target.value)}
           className="rounded-pill border border-black/[0.09] bg-ink-800 px-3 py-2 text-[14px]
                      text-text focus:border-gold-500/45 focus:outline-none"
-          aria-label="תאריך ביקור"
+          aria-label="חודש שירות"
         />
+
+        {monthKey !== currentMonthKey && (
+          <SecondaryButton onClick={() => setMonthKey(currentMonthKey)}>החודש הנוכחי</SecondaryButton>
+        )}
 
         <SecondaryButton
           className="ms-auto inline-flex items-center gap-1.5"
