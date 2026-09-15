@@ -9,9 +9,9 @@ import { useAuth } from '../context/AuthContext';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import {
-  listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels,
+  listTechnicianStock, listTechnicianOptions, setTechnicianStock, listScents, listDeviceModels, listAllDeviceModels,
   returnStockToWarehouse, returnAllStockToWarehouse, resetTechnicianStock, listRoutes, getRouteLoadPlan,
-  resetRouteCycle,
+  resetRouteCycle, updateDevice, updateDeviceModelCapacity,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { getCycleInfo, containersLabel } from '../lib/mappers';
@@ -75,6 +75,9 @@ function TodayLoadCard() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState(null);
   const [resetConfirming, setResetConfirming] = useState(false);
+  // 2026-09-15 (בקשה מפורשת: רשימה שמית + תיקון מהיר, לא רק מונה) —
+  // ר' MissingDevicesModal למטה.
+  const [missingModalOpen, setMissingModalOpen] = useState(false);
 
   async function runCycleReset() {
     if (!plan.data?.deviceIds?.length) return;
@@ -276,11 +279,23 @@ function TodayLoadCard() {
             )}
 
             {plan.data.missing.length > 0 && (
-              <div className="mt-4 rounded-row border border-warn/25 bg-warn/[0.07] px-4 py-3 text-[14px] text-warn">
+              <button
+                type="button"
+                onClick={() => setMissingModalOpen(true)}
+                className="mt-4 w-full rounded-row border border-warn/25 bg-warn/[0.07] px-4 py-3 text-start
+                           text-[14px] text-warn transition-colors hover:border-warn/40 hover:bg-warn/[0.11]"
+              >
                 {plan.data.missing.length} מכשירים בקו בלי ניחוח משויך או בלי נפח-מכל מוגדר לדגם — לא נכנסו לחישוב.
-                תעדכן אותם בכרטיס הלקוח כדי שהתכנון יהיה מדויק.
-              </div>
+                {' '}<span className="font-bold underline">לרשימה המלאה ותיקון מהיר ←</span>
+              </button>
             )}
+
+            <MissingDevicesModal
+              open={missingModalOpen}
+              missing={plan.data.missing}
+              onClose={() => setMissingModalOpen(false)}
+              onFixed={plan.refetch}
+            />
 
             {/*
               2026-09-10 (מדיניות מפורשת): בתחילת מחזור חדש כל מכשיר
@@ -364,6 +379,128 @@ function TodayLoadCard() {
         )}
       </Async>
     </GlassCard>
+  );
+}
+
+/**
+ * רשימה שמית של מכשירים שלא נכנסו לחישוב ההעמסה (בלי ניחוח/בלי נפח-מכל
+ * לדגם) — 2026-09-15, בקשה מפורשת: לא רק מונה, אלא רשימה מלאה לפי קו
+ * עם תיקון מהיר בלי לצאת למסך אחר. missing מגיע כמו שהוא מ-getRouteLoadPlan
+ * (לא נוגעת בשום חישוב קיים שם) — כאן רק מקבצים לפי route_name לתצוגה.
+ */
+function MissingDevicesModal({ open, missing, onClose, onFixed }) {
+  const scents = useQuery(listScents, [], { enabled: open });
+  const models = useQuery(listAllDeviceModels, [], { enabled: open });
+  const modelByName = useMemo(() => new Map((models.data ?? []).map((m) => [m.name, m])), [models.data]);
+  const scentOptions = useMemo(() => (scents.data ?? []).map((s) => ({ value: s.name, label: s.name })), [scents.data]);
+
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const item of missing) {
+      const key = item.route_name ?? 'ללא שיוך לקו';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(item);
+    }
+    return [...map.entries()];
+  }, [missing]);
+
+  return (
+    <Modal
+      open={open}
+      title="מכשירים שלא נכנסו לחישוב"
+      subtitle="חסר להם ניחוח משויך או נפח-מכל מוגדר לדגם — תקן כאן במקום, בלי לצאת למסך אחר"
+      onClose={onClose}
+    >
+      <div className="flex max-h-[62vh] flex-col gap-5 overflow-y-auto">
+        {grouped.map(([routeName, items]) => (
+          <div key={routeName}>
+            <div className="mb-2 text-[14px] font-bold text-text-dim">{routeName} · {items.length}</div>
+            <div className="flex flex-col gap-2">
+              {items.map((item) => (
+                <MissingDeviceRow
+                  key={item.id}
+                  item={item}
+                  scentOptions={scentOptions}
+                  model={modelByName.get(item.model)}
+                  onFixed={onFixed}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+function MissingDeviceRow({ item, scentOptions, model, onFixed }) {
+  const isScent = item.reason === 'no_scent';
+  const [value, setValue] = useState(() => (isScent ? '' : String(model?.capacity_ml ?? '')));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  async function save() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (isScent) {
+        await updateDevice(item.id, { scent_name: value });
+      } else {
+        if (!model) throw new Error('הדגם לא נמצא ברשימת הדגמים — פנה להגדרות');
+        await updateDeviceModelCapacity(model.id, Number(value));
+      }
+      setDone(true);
+      onFixed();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="inner-row flex flex-wrap items-center gap-2.5 px-3.5 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] font-semibold">{item.customer_name}</div>
+        <div className="truncate font-mono text-[13px] text-text-faint">{item.serial} · {item.model}</div>
+        <div className="mt-0.5 text-[13px] text-warn">
+          {isScent ? 'אין ניחוח משויך' : 'אין נפח-מכל מוגדר לדגם (יעודכן לכל המכשירים מהדגם הזה)'}
+        </div>
+      </div>
+
+      {done ? (
+        <StatusChip tone="ok">עודכן</StatusChip>
+      ) : !isScent && !model ? (
+        <span className="text-[13px] text-crit-soft">הדגם לא נמצא ברשימת הדגמים</span>
+      ) : (
+        <>
+          {isScent ? (
+            <Select
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              options={scentOptions}
+              placeholder="בחר ניחוח"
+              className="!w-auto min-w-[150px]"
+            />
+          ) : (
+            <TextInput
+              type="number"
+              min={1}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="מ״ל"
+              className="!w-[100px]"
+            />
+          )}
+          <SecondaryButton onClick={save} disabled={busy || !value}>
+            {busy ? 'שומר…' : 'עדכן'}
+          </SecondaryButton>
+        </>
+      )}
+
+      {error && <div className="w-full text-[13px] text-crit-soft">{error}</div>}
+    </div>
   );
 }
 

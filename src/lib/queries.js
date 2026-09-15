@@ -538,7 +538,10 @@ export async function getRouteLoadPlan(routeName) {
     });
 
     if (!scent || !capacity) {
+      // id/customer_name נוספו כאן (2026-09-15, בקשה מפורשת: רשימה שמית
+      // עם קישור מהיר לתיקון) — שדות תצוגה בלבד, לא נוגעים בשום חישוב קיים.
       missing.push({
+        id: device.id, customer_name: device.customer?.name ?? '—',
         serial: device.serial, model: device.model, scent_name: device.scent_name,
         reason: !scent ? 'no_scent' : 'no_capacity', route_name: deviceRoute,
       });
@@ -1363,6 +1366,10 @@ export const createDeviceModel = (name) =>
 
 export const setDeviceModelActive = (id, active) =>
   supabase.from('device_models').update({ active }).eq('id', id).select('id, name, active').single().then(unwrap);
+
+/** קביעת נפח-מכל (מ"ל) לדגם — משמש ב"תיקון מהיר" של מכשירים שנפלו ל"לא נכנסו לחישוב" (ר' StockScreen). */
+export const updateDeviceModelCapacity = (id, capacity_ml) =>
+  supabase.from('device_models').update({ capacity_ml }).eq('id', id).select('id, name, capacity_ml').single().then(unwrap);
 
 /* =====================================================================
    קריאות שירות
