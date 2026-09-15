@@ -538,10 +538,11 @@ export async function getRouteLoadPlan(routeName) {
     });
 
     if (!scent || !capacity) {
-      // id/customer_name נוספו כאן (2026-09-15, בקשה מפורשת: רשימה שמית
-      // עם קישור מהיר לתיקון) — שדות תצוגה בלבד, לא נוגעים בשום חישוב קיים.
+      // id/customer_name/address נוספו כאן (2026-09-15, בקשה מפורשת: רשימה
+      // שמית עם כתובת וקישור מהיר לתיקון) — שדות תצוגה בלבד (address הוא
+      // אותו shortAddress שכבר חושב למעלה בלולאה), לא נוגעים בשום חישוב קיים.
       missing.push({
-        id: device.id, customer_name: device.customer?.name ?? '—',
+        id: device.id, customer_name: device.customer?.name ?? '—', address: shortAddress,
         serial: device.serial, model: device.model, scent_name: device.scent_name,
         reason: !scent ? 'no_scent' : 'no_capacity', route_name: deviceRoute,
       });

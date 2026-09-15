@@ -463,6 +463,7 @@ function MissingDeviceRow({ item, scentOptions, model, onFixed }) {
     <div className="inner-row flex flex-wrap items-center gap-2.5 px-3.5 py-3">
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-semibold">{item.customer_name}</div>
+        {item.address && <div className="truncate text-[13.5px] text-text-dim">{item.address}</div>}
         <div className="truncate font-mono text-[13px] text-text-faint">{item.serial} · {item.model}</div>
         <div className="mt-0.5 text-[13px] text-warn">
           {isScent ? 'אין ניחוח משויך' : 'אין נפח-מכל מוגדר לדגם (יעודכן לכל המכשירים מהדגם הזה)'}
