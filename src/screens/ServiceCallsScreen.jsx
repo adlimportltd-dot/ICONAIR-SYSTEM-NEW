@@ -330,15 +330,27 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  // רשימת המכשירים מצטמצמת ללקוח שנבחר — אחרת בוחרים מכשיר של לקוח אחר
-  // 2026-09-16 (בקשה מפורשת: "שמות הדגמים... ברורה וקריאה, לא תלוי
-  // במספרי לקט מוזרים") — שם הדגם קודם, המק"ט הטכני (serial) רק בתור
-  // פרט-הבחנה משני אחריו (שדה בחירה רגיל של HTML לא תומך בשתי שורות,
-  // אז הסדר בתוך המחרוזת הוא מה שקובע מה הטכנאי רואה קודם).
+  // רשימת המכשירים מצטמצמת ללקוח שנבחר — d.customer.id הוא תמיד הלקוח
+  // ה"אב" (גם למכשיר ששייך לאתר ספציפי של לקוח ריבוי-כתובות כמו
+  // אוורסט), אז הסינון הזה כבר מציג את *כל* הסניפים של הלקוח, לא רק
+  // כתובת אחת שלו.
+  //
+  // 2026-09-16 (בקשה מפורשת: "כתובת מלאה - סוג מכשיר - מיקום/תיאור,
+  // לא רק מק"ט"): לכתובת עדיפות לאתר הספציפי (site) על פני כתובת
+  // הלקוח הכללית — אותה קדימות בדיוק כמו shortAddress ב-getRouteLoadPlan
+  // — כדי שאצל לקוח ריבוי-סניפים כל מכשיר יראה מיד לאיזה סניף הוא שייך.
   const deviceOptions = useMemo(
     () => devices
       .filter((d) => !form.customer_id || d.customer?.id === form.customer_id)
-      .map((d) => ({ value: d.id, label: `${d.model} · ${d.serial}` })),
+      .map((d) => {
+        const address = d.site
+          ? [d.site.label, d.site.city].filter(Boolean).join(', ')
+          : [d.customer?.address, d.customer?.city].filter(Boolean).join(', ');
+        return {
+          value: d.id,
+          label: [address, d.model, d.location_note].filter(Boolean).join(' · ') || d.serial,
+        };
+      }),
     [devices, form.customer_id]
   );
 

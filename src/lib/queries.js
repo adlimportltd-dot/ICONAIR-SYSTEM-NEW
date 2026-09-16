@@ -260,7 +260,7 @@ export const listDeviceOptions = () =>
   supabase
     .from('devices')
     .select(`
-      id, serial, model, oil_level_pct,
+      id, serial, model, oil_level_pct, location_note,
       customer:customers(id, name, address, city, phone, email),
       site:customer_sites(id, label, city)
     `)
