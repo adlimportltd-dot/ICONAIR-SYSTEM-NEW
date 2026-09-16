@@ -537,6 +537,15 @@ function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
         description: call.description ?? '',
       });
       setError(null);
+    } else {
+      // 2026-09-16 (תיקון דחוף — Sentry, "null is not an object (evaluating
+      // 'e.device')"): בלי זה, form נשאר truthy מהפעם הקודמת אחרי סגירת
+      // המודל (call הופך ל-null אבל form לא התאפס), אז {form && (...)}
+      // עדיין מרנדר וקורא ל-call.device על call שהוא null. ה-JSX מטה
+      // מוערך תמיד ע"י React (זה ה-children שמועברים ל-Modal), גם אם
+      // Modal עצמו מחזיר null בפנים כש-open=false — לכן ההגנה חייבת
+      // להיות כאן, לא להסתמך על זה ש-Modal "לא ירנדר" את זה.
+      setForm(null);
     }
   }, [call]);
 
@@ -581,13 +590,13 @@ function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
         <form onSubmit={submit} className="flex flex-col gap-3.5">
           <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px] leading-relaxed">
             <div><b className="font-semibold text-text">כתובת:</b> {address || 'לא צוינה כתובת'}</div>
-            {call.device && (
+            {call?.device && (
               <div>
                 <b className="font-semibold text-text">מכשיר:</b> {call.device.model}
                 {call.device.serial ? ` · ${call.device.serial}` : ''}
               </div>
             )}
-            {call.device?.location_note && (
+            {call?.device?.location_note && (
               <div><b className="font-semibold text-text">מיקום בנכס:</b> {call.device.location_note}</div>
             )}
           </div>
