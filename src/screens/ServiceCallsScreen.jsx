@@ -301,7 +301,11 @@ function CustomerCombobox({ value, onChange, options }) {
           {filtered.length === 0 ? (
             <div className="px-3.5 py-3 text-[14px] text-text-faint">לא נמצאה התאמה</div>
           ) : (
-            filtered.slice(0, 40).map((option) => (
+            // 2026-09-16 (בקשה מפורשת: "תביא ותציג את כל הלקוחות") — הוסר
+            // .slice(0,40) שהיה כאן: עם כ-100 לקוחות במערכת, חיפוש רחב
+            // (או שדה ריק) יכול היה להחתיך לקוחות אמיתיים מהתוצאה בלי שום
+            // חיווי. הרשימה כבר גוללת בתוך max-h-64, אין צורך בתקרה מלאכותית.
+            filtered.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -327,10 +331,14 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
   // רשימת המכשירים מצטמצמת ללקוח שנבחר — אחרת בוחרים מכשיר של לקוח אחר
+  // 2026-09-16 (בקשה מפורשת: "שמות הדגמים... ברורה וקריאה, לא תלוי
+  // במספרי לקט מוזרים") — שם הדגם קודם, המק"ט הטכני (serial) רק בתור
+  // פרט-הבחנה משני אחריו (שדה בחירה רגיל של HTML לא תומך בשתי שורות,
+  // אז הסדר בתוך המחרוזת הוא מה שקובע מה הטכנאי רואה קודם).
   const deviceOptions = useMemo(
     () => devices
       .filter((d) => !form.customer_id || d.customer?.id === form.customer_id)
-      .map((d) => ({ value: d.id, label: `${d.serial} · ${d.model}` })),
+      .map((d) => ({ value: d.id, label: `${d.model} · ${d.serial}` })),
     [devices, form.customer_id]
   );
 
