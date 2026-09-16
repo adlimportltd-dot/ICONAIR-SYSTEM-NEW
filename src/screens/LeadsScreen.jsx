@@ -3,7 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
-import { FunnelIcon } from '../components/ui/Icons';
+import { FunnelIcon, PhoneIcon } from '../components/ui/Icons';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
@@ -67,8 +67,22 @@ export default function LeadsScreen() {
     {
       key: 'phone',
       label: 'טלפון',
-      width: '132px',
-      render: (row) => (row.phone ? <span dir="ltr" className="tabular font-mono text-[14px]">{row.phone}</span> : '—'),
+      width: '150px',
+      // 2026-09-16 (בקשה מפורשת: "מספר הטלפון לחיוג מהיר") — קישור tel:
+      // אמיתי, לא רק טקסט — אותו דפוס בדיוק כמו כפתור החיוג בכרטיס
+      // הלקוח במסלולים (RoutesScreen). stopPropagation כדי שלחיצה על
+      // הטלפון לא תפעיל שום click-handler אחר של השורה בעתיד.
+      render: (row) => (row.phone ? (
+        <a
+          href={`tel:${String(row.phone).replace(/[^\d+]/g, '')}`}
+          onClick={(event) => event.stopPropagation()}
+          dir="ltr"
+          className="tabular inline-flex items-center gap-1.5 font-mono text-[14px] text-gold-600 hover:underline"
+        >
+          <PhoneIcon className="h-3.5 w-3.5 flex-none" />
+          {row.phone}
+        </a>
+      ) : '—'),
     },
     {
       key: 'status',
