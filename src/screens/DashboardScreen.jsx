@@ -5,6 +5,7 @@ import ServiceCallsCard from '../components/ServiceCallsCard';
 import OilAlertsCard from '../components/OilAlertsCard';
 import RoutesCard from '../components/RoutesCard';
 import StockCard from '../components/StockCard';
+import FieldNotesCard from '../components/FieldNotesCard';
 import GlassCard from '../components/ui/GlassCard';
 import { Skeleton, ErrorState } from '../components/ui/States';
 import { useAuth } from '../context/AuthContext';
@@ -85,7 +86,7 @@ export default function DashboardScreen({ data, loading, error, onRetry, onNavig
         />
       </section>
 
-      <section className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <section className="mb-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <RoutesCard delay={0.44} routes={mapRoutes(data.routes)} onOpenMap={() => onNavigate('routes')} />
         <StockCard
           delay={0.48}
@@ -93,6 +94,17 @@ export default function DashboardScreen({ data, loading, error, onRetry, onNavig
           monthTotal={formatNumber(data.kpis?.oil_liters_this_month, 1) + ' ליטר'}
         />
       </section>
+
+      {/*
+        2026-09-16 (בקשה מפורשת: "מרכז מעקב להערות שטח... שאוכל לראות
+        מיד") — מנהל בלבד, כמו שאר ווידג'טי הפיקוח בדשבורד (ר' App.jsx:
+        completedVisits/serviceReports גם enabled: isAdmin בלבד).
+      */}
+      {isAdmin && (
+        <section className="grid grid-cols-1">
+          <FieldNotesCard delay={0.52} />
+        </section>
+      )}
     </>
   );
 }

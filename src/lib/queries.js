@@ -1024,6 +1024,67 @@ export const updateLeadStatus = (id, status) =>
 export const convertLeadToCustomer = (leadId, routeName) =>
   supabase.rpc('convert_lead_to_customer', { p_lead_id: leadId, p_route_name: routeName || null }).then(unwrap);
 
+/* =====================================================================
+   הערות שטח (Field Notes) — 2026-09-16, בקשה מפורשת: מרכז מעקב
+   והתראות להערות שטח (oil_tracking.notes, קיים כבר — לא נוסף שום שדה
+   טקסט חדש). "פתוחה"/"טופלה" מנוהל בטבלה נפרדת (field_note_flags,
+   phase38) שרק *מוסיפה* שורה כשמסמנים טופל — אף שורה קיימת ב-
+   oil_tracking לא נוגעת בה, ואין ALTER על הטבלה הזו בכלל.
+   ===================================================================== */
+
+/**
+ * כל הערות השטח (או רק הפתוחות), חדש→ישן. משתמש באותו דפוס-הצטרפות
+ * בדיוק כמו getRouteLoadPlan (effectiveDeviceRoute/loadCityRoutesMap)
+ * כדי שהקו המוצג יהיה נכון גם ללקוח ריבוי-כתובות, לא רק customer.route_name.
+ */
+export async function listFieldNotes({ onlyOpen = false, limit = 200 } = {}) {
+  const [entries, cityRoutes, flags] = await Promise.all([
+    supabase
+      .from('oil_tracking')
+      .select(`
+        id, notes, recorded_at,
+        device:devices(id, serial, city, customer_id, site_id, customer:customers(id, name, route_name)),
+        recorder:profiles(id, full_name)
+      `)
+      .not('notes', 'is', null)
+      .neq('notes', '')
+      .order('recorded_at', { ascending: false })
+      .limit(limit)
+      .then(unwrap),
+    loadCityRoutesMap(),
+    supabase.from('field_note_flags').select('oil_tracking_id, resolved_at').then(unwrap),
+  ]);
+
+  const resolvedIds = new Set(flags.map((f) => f.oil_tracking_id));
+
+  const rows = entries
+    .filter((e) => e.notes?.trim())
+    .map((e) => ({
+      id: e.id,
+      notes: e.notes,
+      recordedAt: e.recorded_at,
+      recorderName: e.recorder?.full_name ?? 'המערכת',
+      customerId: e.device?.customer_id ?? null,
+      siteId: e.device?.site_id ?? null,
+      customerName: e.device?.customer?.name ?? '—',
+      routeName: e.device ? effectiveDeviceRoute(e.device, cityRoutes) : null,
+      resolved: resolvedIds.has(e.id),
+    }));
+
+  return onlyOpen ? rows.filter((r) => !r.resolved) : rows;
+}
+
+/** סימון הערה כטופלה — upsert כדי שיהיה בטוח גם אם כבר סומנה בעבר. */
+export const resolveFieldNote = (oilTrackingId) =>
+  supabase
+    .from('field_note_flags')
+    .upsert({ oil_tracking_id: oilTrackingId, resolved_at: new Date().toISOString() }, { onConflict: 'oil_tracking_id' })
+    .then(unwrap);
+
+/** פתיחה מחדש — פשוט מוחקת את דגל-הטיפול; ההערה עצמה ב-oil_tracking לא נוגעת. */
+export const reopenFieldNote = (oilTrackingId) =>
+  supabase.from('field_note_flags').delete().eq('oil_tracking_id', oilTrackingId).then(unwrap);
+
 /**
  * קביעת מחיר ליחידה לדגם מסוים בכתובת מסוימת — upsert לפי (site_id, model),
  * כדי שאפשר יהיה לקרוא לזה גם בפעם הראשונה (אין עדיין שורה) וגם בעדכון.

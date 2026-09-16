@@ -23,6 +23,7 @@ import {
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
   completeVisit, createOilEntry, listOilHistoryForDevices,
   listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute, closeVisit,
+  listFieldNotes,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
@@ -226,6 +227,16 @@ function RouteStops({ routeName }) {
   const [monthKey, setMonthKey] = useState(currentMonthKey);
   const monthStart = `${monthKey}-01`;
   const stops = useQuery(() => listRouteAssignments(routeName, monthStart), [routeName, monthStart]);
+
+  // 2026-09-16 (בקשה מפורשת: "בועת התראה ליד שם לקוח שיש לו הערה
+  // פתוחה") — חישוב חד-פעמי, לא תלוי-קו (listFieldNotes שולף מכל
+  // המערכת), רק בודקים פה אילו מהתחנות *של הקו הזה* מופיעות בו.
+  const openNotes = useQuery(() => listFieldNotes({ onlyOpen: true }), []);
+  useRealtime(['oil_tracking', 'field_note_flags'], openNotes.refetch);
+  const openNoteStopIds = useMemo(
+    () => new Set((openNotes.data ?? []).map((n) => n.siteId ?? n.customerId)),
+    [openNotes.data]
+  );
 
   // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
   // כבוצעה על הקו הזה, המסך הזה מתעדכן חי בלי רענון ידני.
@@ -710,6 +721,7 @@ function RouteStops({ routeName }) {
                       customer={customer}
                       done={statusById[customer.id] === 'done'}
                       closed={statusById[customer.id] === 'skipped'}
+                      hasOpenNote={openNoteStopIds.has(customer.site_id ?? customer.customer_id)}
                       onToggleDone={() => toggleStatus(customer.id)}
                       onMarkDone={() => markDone(customer.id)}
                       onCloseVisit={(reason) => closeStop(customer.id, reason)}
@@ -1023,7 +1035,7 @@ function PillButton({ active, onClick, children }) {
  * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
 function StopRow({
-  id, index, total, customer, done, closed, onToggleDone, onMarkDone, onCloseVisit, onJump, deviceModels, scents, onVisitCompleted,
+  id, index, total, customer, done, closed, hasOpenNote, onToggleDone, onMarkDone, onCloseVisit, onJump, deviceModels, scents, onVisitCompleted,
   isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect,
   cardOpen, onOpenCard, onCloseCard, onGoToNext, hasNext,
 }) {
@@ -1108,6 +1120,8 @@ function StopRow({
                 {customer.name}
               </div>
               {closed && <StatusChip tone="warn">סגור</StatusChip>}
+              {/* 2026-09-16 (בקשה מפורשת: "בועת התראה ליד שם הלקוח") — הערת שטח פתוחה מביקור קודם, לא טופלה עדיין (ר' מרכז ההערות בדשבורד) */}
+              {hasOpenNote && <StatusChip tone="crit">הערה</StatusChip>}
             </div>
             <div className="truncate text-[13px] text-text-faint">{customer.address || '—'}</div>
           </button>
