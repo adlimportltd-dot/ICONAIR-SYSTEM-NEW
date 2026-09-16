@@ -127,7 +127,7 @@ export function summarizeDevicesByScent(devices = []) {
 export const CALL_STATUS_LABEL = {
   open: 'פתוחה',
   in_progress: 'בטיפול',
-  resolved: 'טופלה',
+  resolved: 'בוצע',
   cancelled: 'בוטלה',
 };
 

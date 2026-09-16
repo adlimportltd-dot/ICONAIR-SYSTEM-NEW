@@ -566,10 +566,32 @@ function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
     }
   }
 
+  // 2026-09-16 (בקשה דחופה מהשטח: "כתובת, סניף ומיקום מלאים, שהטכנאי
+  // ידע בדיוק לאן לגשת") — עדיפות לכתובת הסניף הספציפי (device.site) על
+  // פני כתובת הלקוח הכללית, אותה קדימות בדיוק כמו ברשימת המכשירים
+  // ב-NewCallModal/getRouteLoadPlan — כדי שאצל לקוח ריבוי-סניפים (כמו
+  // אוורסט) הכתובת תהיה של הסניף הנכון, לא רק "אוורסט" הכללי.
+  const address = call?.device?.site
+    ? [call.device.site.label, call.device.site.city].filter(Boolean).join(', ')
+    : [call?.customer?.address, call?.customer?.city].filter(Boolean).join(', ');
+
   return (
     <Modal open={Boolean(call)} title={`עריכת קריאה ${call?.code ?? ''}`} subtitle={call?.customer?.name} onClose={onClose}>
       {form && (
         <form onSubmit={submit} className="flex flex-col gap-3.5">
+          <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px] leading-relaxed">
+            <div><b className="font-semibold text-text">כתובת:</b> {address || 'לא צוינה כתובת'}</div>
+            {call.device && (
+              <div>
+                <b className="font-semibold text-text">מכשיר:</b> {call.device.model}
+                {call.device.serial ? ` · ${call.device.serial}` : ''}
+              </div>
+            )}
+            {call.device?.location_note && (
+              <div><b className="font-semibold text-text">מיקום בנכס:</b> {call.device.location_note}</div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
             <Field label="חומרה">
               <Select

@@ -1438,12 +1438,16 @@ export const updateDeviceModelCapacity = (id, capacity_ml) =>
    ===================================================================== */
 
 export function listServiceCalls({ status = 'open_all', search = '' } = {}) {
+  // 2026-09-16 (בקשה דחופה מהשטח: "כתובת, סניף ומיקום מלאים בעריכת
+  // קריאה") — customer.address/device.location_note/device.site נוספו
+  // כדי שמודל העריכה יוכל להציג בדיוק לאן הטכנאי צריך להגיע, בלי לגעת
+  // בשום שדה קיים שכבר נשלף כאן.
   let query = supabase
     .from('service_calls')
     .select(`
       *,
-      customer:customers(id, name, city),
-      device:devices(id, serial, model),
+      customer:customers(id, name, city, address),
+      device:devices(id, serial, model, location_note, site:customer_sites(id, label, city)),
       assignee:profiles(id, full_name)
     `)
     .order('opened_at', { ascending: false })
