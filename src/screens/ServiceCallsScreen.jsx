@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import GlassCard from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
@@ -58,8 +58,17 @@ export default function ServiceCallsScreen({ openFormSignal }) {
     if (openFormSignal) setFormOpen(true);
   }, [openFormSignal]);
 
+  // 2026-09-16 (בקשה מפורשת: "חיפוש חופשי במקום גלילה, בלי לחתוך
+  // כתובות") — name/address נשמרים בנפרד (לא רק label מוכן) כדי ש-
+  // CustomerCombobox יוכל גם לסנן לפי שניהם וגם להציג אותם בשתי שורות
+  // מלאות בתוצאה, לא רק שורה אחת מקוצרת כמו ה-<Select> הישן.
   const customerOptions = useMemo(
-    () => (customers.data ?? []).map((c) => ({ value: c.id, label: c.city ? `${c.name} · ${c.city}` : c.name })),
+    () => (customers.data ?? []).map((c) => ({
+      value: c.id,
+      name: c.name,
+      address: [c.address, c.city].filter(Boolean).join(', '),
+      label: c.city ? `${c.name} · ${c.city}` : c.name,
+    })),
     [customers.data]
   );
   const technicianOptions = useMemo(
@@ -235,6 +244,81 @@ export default function ServiceCallsScreen({ openFormSignal }) {
   );
 }
 
+/**
+ * שדה בחירת לקוח כחיפוש חופשי — 2026-09-16, בקשה מפורשת: תפריט הגלילה
+ * הרגיל לא מאפשר חיפוש וחותך כתובות. מסנן בצד הלקוח (הרשימה כבר טעונה
+ * במלואה, ר' customerOptions למעלה — אין צורך בשאילתה נוספת לשרת על כל
+ * תו), לפי שם *או* כתובת, ומציג את שתיהן במלואן בכל תוצאה, לא בשורה
+ * אחת מקוצרת. הבחירה בפועל עדיין מעבירה customer_id רגיל ל-onChange —
+ * אותו ערך בדיוק שה-<Select> הישן היה מעביר.
+ */
+function CustomerCombobox({ value, onChange, options }) {
+  // אתחול-עצל מ-value ההתחלתי בלבד (למשל אם ייעשה שימוש חוזר ברכיב
+  // עם בחירה קיימת) — **בכוונה לא** useEffect שמסנכרן על כל שינוי ב-
+  // value: זה בדיוק מה שגרם לבאג האמיתי שנתפס בבדיקה — הקלדה שמבטלת
+  // בחירה קודמת (למטה) גם משנה את value, וה-effect היה "דורס" את הטקסט
+  // שהמשתמש הרגע הקליד בחזרה לריק, כאילו אף פעם לא הקליד כלום.
+  const [query, setQuery] = useState(() => options.find((o) => o.value === value)?.label ?? '');
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDocMouseDown(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [open]);
+
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? options.filter((o) => o.name.toLowerCase().includes(needle) || o.address.toLowerCase().includes(needle))
+    : options;
+
+  function pick(option) {
+    onChange(option.value);
+    setQuery(option.label);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <TextInput
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+          if (value) onChange(''); // הקלדה מחדש אחרי שכבר נבחר לקוח = הבחירה בוטלה, עד שייבחר משהו מהרשימה שוב
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="הקלד שם לקוח או כתובת…"
+        autoComplete="off"
+      />
+
+      {open && (
+        <div className="absolute z-10 mt-1.5 max-h-64 w-full overflow-y-auto rounded-card border border-[#CBD5E1] bg-white shadow-lift">
+          {filtered.length === 0 ? (
+            <div className="px-3.5 py-3 text-[14px] text-text-faint">לא נמצאה התאמה</div>
+          ) : (
+            filtered.slice(0, 40).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => pick(option)}
+                className="block w-full border-b border-black/[0.06] px-3.5 py-2.5 text-start last:border-b-0 hover:bg-gold-500/[0.07]"
+              >
+                <div className="text-[15px] font-semibold text-text">{option.name}</div>
+                {option.address && <div className="text-[13px] text-text-faint">{option.address}</div>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NewCallModal({ open, customerOptions, technicianOptions, devices, onClose, onCreated }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState(null);
@@ -253,6 +337,14 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
   async function submit(event) {
     event.preventDefault();
     setError(null);
+
+    // הוחלף מ-required על ה-<select> הישן — CustomerCombobox הוא <input>
+    // חופשי, אז אימות שנבחר לקוח *מהרשימה* (לא רק הוקלד טקסט) קורה כאן.
+    if (!form.customer_id) {
+      setError('יש לבחור לקוח מתוך רשימת ההצעות');
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -278,12 +370,10 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
     <Modal open={open} title="קריאת שירות חדשה" subtitle="קוד הקריאה נוצר אוטומטית" onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         <Field label="לקוח" required>
-          <Select
+          <CustomerCombobox
             value={form.customer_id}
-            onChange={(event) => setForm((prev) => ({ ...prev, customer_id: event.target.value, device_id: '' }))}
+            onChange={(customerId) => setForm((prev) => ({ ...prev, customer_id: customerId, device_id: '' }))}
             options={customerOptions}
-            placeholder="בחר לקוח"
-            required
           />
         </Field>
 
