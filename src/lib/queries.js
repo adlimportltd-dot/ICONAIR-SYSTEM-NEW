@@ -1491,6 +1491,38 @@ export const startServiceCall = (id, assignedTo) =>
     .single()
     .then(unwrap);
 
+/**
+ * עריכה כללית של קריאה קיימת (חומרה/סטטוס/הערות/שיוך) — 2026-09-16,
+ * בקשה מפורשת. `previousStatus` (הסטטוס *לפני* העריכה) נדרש כדי לנהל
+ * את closed_at נכון בלי להפר את ה-CHECK הדו-כיווני הקיים בבסיס הנתונים
+ * (service_calls_closed_at_matches_status: open/in_progress→closed_at
+ * חייב NULL, resolved/cancelled→closed_at חייב NOT NULL) — ורק
+ * במעבר אמיתי בין המצבים, לא בכל שמירה: עריכת חומרה בלבד על קריאה
+ * שכבר סגורה לא אמורה "לאפס" את שעת הסגירה המקורית שלה ל-עכשיו.
+ */
+export const updateServiceCall = (id, patch, previousStatus) => {
+  const fullPatch = { ...patch };
+  if (patch.status) {
+    const isNowClosed = patch.status === 'resolved' || patch.status === 'cancelled';
+    const wasClosed = previousStatus === 'resolved' || previousStatus === 'cancelled';
+    if (isNowClosed && !wasClosed) fullPatch.closed_at = new Date().toISOString();
+    else if (!isNowClosed && wasClosed) fullPatch.closed_at = null;
+  }
+
+  return supabase
+    .from('service_calls')
+    .update(fullPatch)
+    .eq('id', id)
+    .select(`
+      *,
+      customer:customers(id, name, city),
+      device:devices(id, serial, model),
+      assignee:profiles(id, full_name)
+    `)
+    .single()
+    .then(unwrap);
+};
+
 /* =====================================================================
    דוחות
    ===================================================================== */

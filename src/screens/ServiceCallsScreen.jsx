@@ -9,7 +9,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
-  listServiceCalls, createServiceCall, resolveServiceCall, startServiceCall,
+  listServiceCalls, createServiceCall, resolveServiceCall, startServiceCall, updateServiceCall,
   listCustomerOptions, listDeviceOptions, listProfiles,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
@@ -42,6 +42,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
   const [status, setStatus] = useState('open_all');
   const [formOpen, setFormOpen] = useState(false);
   const [resolving, setResolving] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [rowBusy, setRowBusy] = useState(null);
 
   const calls = useQuery(() => listServiceCalls({ status, search }), [status, search]);
@@ -146,38 +147,53 @@ export default function ServiceCallsScreen({ openFormSignal }) {
     },
   ];
 
-  const actions = (row) => {
-    if (row.status === 'resolved' || row.status === 'cancelled') return null;
-
-    return (
-      <>
-        {row.status === 'open' && (
+  // 2026-09-16 (בקשה מפורשת: יכולת עריכה לקריאות קיימות) — כפתור
+  // "עריכה" מוצג תמיד (גם לקריאה סגורה — לתקן חומרה/הערות בדיעבד),
+  // בעוד "קח לטיפול"/"סגור" נשארים מוגבלים לקריאות פתוחות בדיוק כמו
+  // קודם. כל הכפתורים עוצרים את ה-click מלהמשיך לשורה (onRowClick
+  // למטה פותח את אותו מודל עריכה — ר' DataTable).
+  const actions = (row) => (
+    <>
+      {row.status !== 'resolved' && row.status !== 'cancelled' && (
+        <>
+          {row.status === 'open' && (
+            <button
+              type="button"
+              disabled={rowBusy === row.id}
+              onClick={(event) => {
+                event.stopPropagation();
+                withRowBusy(row.id, () => startServiceCall(row.id, profile?.id));
+              }}
+              className="ghost-btn disabled:opacity-50"
+            >
+              קח לטיפול
+            </button>
+          )}
           <button
             type="button"
             disabled={rowBusy === row.id}
             onClick={(event) => {
               event.stopPropagation();
-              withRowBusy(row.id, () => startServiceCall(row.id, profile?.id));
+              setResolving(row);
             }}
             className="ghost-btn disabled:opacity-50"
           >
-            קח לטיפול
+            סגור
           </button>
-        )}
-        <button
-          type="button"
-          disabled={rowBusy === row.id}
-          onClick={(event) => {
-            event.stopPropagation();
-            setResolving(row);
-          }}
-          className="ghost-btn disabled:opacity-50"
-        >
-          סגור
-        </button>
-      </>
-    );
-  };
+        </>
+      )}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setEditing(row);
+        }}
+        className="ghost-btn"
+      >
+        עריכה
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -216,6 +232,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
             rows={calls.data ?? []}
             rowKey={(row) => row.id}
             actions={actions}
+            onRowClick={(row) => setEditing(row)}
           />
         </Async>
       </GlassCard>
@@ -237,6 +254,16 @@ export default function ServiceCallsScreen({ openFormSignal }) {
         onClose={() => setResolving(null)}
         onResolved={() => {
           setResolving(null);
+          calls.refetch();
+        }}
+      />
+
+      <EditCallModal
+        call={editing}
+        technicianOptions={technicianOptions}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
           calls.refetch();
         }}
       />
@@ -485,6 +512,103 @@ function ResolveModal({ call, onClose, onResolved }) {
           <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/**
+ * עריכת קריאה קיימת — 2026-09-16, בקשה מפורשת: לעדכן חומרה/סטטוס/
+ * הערות/שיוך-טכנאי בלי לצאת מהמסך. פועלת על **אותה קריאה בדיוק**
+ * (updateServiceCall(call.id, ...)) — לא יוצרת שורה חדשה. סטטוס
+ * "פתוח"/"בטיפול" מול "טופל"/"בוטל" מנוהל נכון מול ה-closed_at
+ * הקיים ב-updateServiceCall עצמו, ר' ההערה שם.
+ */
+function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (call) {
+      setForm({
+        severity: call.severity,
+        status: call.status,
+        assigned_to: call.assigned_to ?? '',
+        description: call.description ?? '',
+      });
+      setError(null);
+    }
+  }, [call]);
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+
+    try {
+      await updateServiceCall(
+        call.id,
+        {
+          severity: form.severity,
+          status: form.status,
+          assigned_to: form.assigned_to || null,
+          description: form.description || null,
+        },
+        call.status
+      );
+      onSaved();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={Boolean(call)} title={`עריכת קריאה ${call?.code ?? ''}`} subtitle={call?.customer?.name} onClose={onClose}>
+      {form && (
+        <form onSubmit={submit} className="flex flex-col gap-3.5">
+          <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+            <Field label="חומרה">
+              <Select
+                value={form.severity}
+                onChange={set('severity')}
+                options={Object.entries(CALL_SEVERITY_LABEL).map(([value, label]) => ({ value, label }))}
+              />
+            </Field>
+            <Field label="סטטוס">
+              <Select
+                value={form.status}
+                onChange={set('status')}
+                options={Object.entries(CALL_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
+              />
+            </Field>
+          </div>
+
+          <Field label="שיוך לטכנאי">
+            <Select value={form.assigned_to} onChange={set('assigned_to')} options={technicianOptions}
+                    placeholder="לא שובץ" />
+          </Field>
+
+          <Field label="הערות">
+            <TextArea value={form.description} onChange={set('description')} rows={3}
+                      placeholder="מה בדיוק קורה, ומה כבר נוסה בשטח" />
+          </Field>
+
+          {error && (
+            <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-1 flex gap-2.5">
+            <PrimaryButton type="submit" loading={busy}>שמור שינויים</PrimaryButton>
+            <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }
