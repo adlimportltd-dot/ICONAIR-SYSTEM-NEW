@@ -58,11 +58,20 @@ export default function LeadsScreen() {
     }
   }
 
+  // 2026-09-17 (בקשה מפורשת: "העמודות לא יושבות מיושרות תחת הכותרות") —
+  // הבאג האמיתי: minmax(0, Nfr) על lead/notes נתן להן רצפה של 0px, וכש-
+  // סכום העמודות הקבועות + כפתורי הפעולה חרג מרוחב הכרטיס בפועל (קורה
+  // כבר במסך דסקטופ רגיל, לא רק צר) — ה-grid כיווץ בדיוק את שתי העמודות
+  // הגמישות האלה ל-0 כדי להישאר בגבולות, בלי לגלוש ובלי שגיאה — כל
+  // התוכן פשוט "נעלם" ושאר העמודות נראו זזות שורה שלמה שמאלה. עכשיו לכל
+  // עמודה גמישה יש רצפה אמיתית (minmax(Npx, ...)) שלעולם לא מתאפסת,
+  // והעמודות הקבועות צומצמו לרוחב שבאמת דרוש (התוכן ממילא נחתך ב-truncate
+  // הקיים ב-DataTable אם צריך).
   const columns = [
     {
       key: 'lead',
       label: 'ליד',
-      width: 'minmax(0,1.3fr)',
+      width: 'minmax(110px,1.2fr)',
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.full_name}</div>
@@ -73,7 +82,7 @@ export default function LeadsScreen() {
     {
       key: 'phone',
       label: 'טלפון',
-      width: '150px',
+      width: '132px',
       // 2026-09-16 (בקשה מפורשת: "מספר הטלפון לחיוג מהיר") — קישור tel:
       // אמיתי, לא רק טקסט — אותו דפוס בדיוק כמו כפתור החיוג בכרטיס
       // הלקוח במסלולים (RoutesScreen). stopPropagation כדי שלחיצה על
@@ -93,7 +102,7 @@ export default function LeadsScreen() {
     {
       key: 'status',
       label: 'סטטוס',
-      width: '150px',
+      width: '140px',
       render: (row) =>
         row.status === 'converted' ? (
           <StatusChip tone="ok">{LEAD_STATUS_LABEL.converted}</StatusChip>
@@ -107,16 +116,16 @@ export default function LeadsScreen() {
           />
         ),
     },
-    { key: 'notes', label: 'הערות', render: (row) => row.notes || '—' },
+    { key: 'notes', label: 'הערות', width: 'minmax(90px,1fr)', render: (row) => row.notes || '—' },
     // 2026-09-17 (בקשה מפורשת: שתי שאלות ההסמכה מטופס הפייסבוק, כבר
     // נשמרות ע"י Make.com בעמודות business_size/installation_time —
     // כאן רק תצוגה, שום שינוי בשליפה עצמה (listLeads כבר select('*')).
-    { key: 'business_size', label: 'גודל העסק', width: '130px', render: (row) => formatFacebookAnswer(row.business_size) || '—' },
-    { key: 'installation_time', label: 'זמן התקנה', width: '130px', render: (row) => formatFacebookAnswer(row.installation_time) || '—' },
+    { key: 'business_size', label: 'גודל העסק', width: '104px', render: (row) => formatFacebookAnswer(row.business_size) || '—' },
+    { key: 'installation_time', label: 'זמן התקנה', width: '104px', render: (row) => formatFacebookAnswer(row.installation_time) || '—' },
     {
       key: 'at',
       label: 'התקבל',
-      width: '124px',
+      width: '96px',
       render: (row) => <span className="tabular text-[13.5px] text-text-faint">{formatDateTime(row.created_at)}</span>,
     },
   ];
@@ -178,6 +187,11 @@ export default function LeadsScreen() {
             />
           }
         >
+          {/* 2026-09-17: רשת רחבה (7 עמודות + פעולות) — רשת עמודות שלמה
+              עדיין העדיפות (ר' ההערה מעל columns), אבל overflow-x-auto
+              הוא רשת-ביטחון: על חלון דסקטופ צר במיוחד עדיף גלילה אופקית
+              מקומית על פני חיתוך תוכן. */}
+          <div className="overflow-x-auto">
           <DataTable
             columns={columns}
             rows={filtered}
@@ -193,21 +207,23 @@ export default function LeadsScreen() {
                   <button
                     type="button"
                     onClick={(event) => { event.stopPropagation(); setConvertLead(row); }}
-                    className="ghost-btn whitespace-nowrap px-3 py-2 text-[13.5px]"
+                    className="ghost-btn whitespace-nowrap px-2.5 py-2 text-[13.5px]"
+                    title="הפוך ללקוח במסלול"
                   >
-                    הפוך ללקוח במסלול
+                    הפוך ללקוח
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); setEditingLead(row); }}
-                  className="ghost-btn whitespace-nowrap px-3 py-2 text-[13.5px]"
+                  className="ghost-btn whitespace-nowrap px-2.5 py-2 text-[13.5px]"
                 >
                   עריכה
                 </button>
               </>
             )}
           />
+          </div>
         </Async>
       </GlassCard>
 
