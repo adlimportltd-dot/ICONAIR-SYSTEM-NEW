@@ -8,18 +8,23 @@ import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } fr
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
-import { listLeads, createLead, updateLeadStatus, convertLeadToCustomer, listRoutes } from '../lib/queries';
+import { listLeads, createLead, updateLeadStatus, updateLead, convertLeadToCustomer, listRoutes } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { formatDateTime } from '../lib/mappers';
 
+// 2026-09-17 (בקשה מפורשת: "מערכת CRM ניהולית" — סטטוסים שמשקפים תהליך
+// מכירה אמיתי) — מחליף את הרשימה הישנה (contacted/archived). 'converted'
+// נשאר מצב-סיום אוטומטי בלבד (ר' ConvertLeadModal), לא נבחר מהתפריט הזה
+// — ר' phase40 לעדכון האילוץ התואם ב-Supabase.
 export const LEAD_STATUS_LABEL = {
   new: 'חדש',
-  contacted: 'נוצר קשר',
+  in_progress: 'בטיפול',
+  no_answer: 'אין מענה',
+  closed_paid: 'סגור - משולם',
   converted: 'הומר ללקוח',
-  archived: 'בארכיון',
 };
 
-const LEAD_STATUS_TONE = { new: 'gold', contacted: 'teal', converted: 'ok', archived: 'slate' };
+const LEAD_STATUS_TONE = { new: 'gold', in_progress: 'teal', no_answer: 'warn', closed_paid: 'ok', converted: 'ok' };
 const STATUS_OPTIONS = Object.entries(LEAD_STATUS_LABEL).map(([value, label]) => ({ value, label }));
 
 const emptyForm = () => ({ full_name: '', phone: '', city: '', notes: '' });
@@ -30,6 +35,7 @@ export default function LeadsScreen() {
   const [date, setDate] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [convertLead, setConvertLead] = useState(null);
+  const [editingLead, setEditingLead] = useState(null);
 
   const leads = useQuery(() => listLeads({ status, date }), [status, date]);
   useRealtime(['leads'], leads.refetch);
@@ -176,21 +182,31 @@ export default function LeadsScreen() {
             columns={columns}
             rows={filtered}
             rowKey={(row) => row.id}
-            actions={(row) =>
-              row.status === 'converted' ? (
-                <span className="text-[13.5px] text-text-faint">
-                  {row.converted_customer ? `→ ${row.converted_customer.name}` : 'הומר ללקוח'}
-                </span>
-              ) : (
+            onRowClick={(row) => setEditingLead(row)}
+            actions={(row) => (
+              <>
+                {row.status === 'converted' ? (
+                  <span className="text-[13.5px] text-text-faint">
+                    {row.converted_customer ? `→ ${row.converted_customer.name}` : 'הומר ללקוח'}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); setConvertLead(row); }}
+                    className="ghost-btn whitespace-nowrap px-3 py-2 text-[13.5px]"
+                  >
+                    הפוך ללקוח במסלול
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setConvertLead(row)}
+                  onClick={(event) => { event.stopPropagation(); setEditingLead(row); }}
                   className="ghost-btn whitespace-nowrap px-3 py-2 text-[13.5px]"
                 >
-                  הפוך ללקוח במסלול
+                  עריכה
                 </button>
-              )
-            }
+              </>
+            )}
           />
         </Async>
       </GlassCard>
@@ -201,6 +217,12 @@ export default function LeadsScreen() {
         lead={convertLead}
         onClose={() => setConvertLead(null)}
         onConverted={() => { setConvertLead(null); leads.refetch(); }}
+      />
+
+      <EditLeadModal
+        lead={editingLead}
+        onClose={() => setEditingLead(null)}
+        onSaved={() => { setEditingLead(null); leads.refetch(); }}
       />
     </>
   );
@@ -339,6 +361,100 @@ function ConvertLeadModal({ lead, onClose, onConverted }) {
 
           <div className="mt-1 flex gap-2.5">
             <PrimaryButton type="submit" loading={busy}>יצירת לקוח</PrimaryButton>
+            <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * עריכת ליד — 2026-09-17, בקשה מפורשת: "מערכת CRM ניהולית" עם הערות
+ * מעקב אישיות וניהול סטטוס נוח לכל ליד. מעדכן בדיוק את אותו ליד
+ * (updateLead(lead.id, ...)), לא יוצר שורה חדשה. ליד שכבר "הומר ללקוח"
+ * מנעול-סטטוס (רק ר' ConvertLeadModal יכול לקבוע converted) — עדיין
+ * אפשר לערוך לו הערות, רק לא "לבטל" את ההמרה מכאן.
+ */
+function EditLeadModal({ lead, onClose, onSaved }) {
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (lead) {
+      setForm({ status: lead.status, notes: lead.notes ?? '' });
+      setError(null);
+    } else {
+      // תיקון-באג ידוע (ר' ServiceCallsScreen/EditCallModal, 2026-09-16):
+      // בלי זה form נשאר truthy אחרי סגירה, ו-{form && ...} עדיין קורא
+      // לשדות lead.* על lead שהוא null (ה-JSX מוערך ע"י React בקומפוננטה
+      // הזו לפני ש-Modal בפנים מחליט לא לרנדר).
+      setForm(null);
+    }
+  }, [lead]);
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const patch = { notes: form.notes.trim() || null };
+      if (lead.status !== 'converted') patch.status = form.status;
+      await updateLead(lead.id, patch);
+      onSaved();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={Boolean(lead)}
+      title={lead ? `עריכת ליד — ${lead.full_name}` : 'עריכת ליד'}
+      subtitle={lead?.city}
+      onClose={onClose}
+    >
+      {form && lead && (
+        <form onSubmit={submit} className="flex flex-col gap-3.5">
+          <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px] leading-relaxed">
+            <div><b className="font-semibold text-text">טלפון:</b> {lead.phone || '—'}</div>
+            {lead.business_size && <div><b className="font-semibold text-text">גודל העסק:</b> {lead.business_size}</div>}
+            {lead.installation_time && (
+              <div><b className="font-semibold text-text">זמן התקנה מבוקש:</b> {lead.installation_time}</div>
+            )}
+          </div>
+
+          <Field label="סטטוס">
+            {lead.status === 'converted' ? (
+              <div className="chip text-ok border-ok/25 bg-ok/10 !inline-flex !py-3 !text-[15px]">
+                {LEAD_STATUS_LABEL.converted}{lead.converted_customer ? ` — ${lead.converted_customer.name}` : ''}
+              </div>
+            ) : (
+              <Select
+                value={form.status}
+                onChange={set('status')}
+                options={STATUS_OPTIONS.filter((o) => o.value !== 'converted')}
+              />
+            )}
+          </Field>
+
+          <Field label="הערות מעקב" hint='עדכונים אישיים על הליד — למשל "דיברתי איתו, רוצה התקנה בשבוע הבא"'>
+            <TextArea value={form.notes} onChange={set('notes')} rows={4} />
+          </Field>
+
+          {error && (
+            <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-1 flex gap-2.5">
+            <PrimaryButton type="submit" loading={busy}>שמור שינויים</PrimaryButton>
             <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
           </div>
         </form>

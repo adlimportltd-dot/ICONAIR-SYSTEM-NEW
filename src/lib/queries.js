@@ -1016,6 +1016,14 @@ export const updateLeadStatus = (id, status) =>
   supabase.from('leads').update({ status }).eq('id', id).select().single().then(unwrap);
 
 /**
+ * עריכה כללית של ליד קיים (סטטוס + הערות מעקב) — 2026-09-17, בקשה
+ * מפורשת: "מערכת CRM ניהולית" עם הערות אישיות לכל ליד. מעדכן בדיוק
+ * את אותו ליד (patch על id), לא יוצר שורה חדשה.
+ */
+export const updateLead = (id, patch) =>
+  supabase.from('leads').update(patch).eq('id', id).select('*, converted_customer:customers(id, name)').single().then(unwrap);
+
+/**
  * "הפוך ללקוח במסלול" — קורא ל-RPC אטומי (convert_lead_to_customer,
  * phase37) שיוצר את הלקוח ומסמן את הליד כ-converted באותה טרנזקציה,
  * כדי שלא יישאר ליד "converted" בלי לקוח בפועל אם משהו נופל באמצע.
