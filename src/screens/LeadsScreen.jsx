@@ -10,7 +10,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { listLeads, createLead, updateLeadStatus, updateLead, convertLeadToCustomer, listRoutes } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { formatDateTime } from '../lib/mappers';
+import { formatDateTime, formatFacebookAnswer } from '../lib/mappers';
 
 // 2026-09-17 (בקשה מפורשת: "מערכת CRM ניהולית" — סטטוסים שמשקפים תהליך
 // מכירה אמיתי) — מחליף את הרשימה הישנה (contacted/archived). 'converted'
@@ -111,8 +111,8 @@ export default function LeadsScreen() {
     // 2026-09-17 (בקשה מפורשת: שתי שאלות ההסמכה מטופס הפייסבוק, כבר
     // נשמרות ע"י Make.com בעמודות business_size/installation_time —
     // כאן רק תצוגה, שום שינוי בשליפה עצמה (listLeads כבר select('*')).
-    { key: 'business_size', label: 'גודל העסק', width: '130px', render: (row) => row.business_size || '—' },
-    { key: 'installation_time', label: 'זמן התקנה', width: '130px', render: (row) => row.installation_time || '—' },
+    { key: 'business_size', label: 'גודל העסק', width: '130px', render: (row) => formatFacebookAnswer(row.business_size) || '—' },
+    { key: 'installation_time', label: 'זמן התקנה', width: '130px', render: (row) => formatFacebookAnswer(row.installation_time) || '—' },
     {
       key: 'at',
       label: 'התקבל',
@@ -423,9 +423,11 @@ function EditLeadModal({ lead, onClose, onSaved }) {
         <form onSubmit={submit} className="flex flex-col gap-3.5">
           <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px] leading-relaxed">
             <div><b className="font-semibold text-text">טלפון:</b> {lead.phone || '—'}</div>
-            {lead.business_size && <div><b className="font-semibold text-text">גודל העסק:</b> {lead.business_size}</div>}
+            {lead.business_size && (
+              <div><b className="font-semibold text-text">גודל העסק:</b> {formatFacebookAnswer(lead.business_size)}</div>
+            )}
             {lead.installation_time && (
-              <div><b className="font-semibold text-text">זמן התקנה מבוקש:</b> {lead.installation_time}</div>
+              <div><b className="font-semibold text-text">זמן התקנה מבוקש:</b> {formatFacebookAnswer(lead.installation_time)}</div>
             )}
           </div>
 

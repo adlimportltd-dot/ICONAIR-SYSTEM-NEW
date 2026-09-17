@@ -220,6 +220,23 @@ export function formatDateTime(value) {
   });
 }
 
+/**
+ * ניקוי תשובות טופס-פייסבוק (Lead Ads) — 2026-09-17, בקשה מפורשת: Meta
+ * שולחת את ה-ID הפנימי של תשובת-הבחירה (עם קווים תחתונים במקום רווחים,
+ * למשל "עסק_קטן_(_עד_100_מטר_)"), לא את הטקסט הקריא. תצוגה בלבד — לא
+ * נוגע בערך שנשמר ב-Supabase (business_size/installation_time), רק
+ * במה שמוצג באפליקציה.
+ */
+export function formatFacebookAnswer(value) {
+  if (!value) return value;
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** "40 דק'" · "3 שע'" · "אתמול" · "לפני 4 ימים" */
 export function relativeTime(value) {
   if (!value) return '—';
