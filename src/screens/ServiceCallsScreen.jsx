@@ -35,6 +35,20 @@ const EMPTY_FORM = {
   severity: 'norm', assigned_to: '',
 };
 
+/**
+ * כתובת הקריאה — 2026-09-16, בעדיפות לכתובת הסניף הספציפי (device.site)
+ * על פני כתובת הלקוח הכללית, אותה קדימות בדיוק כמו ברשימת המכשירים
+ * ב-NewCallModal/getRouteLoadPlan — כדי שאצל לקוח ריבוי-סניפים (כמו
+ * אוורסט) הכתובת תהיה של הסניף הנכון, לא רק הכללית. חולצה כפונקציה
+ * משותפת ב-2026-09-17 כי עכשיו גם עמודת הטבלה הראשית משתמשת בה, לא רק
+ * חלון העריכה.
+ */
+function callAddress(call) {
+  return call?.device?.site
+    ? [call.device.site.label, call.device.site.city].filter(Boolean).join(', ')
+    : [call?.customer?.address, call?.customer?.city].filter(Boolean).join(', ');
+}
+
 export default function ServiceCallsScreen({ openFormSignal }) {
   const { profile } = useAuth();
 
@@ -90,6 +104,14 @@ export default function ServiceCallsScreen({ openFormSignal }) {
     }
   }
 
+  // 2026-09-17 (בקשה מפורשת: "כתובת הלקוח תוצג ישירות בטבלה הראשית") —
+  // עמודה חדשה, ר' callAddress למעלה (אותה עדיפות סניף-על-פני-לקוח-כללי
+  // כמו בחלון העריכה). לשתי העמודות הגמישות (לקוח, כתובת) יש רצפת-מינימום
+  // אמיתית (minmax(Npx,...)) — לא minmax(0,...) כמו שהיה קודם ב"לקוח
+  // ותקלה" — כדי לא לחזור על באג "עמודה שקורסת ל-0px" שתוקן במסך הלידים
+  // (ר' ההערה המקבילה ב-LeadsScreen.jsx). עמודות קבועות אחרות צומצמו
+  // מעט כדי לפנות מקום; הטבלה עטופה עכשיו ב-overflow-x-auto (למטה) כרשת
+  // ביטחון למסכים צרים יותר.
   const columns = [
     {
       key: 'code',
@@ -100,7 +122,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
     {
       key: 'customer',
       label: 'לקוח ותקלה',
-      width: 'minmax(0,1.8fr)',
+      width: 'minmax(130px,1.4fr)',
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.customer?.name ?? '—'}</div>
@@ -109,9 +131,15 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       ),
     },
     {
+      key: 'address',
+      label: 'כתובת',
+      width: 'minmax(120px,1.3fr)',
+      render: (row) => <span className="truncate text-[14px] text-text-dim">{callAddress(row) || '—'}</span>,
+    },
+    {
       key: 'device',
       label: 'מכשיר',
-      width: '150px',
+      width: '130px',
       render: (row) => (row.device
         ? (
           <div className="flex items-center gap-2">
@@ -134,7 +162,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       width: '96px',
       render: (row) => <StatusChip tone={STATUS_TONE[row.status]}>{CALL_STATUS_LABEL[row.status]}</StatusChip>,
     },
-    { key: 'assignee', label: 'משויך ל', width: '110px', render: (row) => row.assignee?.full_name ?? 'לא שובץ' },
+    { key: 'assignee', label: 'משויך ל', width: '100px', render: (row) => row.assignee?.full_name ?? 'לא שובץ' },
     {
       key: 'opened',
       label: 'נפתח',
@@ -227,13 +255,15 @@ export default function ServiceCallsScreen({ openFormSignal }) {
             />
           }
         >
-          <DataTable
-            columns={columns}
-            rows={calls.data ?? []}
-            rowKey={(row) => row.id}
-            actions={actions}
-            onRowClick={(row) => setEditing(row)}
-          />
+          <div className="overflow-x-auto">
+            <DataTable
+              columns={columns}
+              rows={calls.data ?? []}
+              rowKey={(row) => row.id}
+              actions={actions}
+              onRowClick={(row) => setEditing(row)}
+            />
+          </div>
         </Async>
       </GlassCard>
 
@@ -575,14 +605,7 @@ function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
     }
   }
 
-  // 2026-09-16 (בקשה דחופה מהשטח: "כתובת, סניף ומיקום מלאים, שהטכנאי
-  // ידע בדיוק לאן לגשת") — עדיפות לכתובת הסניף הספציפי (device.site) על
-  // פני כתובת הלקוח הכללית, אותה קדימות בדיוק כמו ברשימת המכשירים
-  // ב-NewCallModal/getRouteLoadPlan — כדי שאצל לקוח ריבוי-סניפים (כמו
-  // אוורסט) הכתובת תהיה של הסניף הנכון, לא רק "אוורסט" הכללי.
-  const address = call?.device?.site
-    ? [call.device.site.label, call.device.site.city].filter(Boolean).join(', ')
-    : [call?.customer?.address, call?.customer?.city].filter(Boolean).join(', ');
+  const address = callAddress(call);
 
   return (
     <Modal open={Boolean(call)} title={`עריכת קריאה ${call?.code ?? ''}`} subtitle={call?.customer?.name} onClose={onClose}>
