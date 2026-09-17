@@ -1022,6 +1022,34 @@ export const countNewLeads = () =>
 
 export const createLead = (payload) => supabase.from('leads').insert(payload).select().single().then(unwrap);
 
+/** מחיקה מוחלטת של ליד — 2026-09-17, בקשה מפורשת: "כפתור מחיקת ליד". RLS מגביל למנהל בלבד (leads_delete). */
+export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(unwrap);
+
+/* ---- סטטוסים ניתנים-להרחבה (lead_statuses, phase42) — אותו דפוס בדיוק
+   כמו scents/device_models: רשימה גלובלית, name=מפתח פנימי קבוע,
+   label=טקסט עברי לתצוגה, active לביטול-זמינות בלי איבוד היסטוריה. ---- */
+
+/** כל הסטטוסים (כולל מושבתים — כדי שגם ליד ישן עם סטטוס שהושבת יציג תווית תקינה, לא את המפתח הפנימי). */
+export const listLeadStatuses = () =>
+  supabase.from('lead_statuses').select('id, name, label, sort_order, active').order('sort_order').order('label').then(unwrap);
+
+/**
+ * הוספת סטטוס מותאם-אישית — 2026-09-17, בקשה מפורשת: "תאפשר להוסיף
+ * סטטוסים נוספים". name (המפתח הפנימי) נגזר אוטומטית מה-label כדי
+ * שהמנהל יזין רק את הטקסט העברי; הסיומת האקראית מבטיחה ייחודיות בלי
+ * צורך בבדיקת-קיום מראש (unique constraint על name תופס כל התנגשות).
+ */
+export const createLeadStatus = (label) => {
+  const trimmed = label.trim();
+  const slug = trimmed.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
+  const name = `${slug || 'status'}_${Math.random().toString(36).slice(2, 6)}`;
+  return supabase.from('lead_statuses').insert({ name, label: trimmed }).select('id, name, label, sort_order, active').single().then(unwrap);
+};
+
+/** הפעלה/השבתה — לא מוחק את השורה, כדי שלידים ישנים עם הסטטוס הזה ימשיכו להציג תווית תקינה. */
+export const setLeadStatusActive = (id, active) =>
+  supabase.from('lead_statuses').update({ active }).eq('id', id).select('id, name, label, sort_order, active').single().then(unwrap);
+
 /** טוגל מהיר של סטטוס ליד — ישירות מהטבלה, כמו setCustomerPaid */
 export const updateLeadStatus = (id, status) =>
   supabase.from('leads').update({ status }).eq('id', id).select().single().then(unwrap);
