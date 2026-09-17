@@ -237,6 +237,23 @@ export function formatFacebookAnswer(value) {
     .trim();
 }
 
+/**
+ * מתקן ליד ספציפי שנתפס בבדיקה: city הגיע מ-Make.com בתור "Kiryat
+ * ataKiryat ata" — שתי עותקים של אותה עיר מודבקים בלי רווח (כנראה שתי
+ * שאלות/שדות בטופס פייסבוק שממופים שניהם ל-city). תצוגה בלבד — לא נוגע
+ * בערך שנשמר ב-Supabase. מזהה במפורש רק מחרוזת שהיא בדיוק שני עותקים
+ * זהים ברצף (לא "מנחש" על שמות ערים אחרים שבמקרה חוזרים על עצמם).
+ */
+export function dedupeRepeatedText(value) {
+  if (!value) return value;
+  const trimmed = value.trim();
+  const half = trimmed.length / 2;
+  if (Number.isInteger(half) && trimmed.slice(0, half) === trimmed.slice(half)) {
+    return trimmed.slice(0, half);
+  }
+  return trimmed;
+}
+
 /** "40 דק'" · "3 שע'" · "אתמול" · "לפני 4 ימים" */
 export function relativeTime(value) {
   if (!value) return '—';

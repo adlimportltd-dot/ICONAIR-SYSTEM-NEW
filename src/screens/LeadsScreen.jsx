@@ -10,7 +10,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { listLeads, createLead, updateLeadStatus, updateLead, convertLeadToCustomer, listRoutes } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { formatDateTime, formatFacebookAnswer } from '../lib/mappers';
+import { formatDateTime, formatFacebookAnswer, dedupeRepeatedText } from '../lib/mappers';
 
 // 2026-09-17 (בקשה מפורשת: "מערכת CRM ניהולית" — סטטוסים שמשקפים תהליך
 // מכירה אמיתי) — מחליף את הרשימה הישנה (contacted/archived). 'converted'
@@ -66,7 +66,7 @@ export default function LeadsScreen() {
       render: (row) => (
         <div className="min-w-0">
           <div className="truncate font-semibold">{row.full_name}</div>
-          {row.city && <div className="truncate text-[13px] text-text-faint">{row.city}</div>}
+          {row.city && <div className="truncate text-[13px] text-text-faint">{dedupeRepeatedText(row.city)}</div>}
         </div>
       ),
     },
@@ -330,7 +330,7 @@ function ConvertLeadModal({ lead, onClose, onConverted }) {
     <Modal
       open={!!lead}
       title="הפוך ללקוח במסלול"
-      subtitle={lead ? `${lead.full_name}${lead.city ? ` · ${lead.city}` : ''} — הפרטים יועברו ללקוח חדש` : ''}
+      subtitle={lead ? `${lead.full_name}${lead.city ? ` · ${dedupeRepeatedText(lead.city)}` : ''} — הפרטים יועברו ללקוח חדש` : ''}
       onClose={onClose}
     >
       {lead && (
@@ -338,7 +338,7 @@ function ConvertLeadModal({ lead, onClose, onConverted }) {
           <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px]">
             <div><b className="font-semibold">שם:</b> {lead.full_name}</div>
             <div><b className="font-semibold">טלפון:</b> {lead.phone || '—'}</div>
-            <div><b className="font-semibold">עיר:</b> {lead.city || '—'}</div>
+            <div><b className="font-semibold">עיר:</b> {lead.city ? dedupeRepeatedText(lead.city) : '—'}</div>
           </div>
 
           <Field
@@ -416,7 +416,7 @@ function EditLeadModal({ lead, onClose, onSaved }) {
     <Modal
       open={Boolean(lead)}
       title={lead ? `עריכת ליד — ${lead.full_name}` : 'עריכת ליד'}
-      subtitle={lead?.city}
+      subtitle={lead?.city ? dedupeRepeatedText(lead.city) : undefined}
       onClose={onClose}
     >
       {form && lead && (

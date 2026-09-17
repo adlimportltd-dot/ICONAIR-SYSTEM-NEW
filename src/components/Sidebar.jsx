@@ -137,7 +137,7 @@ function NavItem({ item, isActive, badge, onSelect }) {
  * כהים" — ר' "שתי משפחות שבב" ב-CLAUDE.md. תוכן המסך עצמו (הימין) נשאר
  * לבן טהור כרגיל.
  */
-export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
+export default function Sidebar({ activeId, onSelect, criticalCalls = 0, newLeadsCount = 0 }) {
   const { profile, isAdmin } = useAuth();
   const initials = (profile?.full_name ?? '?').trim().charAt(0);
 
@@ -167,7 +167,7 @@ export default function Sidebar({ activeId, onSelect, criticalCalls = 0 }) {
             key={item.id}
             item={item}
             isActive={item.id === activeId}
-            badge={item.id === 'service' ? criticalCalls : 0}
+            badge={item.id === 'service' ? criticalCalls : item.id === 'leads' ? newLeadsCount : 0}
             onSelect={onSelect}
           />
         ))}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard, listRecentCompletedVisits, listRecentServiceReports } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads } from './lib/queries';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -102,6 +102,13 @@ function Shell() {
   // status='done'). רק מנהל צריך את זה — לטכנאי כבר יש את הסטטוס
   // מול העיניים במסך המסלולים שלו עצמו.
   const completedVisits = useQuery(listRecentCompletedVisits, [], { enabled: isAdmin });
+
+  // 2026-09-17 (בקשה מפורשת: "מונה לידים חדשים בצבע אדום בולט, בדיוק
+  // כמו במערכות האחרות") — אותו דפוס בדיוק כמו criticalCalls (kpis.calls_critical)
+  // שכבר מזין את התג האדום על "קריאות שירות". מנהל בלבד — הלשונית עצמה
+  // adminOnly ממילא.
+  const newLeadsCount = useQuery(countNewLeads, [], { enabled: isAdmin });
+  useRealtime(['leads'], newLeadsCount.refetch, { enabled: isAdmin });
 
   // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
@@ -286,7 +293,12 @@ function Shell() {
       )}
 
       <div className="relative z-[1] min-h-screen">
-        <Sidebar activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
+        <Sidebar
+          activeId={activeId}
+          onSelect={navigate}
+          criticalCalls={kpis?.calls_critical ?? 0}
+          newLeadsCount={newLeadsCount.data ?? 0}
+        />
 
         <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:ms-[300px] lg:px-[22px] lg:pb-10">
           <TopBar

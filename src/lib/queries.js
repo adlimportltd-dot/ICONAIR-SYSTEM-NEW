@@ -1009,6 +1009,17 @@ export function listLeads({ status = '', date = '' } = {}) {
   return query.then(unwrap);
 }
 
+/**
+ * ספירה בלבד (לא שולף שורות) — לתג ההתראה האדום ליד "לידים מקמפיין"
+ * בסרגל הצד, 2026-09-17, בקשה מפורשת: "שיראו מיד כמה לידים חדשים
+ * מחכים". head:true אומר ל-Supabase להחזיר רק מספר, לא את הנתונים עצמם.
+ */
+export const countNewLeads = () =>
+  supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new').then(({ count, error }) => {
+    if (error) throw error;
+    return count ?? 0;
+  });
+
 export const createLead = (payload) => supabase.from('leads').insert(payload).select().single().then(unwrap);
 
 /** טוגל מהיר של סטטוס ליד — ישירות מהטבלה, כמו setCustomerPaid */
