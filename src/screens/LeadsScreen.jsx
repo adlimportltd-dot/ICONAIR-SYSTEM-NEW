@@ -102,6 +102,11 @@ export default function LeadsScreen() {
         ),
     },
     { key: 'notes', label: 'הערות', render: (row) => row.notes || '—' },
+    // 2026-09-17 (בקשה מפורשת: שתי שאלות ההסמכה מטופס הפייסבוק, כבר
+    // נשמרות ע"י Make.com בעמודות business_size/installation_time —
+    // כאן רק תצוגה, שום שינוי בשליפה עצמה (listLeads כבר select('*')).
+    { key: 'business_size', label: 'גודל העסק', width: '130px', render: (row) => row.business_size || '—' },
+    { key: 'installation_time', label: 'זמן התקנה', width: '130px', render: (row) => row.installation_time || '—' },
     {
       key: 'at',
       label: 'התקבל',
