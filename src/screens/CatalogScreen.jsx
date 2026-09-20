@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import { Field, TextInput, Select, PrimaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
-import { BoxIcon, TagIcon } from '../components/ui/Icons';
+import { BoxIcon, TagIcon, EditIcon, TrashIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
   listScents, listDeviceModels, listTechnicianOptions,
   listWarehouseStock, receiveStock, allocateStockToTechnician, returnStockToWarehouse,
+  updateWarehouseStockQuantity, deleteWarehouseStockRow,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 
@@ -324,6 +325,119 @@ function ReceiveStockCard({ modelOptions, scentOptions, onReceived }) {
   );
 }
 
+/**
+ * כמות שורת מחסן, ניתנת לתיקון ידני בלחיצה (למשל אחרי ספירת מלאי
+ * בפועל, או לניקוי כמות שגויה שהוזנה בטעות) — אותו דפוס בדיוק כמו
+ * עריכת מחיר-ידני למכשיר ב-CustomerProfile.jsx: לחיצה הופכת את התא
+ * לשדה קלט + שמירה/ביטול, בלי לפתוח מודאל נפרד.
+ */
+function QuantityCell({ row, onChanged, onError }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(row.quantity));
+  const [busy, setBusy] = useState(false);
+  const isDevice = isDeviceRow(row.scent_name);
+
+  useEffect(() => { setValue(String(row.quantity)); }, [row.quantity]);
+
+  async function save() {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) { onError('כמות לא תקינה'); return; }
+    if (isDevice && !Number.isInteger(n)) { onError('כמות מכשירים חייבת להיות מספר יחידות שלם — בלי שברים'); return; }
+
+    setBusy(true);
+    try {
+      await updateWarehouseStockQuantity(row.id, n);
+      setEditing(false);
+      onChanged();
+    } catch (caught) {
+      onError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="לחץ לתיקון כמות ידני"
+        className={`tabular flex items-center gap-1.5 font-mono text-[14px] font-semibold hover:text-gold-600 ${
+          row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''
+        }`}
+      >
+        {formatQty(row.quantity, row.scent_name)}
+        <EditIcon className="h-3.5 w-3.5 text-text-faint" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        min={0}
+        step={isDevice ? 1 : 0.1}
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); save(); }
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        aria-label={`תיקון כמות עבור ${row.model || row.scent_name}`}
+        className="w-[84px] rounded-pill border border-gold-500/45 bg-white px-2.5 py-1.5 text-[14px] text-text focus:outline-none"
+      />
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy}
+        className="rounded-pill border border-gold-300/[0.35] bg-gold-500/[0.12] px-2.5 py-1.5 text-[13px] font-semibold text-gold-600 disabled:opacity-50"
+      >
+        שמירה
+      </button>
+      <button type="button" onClick={() => setEditing(false)} className="ghost-btn !px-2.5 !py-1.5 text-[13px]">
+        ביטול
+      </button>
+    </div>
+  );
+}
+
+/** מחיקת שורת מחסן (למשל פריט טסט) — אישור כפול, אותו דפוס כמו מחיקות אחרות במערכת */
+function DeleteRowButton({ row, onChanged, onError }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm) { setConfirm(true); return; }
+    setBusy(true);
+    try {
+      await deleteWarehouseStockRow(row.id);
+      onChanged();
+    } catch (caught) {
+      onError(describeError(caught));
+      setConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleDelete}
+      disabled={busy}
+      aria-label={confirm ? `לאשר מחיקת שורת מלאי ${row.model || row.scent_name}` : `מחק שורת מלאי ${row.model || row.scent_name}`}
+      className={`flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+        confirm ? 'border-crit/50 bg-crit/10 text-crit-soft' : 'border-black/[0.09] text-text-faint hover:border-crit/35 hover:text-crit-soft'
+      }`}
+    >
+      <TrashIcon className={`h-3.5 w-3.5 ${confirm ? '' : 'text-crit-soft'}`} />
+      {confirm ? 'לאשר מחיקה' : 'מחיקה'}
+    </button>
+  );
+}
+
 const EMPTY_ALLOCATE_FORM = { itemType: 'device', technician_id: '', model: '', scent_name: '', quantity: '' };
 
 /**
@@ -336,6 +450,7 @@ const EMPTY_ALLOCATE_FORM = { itemType: 'device', technician_id: '', model: '', 
 function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scentOptions }) {
   const [form, setForm] = useState(EMPTY_ALLOCATE_FORM);
   const [error, setError] = useState(null);
+  const [rowError, setRowError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
@@ -391,18 +506,20 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
     {
       key: 'quantity',
       label: 'כמות במחסן',
-      width: '120px',
-      render: (row) => (
-        <span className={`tabular font-mono text-[14px] font-semibold ${row.quantity <= LOW_STOCK ? 'text-crit-soft' : ''}`}>
-          {formatQty(row.quantity, row.scent_name)}
-        </span>
-      ),
+      width: '150px',
+      render: (row) => <QuantityCell row={row} onChanged={warehouse.refetch} onError={setRowError} />,
     },
   ];
 
   return (
     <GlassCard>
-      <CardHead icon={TagIcon} tone="gold" title="מלאי במחסן הראשי" subtitle="כמה יש כרגע, לפי דגם וניחוח" />
+      <CardHead icon={TagIcon} tone="gold" title="מלאי במחסן הראשי" subtitle="כמה יש כרגע, לפי דגם וניחוח — לחץ על הכמות לתיקון ידני" />
+
+      {rowError && (
+        <div className="mb-3.5 rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
+          {rowError}
+        </div>
+      )}
 
       <Async
         loading={warehouse.loading}
@@ -411,7 +528,14 @@ function WarehouseStatusCard({ warehouse, technicianOptions, modelOptions, scent
         isEmpty={warehouse.data?.length === 0}
         empty={<EmptyState title="המחסן ריק" hint='קלוט סחורה בטופס למעלה כדי להתחיל.' />}
       >
-        <DataTable columns={columns} rows={warehouse.data ?? []} rowKey={(row) => row.id} />
+        <div className="overflow-x-auto">
+          <DataTable
+            columns={columns}
+            rows={warehouse.data ?? []}
+            rowKey={(row) => row.id}
+            actions={(row) => <DeleteRowButton row={row} onChanged={warehouse.refetch} onError={setRowError} />}
+          />
+        </div>
       </Async>
 
       <div className="mt-5 flex flex-col gap-3.5 border-t border-black/[0.07] pt-5">

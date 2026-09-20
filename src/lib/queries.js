@@ -1385,6 +1385,20 @@ export const setTechnicianStock = ({ technician_id, model, scent_name, quantity 
 export const listWarehouseStock = () =>
   supabase.from('warehouse_stock').select('id, model, scent_name, quantity, updated_at').order('model').then(unwrap);
 
+/**
+ * תיקון ידני של כמות שורת מחסן (למשל ניקוי נתוני טסט, ספירת מלאי
+ * בפועל) — כתיבה ישירה לטבלה, לא RPC, כי זו קביעת כמות מוחלטת על
+ * שורה בודדת ולא תנועה בין שני צדדים (מחסן↔טכנאי) כמו receive/allocate
+ * למעלה. מותר לפי warehouse_stock_update RLS (is_admin() בלבד).
+ */
+export const updateWarehouseStockQuantity = (id, quantity) =>
+  supabase.from('warehouse_stock').update({ quantity, updated_at: new Date().toISOString() }).eq('id', id)
+    .select('id, model, scent_name, quantity, updated_at').single().then(unwrap);
+
+/** מחיקת שורת מחסן שלמה (למשל דגם/ניחוח טסט) — מותר לפי warehouse_stock_delete RLS */
+export const deleteWarehouseStockRow = (id) =>
+  supabase.from('warehouse_stock').delete().eq('id', id).then(unwrap);
+
 /** קליטת סחורה חדשה למחסן — מוסיף לכמות הקיימת, לא קובע כמות מוחלטת */
 export const receiveStock = ({ model, scent_name, quantity }) =>
   supabase.rpc('receive_stock', {
