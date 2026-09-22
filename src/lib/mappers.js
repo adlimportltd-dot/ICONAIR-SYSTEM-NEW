@@ -221,6 +221,35 @@ export function formatDateTime(value) {
 }
 
 /**
+ * תזכורת/פולו-אפ לליד (leads.reminder_date/reminder_time, phase43) —
+ * מחזיר גם טקסט תצוגה עברי וגם רמת-דחיפות (overdue/today/soon/later),
+ * כדי שהטבלה תוכל לצבוע תג בהתאם בלי לחשב תאריכים בכל קומפוננטה בנפרד.
+ * reminder_date הוא "YYYY-MM-DD" גולמי מה-DB — לא Date עם שעה, כי הוא
+ * מטבעו יום-שלם בלי אזור-זמן, לא רגע בזמן.
+ */
+export function reminderInfo(reminderDate, reminderTime) {
+  if (!reminderDate) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${reminderDate}T00:00:00`);
+  const diffDays = Math.round((target - today) / 86400000);
+
+  const urgency = diffDays < 0 ? 'overdue' : diffDays === 0 ? 'today' : diffDays <= 3 ? 'soon' : 'later';
+  const timePart = reminderTime ? reminderTime.slice(0, 5) : '';
+  const dayLabel = diffDays === 0 ? 'היום'
+    : diffDays === 1 ? 'מחר'
+    : diffDays === -1 ? 'אתמול'
+    : formatDate(reminderDate);
+
+  return {
+    urgency,
+    diffDays,
+    label: urgency === 'overdue' ? `באיחור — ${dayLabel}${timePart ? ` ${timePart}` : ''}` : `${dayLabel}${timePart ? ` ${timePart}` : ''}`,
+  };
+}
+
+/**
  * ניקוי תשובות טופס-פייסבוק (Lead Ads) — 2026-09-17, בקשה מפורשת: Meta
  * שולחת את ה-ID הפנימי של תשובת-הבחירה (עם קווים תחתונים במקום רווחים,
  * למשל "עסק_קטן_(_עד_100_מטר_)"), לא את הטקסט הקריא. תצוגה בלבד — לא

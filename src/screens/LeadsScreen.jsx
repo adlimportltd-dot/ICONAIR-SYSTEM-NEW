@@ -3,7 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
-import { FunnelIcon, PhoneIcon } from '../components/ui/Icons';
+import { FunnelIcon, PhoneIcon, BellIcon } from '../components/ui/Icons';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
@@ -13,7 +13,11 @@ import {
   listLeadStatuses, createLeadStatus, setLeadStatusActive,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
-import { formatDateTime, formatFacebookAnswer, dedupeRepeatedText } from '../lib/mappers';
+import { formatDateTime, formatFacebookAnswer, dedupeRepeatedText, reminderInfo } from '../lib/mappers';
+
+// טון תג לפי דחיפות התזכורת (ר' reminderInfo ב-mappers.js) — היום/באיחור
+// באדום כי דורש טיפול עכשיו, מתקרב (עד 3 ימים) בענבר, רחוק יותר ניטרלי.
+const REMINDER_TONE = { overdue: 'crit', today: 'crit', soon: 'gold', later: 'slate' };
 
 // "הומר ללקוח" הוא מצב-סיום אוטומטי קבוע (נקבע רק ע"י convert_lead_to_customer,
 // phase37) — לא מנוהל בטבלת lead_statuses ולא נבחר ידנית מהתפריט. כל שאר
@@ -21,12 +25,13 @@ import { formatDateTime, formatFacebookAnswer, dedupeRepeatedText } from '../lib
 // עכשיו מ-lead_statuses בבסיס הנתונים, לא קבועים בקוד — ר' phase42.
 const CONVERTED_LABEL = 'הומר ללקוח';
 
-const emptyForm = () => ({ full_name: '', phone: '', city: '', notes: '' });
+const emptyForm = () => ({ full_name: '', phone: '', city: '', notes: '', reminder_date: '', reminder_time: '' });
 
 export default function LeadsScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [date, setDate] = useState('');
+  const [remindersOnly, setRemindersOnly] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [convertLead, setConvertLead] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
@@ -55,14 +60,36 @@ export default function LeadsScreen() {
     return map;
   }, [leadStatuses.data]);
 
+  // תזכורות פעילות = היום, באיחור, או מתקרבות (עד 3 ימים) — בדיוק "היום
+  // או פגישה שמתקרבת" מהבקשה. הספירה (ל-badge על הכפתור) לא תלויה
+  // בסינון/חיפוש אחר, כדי שתמיד תשקף את המצב האמיתי בכל הלידים.
+  const dueCount = useMemo(
+    () => (leads.data ?? []).filter((row) => {
+      const urgency = reminderInfo(row.reminder_date, row.reminder_time)?.urgency;
+      return urgency === 'overdue' || urgency === 'today';
+    }).length,
+    [leads.data]
+  );
+
   const filtered = useMemo(() => {
-    const rows = leads.data ?? [];
-    if (!search.trim()) return rows;
-    const needle = search.trim().toLowerCase();
-    return rows.filter((row) =>
-      [row.full_name, row.phone, row.city].filter(Boolean).some((value) => value.toLowerCase().includes(needle))
-    );
-  }, [leads.data, search]);
+    let rows = leads.data ?? [];
+    if (search.trim()) {
+      const needle = search.trim().toLowerCase();
+      rows = rows.filter((row) =>
+        [row.full_name, row.phone, row.city].filter(Boolean).some((value) => value.toLowerCase().includes(needle))
+      );
+    }
+    if (remindersOnly) {
+      rows = rows
+        .filter((row) => {
+          const urgency = reminderInfo(row.reminder_date, row.reminder_time)?.urgency;
+          return urgency === 'overdue' || urgency === 'today' || urgency === 'soon';
+        })
+        .slice()
+        .sort((a, b) => new Date(`${a.reminder_date}T${a.reminder_time || '00:00'}`) - new Date(`${b.reminder_date}T${b.reminder_time || '00:00'}`));
+    }
+    return rows;
+  }, [leads.data, search, remindersOnly]);
 
   async function changeStatus(row, nextStatus) {
     try {
@@ -86,13 +113,26 @@ export default function LeadsScreen() {
     {
       key: 'lead',
       label: 'ליד',
-      width: 'minmax(110px,1.2fr)',
-      render: (row) => (
-        <div className="min-w-0">
-          <div className="truncate font-semibold">{row.full_name}</div>
-          {row.city && <div className="truncate text-[13px] text-text-faint">{dedupeRepeatedText(row.city)}</div>}
-        </div>
-      ),
+      width: 'minmax(110px,1.3fr)',
+      render: (row) => {
+        const reminder = reminderInfo(row.reminder_date, row.reminder_time);
+        return (
+          <div className="min-w-0">
+            <div className="truncate font-semibold">{row.full_name}</div>
+            {row.city && <div className="truncate text-[13px] text-text-faint">{dedupeRepeatedText(row.city)}</div>}
+            {reminder && (
+              <div className="mt-1">
+                <StatusChip tone={REMINDER_TONE[reminder.urgency]}>
+                  <span className="inline-flex items-center gap-1">
+                    <BellIcon className="h-3 w-3" />
+                    {reminder.label}
+                  </span>
+                </StatusChip>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'phone',
@@ -166,6 +206,28 @@ export default function LeadsScreen() {
         ]}
         extra={
           <div className="flex items-center gap-1.5">
+            {/* 2026-09-22 (בקשה מפורשת: "חיווי... שאף ליד לא יתפספס") —
+                טוגל מהיר לתצוגה ממוקדת רק בלידים עם תזכורת היום/באיחור/
+                מתקרבת. dueCount (רק היום+באיחור) על הכפתור עצמו, כדי
+                שהמנהל יראה מיד "יש X לטפל בהם" גם בלי ללחוץ. */}
+            <button
+              type="button"
+              onClick={() => setRemindersOnly((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-2.5 text-[13.5px] font-semibold transition-colors ${
+                remindersOnly
+                  ? 'border-gold-300/[0.4] bg-gold-500/[0.14] text-gold-600'
+                  : 'border-black/[0.09] text-text-faint hover:border-gold-500/35 hover:text-gold-600'
+              }`}
+              title="הצג רק לידים עם תזכורת להיום או פגישה שמתקרבת"
+            >
+              <BellIcon className="h-3.5 w-3.5" />
+              תזכורות פעילות
+              {dueCount > 0 && (
+                <span className="tabular rounded-full bg-crit px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                  {dueCount}
+                </span>
+              )}
+            </button>
             <input
               type="date"
               value={date}
@@ -212,8 +274,8 @@ export default function LeadsScreen() {
           isEmpty={filtered.length === 0}
           empty={
             <EmptyState
-              title={search || status || date ? 'אין ליד שתואם את הסינון' : 'עוד לא נקלטו לידים'}
-              hint='כל ליד חדש שמגיע מהקמפיין נרשם כאן, ומשם אפשר להפוך אותו ללקוח פעיל במסלול.'
+              title={search || status || date || remindersOnly ? (remindersOnly ? 'אין תזכורות פעילות כרגע' : 'אין ליד שתואם את הסינון') : 'עוד לא נקלטו לידים'}
+              hint={remindersOnly ? 'אין לידים עם תזכורת להיום, באיחור, או מתקרבת בשלושת הימים הקרובים.' : 'כל ליד חדש שמגיע מהקמפיין נרשם כאן, ומשם אפשר להפוך אותו ללקוח פעיל במסלול.'}
             />
           }
         >
@@ -308,6 +370,8 @@ function NewLeadModal({ open, onClose, onCreated }) {
         phone: form.phone.trim() || null,
         city: form.city.trim() || null,
         notes: form.notes.trim() || null,
+        reminder_date: form.reminder_date || null,
+        reminder_time: form.reminder_date && form.reminder_time ? form.reminder_time : null,
       });
       onCreated();
     } catch (caught) {
@@ -334,6 +398,15 @@ function NewLeadModal({ open, onClose, onCreated }) {
         <Field label="הערות">
           <TextArea value={form.notes} onChange={set('notes')} rows={2} />
         </Field>
+
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="תאריך תזכורת" hint="אופציונלי — למשל אם נקבע יום לחזור אליו">
+            <TextInput type="date" value={form.reminder_date} onChange={set('reminder_date')} />
+          </Field>
+          <Field label="שעה" hint={form.reminder_date ? undefined : 'בחר תאריך קודם'}>
+            <TextInput type="time" value={form.reminder_time} onChange={set('reminder_time')} disabled={!form.reminder_date} />
+          </Field>
+        </div>
 
         {error && (
           <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
@@ -441,7 +514,12 @@ function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSave
 
   useEffect(() => {
     if (lead) {
-      setForm({ status: lead.status, notes: lead.notes ?? '' });
+      setForm({
+        status: lead.status,
+        notes: lead.notes ?? '',
+        reminder_date: lead.reminder_date ?? '',
+        reminder_time: lead.reminder_time ? lead.reminder_time.slice(0, 5) : '',
+      });
       setError(null);
       setConfirmingDelete(false);
     } else {
@@ -460,7 +538,11 @@ function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSave
     setError(null);
     setBusy(true);
     try {
-      const patch = { notes: form.notes.trim() || null };
+      const patch = {
+        notes: form.notes.trim() || null,
+        reminder_date: form.reminder_date || null,
+        reminder_time: form.reminder_date && form.reminder_time ? form.reminder_time : null,
+      };
       if (lead.status !== 'converted') patch.status = form.status;
       await updateLead(lead.id, patch);
       onSaved();
@@ -520,6 +602,32 @@ function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSave
           <Field label="הערות מעקב" hint='עדכונים אישיים על הליד — למשל "דיברתי איתו, רוצה התקנה בשבוע הבא"'>
             <TextArea value={form.notes} onChange={set('notes')} rows={4} />
           </Field>
+
+          <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+            <Field label="תאריך תזכורת" hint="למשל אם נקבע יום לחזור אליו או פגישה">
+              <TextInput
+                type="date"
+                value={form.reminder_date}
+                onChange={(event) => setForm((prev) => ({
+                  ...prev,
+                  reminder_date: event.target.value,
+                  reminder_time: event.target.value ? prev.reminder_time : '',
+                }))}
+              />
+            </Field>
+            <Field label="שעה" hint={form.reminder_date ? undefined : 'בחר תאריך קודם'}>
+              <TextInput type="time" value={form.reminder_time} onChange={set('reminder_time')} disabled={!form.reminder_date} />
+            </Field>
+          </div>
+          {form.reminder_date && (
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, reminder_date: '', reminder_time: '' }))}
+              className="self-start text-[13px] text-text-faint hover:text-crit-soft"
+            >
+              נקה תזכורת
+            </button>
+          )}
 
           {error && (
             <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">
