@@ -3,6 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
+import GenerateQuoteModal from '../components/GenerateQuoteModal';
 import { FunnelIcon, PhoneIcon, BellIcon } from '../components/ui/Icons';
 import { Field, TextInput, TextArea, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
@@ -35,6 +36,7 @@ export default function LeadsScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [convertLead, setConvertLead] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
+  const [quoteLead, setQuoteLead] = useState(null);
   const [managingStatuses, setManagingStatuses] = useState(false);
 
   const leads = useQuery(() => listLeads({ status, date }), [status, date]);
@@ -305,6 +307,15 @@ export default function LeadsScreen() {
                     הפוך ללקוח
                   </button>
                 )}
+                {/* 2026-09-22 (בקשה מפורשת: "הפקת הצעות מחיר... מתוך כרטיס הליד") */}
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); setQuoteLead(row); }}
+                  className="ghost-btn whitespace-nowrap px-2.5 py-2 text-[13.5px]"
+                  title="הפקת הצעת מחיר ממותגת ללקוח"
+                >
+                  הצעת מחיר
+                </button>
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); setEditingLead(row); }}
@@ -321,6 +332,8 @@ export default function LeadsScreen() {
 
       <NewLeadModal open={formOpen} onClose={() => setFormOpen(false)} onCreated={() => { setFormOpen(false); leads.refetch(); }} />
 
+      <GenerateQuoteModal lead={quoteLead} onClose={() => setQuoteLead(null)} />
+
       <ConvertLeadModal
         lead={convertLead}
         onClose={() => setConvertLead(null)}
@@ -334,6 +347,7 @@ export default function LeadsScreen() {
         onClose={() => setEditingLead(null)}
         onSaved={() => { setEditingLead(null); leads.refetch(); }}
         onDeleted={() => { setEditingLead(null); leads.refetch(); }}
+        onQuote={() => { setQuoteLead(editingLead); setEditingLead(null); }}
       />
 
       <ManageStatusesModal
@@ -505,7 +519,7 @@ function ConvertLeadModal({ lead, onClose, onConverted }) {
  * מנעול-סטטוס (רק ר' ConvertLeadModal יכול לקבוע converted) — עדיין
  * אפשר לערוך לו הערות, רק לא "לבטל" את ההמרה מכאן.
  */
-function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSaved, onDeleted }) {
+function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSaved, onDeleted, onQuote }) {
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -657,9 +671,13 @@ function EditLeadModal({ lead, statusOptions, statusLabelByName, onClose, onSave
               </div>
             </div>
           ) : (
-            <div className="mt-1 flex items-center gap-2.5">
+            <div className="mt-1 flex flex-wrap items-center gap-2.5">
               <PrimaryButton type="submit" loading={busy}>שמור שינויים</PrimaryButton>
               <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+              {/* 2026-09-22 (בקשה מפורשת: "הפקת הצעות מחיר... מתוך כרטיס הליד") */}
+              <button type="button" onClick={onQuote} className="ghost-btn text-[13.5px]">
+                הצעת מחיר
+              </button>
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}

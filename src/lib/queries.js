@@ -1071,6 +1071,14 @@ export const updateLead = (id, patch) =>
 export const convertLeadToCustomer = (leadId, routeName) =>
   supabase.rpc('convert_lead_to_customer', { p_lead_id: leadId, p_route_name: routeName || null }).then(unwrap);
 
+/* ---- הצעות מחיר ללידים (lead_quotes, phase44) — ר' src/lib/quoteReport.js
+   ליצירה בפועל (PDF+העלאה+רישום ביחד); כאן רק שליפה. ---- */
+
+/** היסטוריית הצעות המחיר שהופקו לליד נתון, חדש→ישן. */
+export const listLeadQuotes = (leadId) =>
+  supabase.from('lead_quotes').select('id, subtotal, vat_amount, total, file_path, created_at')
+    .eq('lead_id', leadId).order('created_at', { ascending: false }).then(unwrap);
+
 /* =====================================================================
    הערות שטח (Field Notes) — 2026-09-16, בקשה מפורשת: מרכז מעקב
    והתראות להערות שטח (oil_tracking.notes, קיים כבר — לא נוסף שום שדה
