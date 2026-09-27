@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom';
 // לא להסתמך על סדר-DOM מקרי בין שני עצים נפרדים.
 const openModals = [];
 
-export default function Modal({ open, title, subtitle, onClose, children, footer }) {
+export default function Modal({ open, title, subtitle, onClose, children, footer, wide = false }) {
   const panel = useRef(null);
   const [stackDepth, setStackDepth] = useState(0);
 
@@ -94,8 +94,8 @@ export default function Modal({ open, title, subtitle, onClose, children, footer
 
       <div
         ref={panel}
-        className="glass relative max-h-[92vh] w-full overflow-y-auto rounded-t-card
-                   p-5 shadow-lift sm:max-w-[520px] sm:rounded-card"
+        className={`glass relative max-h-[92vh] w-full overflow-y-auto rounded-t-card
+                   p-5 shadow-lift sm:rounded-card ${wide ? 'sm:max-w-[1100px] sm:p-7' : 'sm:max-w-[520px]'}`}
         style={{ zIndex: baseZ + 1 }}
       >
         <div className="mb-4 flex items-start gap-3">
