@@ -1,5 +1,5 @@
 /**
- * קלרה — שכבת הנתונים בצד הלקוח (phase46).
+ * קלרה — שכבת הנתונים בצד הלקוח (phase46 + phase47: מוצרים מהקטלוג, פסקול, שיגור ישיר).
  *
  *  - clara_assets / clara_batches / clara_content / clara_messages → Supabase ישירות (RLS).
  *  - clara_settings → רק דרך RPC (clara_status / clara_save_settings). המפתח לא חוזר לדפדפן.
@@ -7,6 +7,10 @@
  */
 import { supabase as client } from './supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { publishSocialPost } from './social';
+
+interface PublishedPost { fb_status: string | null; ig_status: string | null; fb_error: string | null; ig_error: string | null }
+const publishPost = (id: string): Promise<PublishedPost> => publishSocialPost(id);
 
 /** הלקוח המשותף יכול להיות null כש-Supabase לא מוגדר — כאן זה שגיאה ברורה */
 const supabase = new Proxy({} as SupabaseClient, {
@@ -78,6 +82,10 @@ export interface ClaraContent {
   scheduled_at: string | null;
   social_post_id: string | null;
   published_at: string | null;
+  /** phase47 — preset (calm/upbeat/luxury/none) או URL לקובץ שהועלה */
+  soundtrack?: string | null;
+  scent_ids?: string[];
+  device_model_ids?: string[];
 }
 
 export interface ClaraAction { id: string; label: string; kind?: 'primary' | 'secondary' }
@@ -111,6 +119,28 @@ export interface ClaraSettings {
   min_gap_hours: number;
 }
 
+/** פרופיל מוצר מהקטלוג — העובדות היחידות שקלרה כותבת על המוצר (phase47) */
+export interface ScentProduct {
+  id: string; name: string; active: boolean;
+  description: string | null; notes_top: string | null; notes_heart: string | null; notes_base: string | null;
+  mood: string | null; best_for: string | null;
+}
+export interface ModelProduct {
+  id: string; name: string; active: boolean; capacity_ml: number | null;
+  description: string | null; coverage_m2: number | null; features: string | null; best_for: string | null;
+}
+export interface Products { scents: ScentProduct[]; models: ModelProduct[] }
+export type ScentProfile = Partial<Pick<ScentProduct, 'description' | 'notes_top' | 'notes_heart' | 'notes_base' | 'mood' | 'best_for'>>;
+export type ModelProfile = Partial<Pick<ModelProduct, 'description' | 'coverage_m2' | 'features' | 'best_for'>>;
+
+export interface BatchOptions {
+  wanted?: { reels: number; posts: number };
+  scentIds?: string[];
+  modelIds?: string[];
+  /** preset או URL של קובץ מוזיקה */
+  soundtrack?: string;
+}
+
 export interface Site { id: string; label: string | null; city: string | null; customer?: { name: string } | null }
 
 type Result<T> = { data: T | null; error: { message: string } | null };
@@ -122,7 +152,17 @@ const unwrap = <T,>({ data, error }: Result<T>): T => {
 /* ================================ קריאות ================================ */
 
 export const CLARA_BUCKET = 'clara-assets';
-export const CLARA_SQL_URL = 'https://raw.githubusercontent.com/adlimportltd-dot/ICONAIR-SYSTEM-NEW/main/iconair_schema_phase46_clara.sql';
+const RAW = 'https://raw.githubusercontent.com/adlimportltd-dot/ICONAIR-SYSTEM-NEW/main/';
+export const CLARA_SQL_URL = `${RAW}iconair_schema_phase46_clara.sql`;
+export const CLARA_PRODUCTS_SQL_URL = `${RAW}iconair_schema_phase47_clara_products_sound.sql`;
+/** קוד ההקמה המלא, לפי הסדר (בטוח להריץ שוב) */
+export const CLARA_SQL_URLS = [CLARA_SQL_URL, CLARA_PRODUCTS_SQL_URL];
+
+/** phase47 עוד לא הורץ: עמודות הפרופיל/הפסקול חסרות */
+export function isProductsSetupMissing(error: unknown): boolean {
+  const text = String((error as { message?: string })?.message ?? error ?? '');
+  return /42703|PGRST204|column .* does not exist|Could not find the '.*' column/i.test(text);
+}
 
 export function isClaraSetupMissing(error: unknown): boolean {
   const text = String((error as { message?: string })?.message ?? error ?? '');
@@ -287,8 +327,17 @@ async function api<T>(action: string, payload: Record<string, unknown> = {}): Pr
   return json as T;
 }
 
-export async function startBatch(assetIds: string[], brief: string, wanted = { reels: 2, posts: 1 }) {
-  const batch = await supabase.from('clara_batches').insert({ asset_ids: assetIds, brief, wanted }).select('id').single().then(unwrap<{ id: string }>);
+export async function startBatch(assetIds: string[], brief: string, opts: BatchOptions = {}) {
+  const row: Record<string, unknown> = { asset_ids: assetIds, brief, wanted: opts.wanted ?? { reels: 2, posts: 1 } };
+  // עמודות phase47 נשלחות רק כשיש בהן תוכן — כך הזרימה עובדת גם לפני שהורץ ה-SQL
+  if (opts.scentIds?.length) row.scent_ids = opts.scentIds;
+  if (opts.modelIds?.length) row.device_model_ids = opts.modelIds;
+  if (opts.soundtrack && opts.soundtrack !== 'calm') row.soundtrack = opts.soundtrack;
+  const inserted = await supabase.from('clara_batches').insert(row).select('id').single();
+  if (inserted.error && isProductsSetupMissing(inserted.error)) {
+    throw new Error('כדי לבחור מוצרים וסאונד צריך להריץ פעם אחת את עדכון ה-SQL של קלרה (phase47)');
+  }
+  const batch = unwrap<{ id: string }>(inserted);
   await supabase.from('clara_messages').insert({
     role: 'user', batch_id: batch.id,
     body: `שלחתי ${assetIds.length} ${assetIds.length === 1 ? 'קובץ' : 'קבצים'}${brief ? ` — ${brief}` : ''}`,
@@ -297,10 +346,74 @@ export async function startBatch(assetIds: string[], brief: string, wanted = { r
   return batch.id;
 }
 
+/* ============================ קטלוג מוצרים (phase47) ============================ */
+
+const SCENT_COLS = 'id, name, active, description, notes_top, notes_heart, notes_base, mood, best_for';
+const MODEL_COLS = 'id, name, active, capacity_ml, description, coverage_m2, features, best_for';
+
+export async function listProducts(): Promise<Products> {
+  const [scents, models] = await Promise.all([
+    supabase.from('scents').select(SCENT_COLS).eq('active', true).order('name').then(unwrap<ScentProduct[]>),
+    supabase.from('device_models').select(MODEL_COLS).eq('active', true).order('name').then(unwrap<ModelProduct[]>),
+  ]);
+  return { scents: scents ?? [], models: models ?? [] };
+}
+
+const clean = <T extends Record<string, unknown>>(p: T) =>
+  Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'string' ? (v.trim() || null) : v]));
+
+export const saveScentProfile = (id: string, p: ScentProfile) =>
+  supabase.from('scents').update(clean(p)).eq('id', id).select(SCENT_COLS).single().then(unwrap<ScentProduct>);
+
+export const saveModelProfile = (id: string, p: ModelProfile) =>
+  supabase.from('device_models').update(clean(p)).eq('id', id).select(MODEL_COLS).single().then(unwrap<ModelProduct>);
+
+export const hasProfile = (p: ScentProduct | ModelProduct) =>
+  'notes_top' in p ? Boolean(p.description || p.notes_top || p.notes_heart || p.notes_base) : Boolean(p.description || p.features || p.coverage_m2);
+
+/* ================================ פסקול ================================ */
+
+const AUDIO_TYPES = /^audio\/(mpeg|mp3|mp4|x-m4a|aac|wav|x-wav|ogg|webm)$/;
+
+/** מעלה קובץ מוזיקה (עד 15MB) ל-bucket של קלרה ומחזיר URL ציבורי לפסקול */
+export async function uploadSoundtrack(file: File): Promise<string> {
+  if (!AUDIO_TYPES.test(file.type) && !/\.(mp3|m4a|aac|wav|ogg)$/i.test(file.name)) throw new Error('צריך קובץ שמע (MP3, M4A, WAV)');
+  if (file.size > 15 * 1024 * 1024) throw new Error('קובץ המוזיקה גדול מ-15MB');
+  const ext = (file.name.split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `music/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from(CLARA_BUCKET).upload(path, file, { contentType: file.type || 'audio/mpeg' });
+  if (error) throw error;
+  return supabase.storage.from(CLARA_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
 export const retryBatch = (batchId: string) => api('generate', { batchId });
 export const reportRendered = (p: { contentId: string; videoUrl?: string; coverUrl?: string; mediaUrls?: string[]; error?: string }) => api('rendered', p);
 export const reviseContent = (contentId: string, instructions: string) => api<{ visualChanged: boolean }>('revise', { contentId, instructions });
-export const approveContent = (contentId: string, when: ApproveWhen, at?: string) => api<{ scheduledAt: string | null }>('approve', { contentId, when, at });
+export const approveContent = (contentId: string, when: ApproveWhen, at?: string) =>
+  api<{ scheduledAt: string | null; socialPostId: string }>('approve', { contentId, when, at });
+
+/**
+ * "שגר לרשתות" — אישור + פרסום מיידי דרך מנוע ה-Meta (בלי לחכות לריצת ה-Autopilot).
+ * תוכן שכבר מתוזמן יוצא מיד. רילז באינסטגרם: הקונטיינר נוצר עכשיו, וה-Autopilot
+ * משלים את הפרסום כשהעיבוד ב-Meta מסתיים (בד"כ 1–3 דקות).
+ */
+export async function launchNow(item: Pick<ClaraContent, 'id' | 'status' | 'social_post_id'>): Promise<'published' | 'processing' | 'queued'> {
+  let postId = item.social_post_id;
+  if (item.status === 'pending_approval') postId = (await approveContent(item.id, 'now')).socialPostId;
+  if (!postId) throw new Error('התוכן עוד לא מוכן לשיגור');
+  try {
+    const post = await publishPost(postId);
+    if (post.fb_status === 'failed' && (!post.ig_status || post.ig_status === 'failed')) {
+      throw new Error(post.fb_error || post.ig_error || 'הפרסום נכשל');
+    }
+    const pending = post.fb_status === 'pending' || post.ig_status === 'pending';
+    return pending ? 'processing' : 'published';
+  } catch (e) {
+    // ה-Autopilot כבר תפס את הפוסט באותה שנייה — הוא ממשיך את הפרסום
+    if (e instanceof Error && /כבר בתהליך/.test(e.message)) return 'queued';
+    throw e;
+  }
+}
 export const approveBatch = (batchId: string, when: 'best' | 'today') => api<{ approved: number }>('approve_batch', { batchId, when });
 export const unscheduleContent = (contentId: string) => api('unschedule', { contentId });
 export const rejectContent = (contentId: string) => api('reject', { contentId });

@@ -23,6 +23,8 @@ export interface RenderInput {
   scenes: RenderScene[];
   cta: string;
   logoUrl?: string | null;
+  /** פסקול (48kHz). null/חסר = ערוץ שקט. נחתך/מושלם בשקט לאורך הסרטון. */
+  audio?: AudioBuffer | null;
   onProgress?: (fraction: number) => void;
   /** בדיקות בלבד: דפדפני בדיקה בלי מקודד H.264. בפרודקשן תמיד H.264 (אינסטגרם). */
   _testCodec?: 'vp9';
@@ -35,6 +37,7 @@ const H = 1920;
 const FPS = 30;
 const END_SECONDS = 2.2;
 const FADE = 0.35;
+const SR = 48000;
 const INK = '#020617';
 const AMBER = '#F59E0B';
 
@@ -53,10 +56,10 @@ async function pickCodec(): Promise<string> {
   throw new Error('הדפדפן לא יודע לקודד H.264 ברזולוציית רילז');
 }
 
-async function aacSupported(): Promise<boolean> {
+async function audioSupported(codec: string): Promise<boolean> {
   if (typeof AudioEncoder === 'undefined') return false;
   try {
-    const { supported } = await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 });
+    const { supported } = await AudioEncoder.isConfigSupported({ codec, sampleRate: SR, numberOfChannels: 2, bitrate: 160000 });
     return Boolean(supported);
   } catch {
     return false;
@@ -250,12 +253,15 @@ export async function renderReel(input: RenderInput): Promise<RenderOutput> {
     const ctx = canvas.getContext('2d', { alpha: false })!;
 
     const codec = input._testCodec === 'vp9' ? 'vp09.00.40.08' : await pickCodec();
-    const withAudio = await aacSupported();
+    // בפרודקשן AAC (אינסטגרם). בדיקות: Opus, כי לדפדפני בדיקה אין מקודד AAC.
+    const audioCodec = input._testCodec === 'vp9' ? 'opus' : 'mp4a.40.2';
+    const withAudio = await audioSupported(audioCodec);
     const target = new ArrayBufferTarget();
+    if (input.audio && !withAudio) console.warn('קידוד שמע לא נתמך בדפדפן — הסרטון ייצא בלי סאונד');
     const muxer = new Muxer({
       target,
       video: { codec: input._testCodec === 'vp9' ? 'vp9' : 'avc', width: W, height: H, frameRate: FPS },
-      ...(withAudio ? { audio: { codec: 'aac' as const, sampleRate: 48000, numberOfChannels: 2 } } : {}),
+      ...(withAudio ? { audio: { codec: audioCodec === 'opus' ? 'opus' as const : 'aac' as const, sampleRate: SR, numberOfChannels: 2 } } : {}),
       fastStart: 'in-memory',
       firstTimestampBehavior: 'offset',
     });
@@ -327,25 +333,40 @@ export async function renderReel(input: RenderInput): Promise<RenderOutput> {
     await encoder.flush();
     encoder.close();
 
-    // ערוץ שמע שקט (AAC) — חלק מהנגנים/פלטפורמות מעדיפים שיהיה אחד
+    // ערוץ שמע (AAC): הפסקול אם נבחר, אחרת שקט — חלק מהנגנים/פלטפורמות מעדיפים שיהיה אחד
     if (withAudio) {
+      let audioError: Error | null = null;
       const audioEncoder = new AudioEncoder({
         output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-        error: () => undefined,
+        error: (e) => { audioError = e instanceof Error ? e : new Error(String(e)); },
       });
-      audioEncoder.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 });
+      audioEncoder.configure({ codec: audioCodec, sampleRate: SR, numberOfChannels: 2, bitrate: 160000 });
+      const src = input.audio && input.audio.sampleRate === SR ? input.audio : null;
+      const left = src?.getChannelData(0);
+      const right = src ? src.getChannelData(Math.min(1, src.numberOfChannels - 1)) : undefined;
       const block = 1024;
-      const totalSamples = Math.ceil(total * 48000);
+      const totalSamples = Math.ceil(total * SR);
       for (let s = 0; s < totalSamples; s += block) {
+        if (audioError) throw audioError;
+        const buf = new Float32Array(block * 2);
+        if (left && right) {
+          const n = Math.max(0, Math.min(block, left.length - s));
+          if (n > 0) {
+            buf.set(left.subarray(s, s + n), 0);
+            buf.set(right.subarray(s, s + n), block);
+          }
+        }
         const data = new AudioData({
-          format: 'f32-planar', sampleRate: 48000, numberOfFrames: block, numberOfChannels: 2,
-          timestamp: Math.round((s / 48000) * 1_000_000), data: new Float32Array(block * 2),
+          format: 'f32-planar', sampleRate: SR, numberOfFrames: block, numberOfChannels: 2,
+          timestamp: Math.round((s / SR) * 1_000_000), data: buf,
         });
         audioEncoder.encode(data);
         data.close();
+        while (audioEncoder.encodeQueueSize > 16) await new Promise((r) => setTimeout(r, 2));
       }
       await audioEncoder.flush();
       audioEncoder.close();
+      if (audioError) throw audioError;
     }
 
     muxer.finalize();
