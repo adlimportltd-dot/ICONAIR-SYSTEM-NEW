@@ -279,3 +279,28 @@ bg-gold-500/[0.07] shadow-icon-glow`) לצד הכותרת. אייקונים מג
   בלבד (`#020617`, `#F59E0B`, לבן, `#F1F5F9`) — זה נכס שיווקי, לא UI.
 - **לידים לא משוכפלים**: לשונית הלידים כאן היא ניתוח בלבד של אותה טבלת
   `leads` (Make.com ← טפסי Meta). הטיפול בליד נשאר בטאב "לידים מקמפיין".
+
+## קלרה — סוכנת שיווק אוטונומית (phase46), מ-2026-09-28
+
+- **זרימה:** `clara_assets` (העלאה מהשטח) → `clara_batches` → `/api/clara` (`generate`:
+  Claude עם ראייה, פלט מובנה דרך tool-use) → `clara_content` בסטטוס `draft` →
+  **רינדור בדפדפן** (`useClaraRenderer`) → `pending_approval` + הודעה בשיחה + Push →
+  אישור (`approve`) → שורה ב-`social_posts` (`source='clara'`) → Autopilot של phase45
+  מפרסם → טריגר `clara_sync_from_social` מסמן `published` וכותב הודעה.
+- **מכונת המצבים נאכפת ב-DB** (`clara_content_guard`), לא רק בממשק. מעבר חדש = לעדכן
+  גם את הטריגר וגם את הבדיקות.
+- **רילז = WebCodecs H.264 + `mp4-muxer`** (`src/lib/reelRenderer.ts`), לא MediaRecorder:
+  אינסטגרם דורש moov בתחילת הקובץ ובלי edit lists. הרינדור רץ רק בדפדפן עם מקודד
+  H.264 (כרום/אדג' במחשב). `_testCodec: 'vp9'` קיים לבדיקות בלבד.
+- **רילז באינסטגרם = קונטיינר בין ריצות Autopilot** (`publishInstagramReel` ב-`api/social.js`):
+  יצירה → בדיקת `status_code` בכל ריצה → `media_publish` רק כש-FINISHED. המתנה לעיבוד
+  לא נספרת כ"ניסיון כושל".
+- **תזמון חכם = `clara_next_slot()` ב-SQL**: חלונות קהל בשעון ישראל, תקרה יומית ומרווח
+  מינימלי מ-`clara_settings`.
+- **מפתח Anthropic** ב-`clara_settings` (סגורה ב-RLS, רק דרך `clara_status`/`clara_save_settings`/
+  `clara_credentials`). ברירת מחדל: `claude-sonnet-5`, ניתן לשינוי בהגדרות קלרה.
+- **"וואטסאפ" = שיחה בתוך ה-CRM + Push** (לא WhatsApp Cloud API — לא קיים חיבור כזה;
+  ר' "לא לבנות סטטוס לאינטגרציה שלא קיימת").
+- **TypeScript:** קבצים חדשים של קלרה ב-TS/TSX. `npx tsc -p tsconfig.json` חייב לעבור נקי.
+  לרכיבי UI משותפים ב-JS יש קבצי `.d.ts` צמודים (`src/components/ui/*.d.ts`) — כשמוסיפים
+  prop לרכיב כזה, מעדכנים גם את ה-`.d.ts`. Tailwind סורק `ts,tsx` (`tailwind.config.js`).
