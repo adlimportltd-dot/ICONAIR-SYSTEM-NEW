@@ -29,6 +29,7 @@ import ReportsScreen from './screens/ReportsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CatalogScreen from './screens/CatalogScreen';
 import LeadsScreen from './screens/LeadsScreen';
+import SocialScreen from './screens/SocialScreen';
 
 /** קישור חתימה ציבורי (?sign=<token>) — נבדק לפני SetupScreen/AuthProvider במכוון: הלקוח שחותם לא מחובר ולא צריך להיות. */
 function useSignToken() {
@@ -339,6 +340,7 @@ function Shell() {
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'catalog' && isAdmin && <CatalogScreen />}
           {activeId === 'leads' && isAdmin && <LeadsScreen />}
+          {activeId === 'social' && isAdmin && <SocialScreen />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
 
