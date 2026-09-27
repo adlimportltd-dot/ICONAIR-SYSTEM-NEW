@@ -304,3 +304,17 @@ bg-gold-500/[0.07] shadow-icon-glow`) לצד הכותרת. אייקונים מג
 - **TypeScript:** קבצים חדשים של קלרה ב-TS/TSX. `npx tsc -p tsconfig.json` חייב לעבור נקי.
   לרכיבי UI משותפים ב-JS יש קבצי `.d.ts` צמודים (`src/components/ui/*.d.ts`) — כשמוסיפים
   prop לרכיב כזה, מעדכנים גם את ה-`.d.ts`. Tailwind סורק `ts,tsx` (`tailwind.config.js`).
+
+## קלרה — מוצרים, סאונד ושיגור ישיר (phase47), מ-2026-09-28
+
+- **פרופיל מוצר בקטלוג:** עמודות תוספתיות ב-`scents` (תיאור, תווי ראש/לב/בסיס, אווירה, מתאים ל)
+  וב-`device_models` (תיאור, `coverage_m2`, יכולות, מתאים ל). נערך מתוך לשונית קלרה (`ProductPicker.tsx`).
+  `api/clara.ts` שולף את הפרופיל (`loadProducts`/`productBlock`) ל-generate ול-revise — **אלה העובדות היחידות
+  שקלרה כותבת על מוצר**; שדה ריק = לא מוזכר. אל תוסיף עובדות מוצר לפרומפט ממקור אחר.
+- **פסקול = `src/lib/soundtrack.ts`:** preset מסונתז ב-OfflineAudioContext (מקורי, בלי זכויות) או קובץ שהועלה
+  ל-`clara-assets/music/`. נשמר כ-`clara_content.soundtrack` (preset | none | URL). הרנדרר מקודד ל-AAC;
+  כישלון בבניית סאונד לא מפיל את הרינדור (ממשיך בשקט).
+- **"שגר לרשתות" = `launchNow`** ב-`lib/clara.ts`: approve('now') ואז `publishSocialPost` מיידי (אותו מנוע
+  של phase45). 409 "כבר בתהליך" = ה-Autopilot תפס אותו — לא שגיאה.
+- `startBatch` שולח עמודות phase47 רק כשיש בהן ערך, כך שהזרימה עובדת גם לפני שהורץ ה-SQL. מסך ההקמה
+  של קלרה מעתיק את phase46+phase47 יחד (`CLARA_SQL_URLS`).
