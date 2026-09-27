@@ -216,6 +216,15 @@ async function status(db) {
 const withLink = (post) => (post.link_url && post.media_urls?.length ? `${post.caption}\n\n${post.link_url}`.trim() : post.caption);
 
 async function publishFacebook(post, c) {
+  // רילז (phase46): וידאו לעמוד. Meta מורידה את הקובץ בעצמה מה-URL הציבורי.
+  if (post.media_kind === 'reel') {
+    const r = await graph(`${c.page_id}/videos`, {
+      method: 'POST', params: { file_url: post.video_url, description: withLink(post) }, token: c.page_token,
+    });
+    const link = await graph(r.id, { params: { fields: 'permalink_url' }, token: c.page_token }).catch(() => ({}));
+    const permalink = link.permalink_url ? (link.permalink_url.startsWith('http') ? link.permalink_url : `https://www.facebook.com${link.permalink_url}`) : null;
+    return { fb_status: 'published', fb_post_id: r.id, fb_permalink: permalink, fb_error: null };
+  }
   const media = post.media_urls || [];
   let postId;
 
@@ -248,8 +257,51 @@ async function waitForContainer(id, token) {
   }
 }
 
+const REEL_PROCESSING_LIMIT_MS = 20 * 60 * 1000;
+
+/**
+ * רילז לאינסטגרם — בלי לחכות בתוך בקשה אחת (עיבוד וידאו אצל Meta לוקח
+ * דקות): ריצה ראשונה יוצרת קונטיינר ושומרת את ה-id; כל ריצת Autopilot
+ * אחר כך בודקת status_code — ורק כשהוא FINISHED מפרסמים.
+ * מחזיר { waiting: true } כשעדיין בעיבוד — זה לא "ניסיון כושל".
+ */
+async function publishInstagramReel(post, c) {
+  if (!post.ig_container_id) {
+    const container = await graph(`${c.ig_user_id}/media`, {
+      method: 'POST',
+      params: {
+        media_type: 'REELS', video_url: post.video_url, caption: withLink(post), share_to_feed: 'true',
+        ...(post.cover_url ? { cover_url: post.cover_url } : {}),
+      },
+      token: c.page_token,
+    });
+    return { waiting: true, ig_container_id: container.id, ig_container_at: new Date().toISOString(), ig_error: null };
+  }
+
+  const st = await graph(post.ig_container_id, { params: { fields: 'status_code,status' }, token: c.page_token });
+  if (st.status_code === 'FINISHED') {
+    const published = await graph(`${c.ig_user_id}/media_publish`, { method: 'POST', params: { creation_id: post.ig_container_id }, token: c.page_token });
+    const link = await graph(published.id, { params: { fields: 'permalink' }, token: c.page_token }).catch(() => ({}));
+    return { ig_status: 'published', ig_media_id: published.id, ig_permalink: link.permalink || null, ig_error: null };
+  }
+  if (st.status_code === 'ERROR' || st.status_code === 'EXPIRED') {
+    // ניסיון הבא ייצור קונטיינר חדש
+    const e = new Error(`אינסטגרם דחה את הסרטון: ${st.status || st.status_code}`);
+    e.patch = { ig_container_id: null, ig_container_at: null };
+    throw e;
+  }
+  const started = post.ig_container_at ? Date.parse(post.ig_container_at) : Date.now();
+  if (Date.now() - started > REEL_PROCESSING_LIMIT_MS) {
+    const e = new Error('אינסטגרם מעבד את הסרטון יותר מ-20 דקות — נסה שוב');
+    e.patch = { ig_container_id: null, ig_container_at: null };
+    throw e;
+  }
+  return { waiting: true };
+}
+
 async function publishInstagram(post, c) {
   if (!c.ig_user_id) throw new Error('לעמוד הפייסבוק לא מקושר חשבון אינסטגרם עסקי');
+  if (post.media_kind === 'reel') return publishInstagramReel(post, c);
   const media = post.media_urls || [];
   if (!media.length) throw new Error('פוסט אינסטגרם חייב לפחות תמונה אחת');
 
@@ -274,22 +326,30 @@ async function publishInstagram(post, c) {
 
 /** מפרסם את מה שממתין בפוסט. מחזיר patch לשמירה. שגיאה זמנית → נשאר pending לניסיון חוזר. */
 async function runPublish(post, c) {
-  const patch = { publish_lock: null, attempts: (post.attempts || 0) + 1 };
+  // attempts עולה רק על שגיאה אמיתית — "עדיין בעיבוד" של רילז לא נספר.
+  const patch = { publish_lock: null };
+  const nextAttempt = (post.attempts || 0) + 1;
+  const bump = () => { patch.attempts = nextAttempt; };
   if (!c.page_token) {
     if (post.fb_status === 'pending') Object.assign(patch, { fb_status: 'failed', fb_error: 'Meta לא מחובר' });
     if (post.ig_status === 'pending') Object.assign(patch, { ig_status: 'failed', ig_error: 'Meta לא מחובר' });
     return patch;
   }
-  const lastTry = patch.attempts >= 5;
+  const lastTry = nextAttempt >= 5;
 
   if (post.fb_status === 'pending') {
     try { Object.assign(patch, await publishFacebook(post, c)); } catch (e) {
-      Object.assign(patch, e.retryable && !lastTry ? { fb_error: `${e.message} (ניסיון ${patch.attempts})` } : { fb_status: 'failed', fb_error: e.message });
+      bump();
+      Object.assign(patch, e.retryable && !lastTry ? { fb_error: `${e.message} (ניסיון ${nextAttempt})` } : { fb_status: 'failed', fb_error: e.message });
     }
   }
   if (post.ig_status === 'pending') {
-    try { Object.assign(patch, await publishInstagram(post, c)); } catch (e) {
-      Object.assign(patch, e.retryable && !lastTry ? { ig_error: `${e.message} (ניסיון ${patch.attempts})` } : { ig_status: 'failed', ig_error: e.message });
+    try {
+      const { waiting, ...rest } = await publishInstagram(post, c);
+      Object.assign(patch, rest);
+    } catch (e) {
+      bump();
+      Object.assign(patch, e.patch || {}, e.retryable && !lastTry ? { ig_error: `${e.message} (ניסיון ${nextAttempt})` } : { ig_status: 'failed', ig_error: e.message });
     }
   }
   if (patch.fb_status === 'published' || patch.ig_status === 'published') patch.published_at = post.published_at || new Date().toISOString();
@@ -387,6 +447,9 @@ async function cron(body) {
   let published = 0;
   for (const post of due) {
     const patch = await runPublish(post, creds);
+    if (patch.fb_status === 'failed' || patch.ig_status === 'failed') {
+      await reportToSentry(new Error(`Publish failed: ${patch.fb_error || patch.ig_error}`), { postId: post.id, kind: post.media_kind });
+    }
     await rpc(db, 'social_cron_update', { p_secret: secret, p_id: post.id, p: patch });
     if (patch.published_at) published += 1;
   }
@@ -404,6 +467,12 @@ async function cron(body) {
 }
 
 /* ================================ קמפיינים ================================ */
+
+// Meta מחזירה לפעמים שמות עם ישויות HTML (&#039; במקום ') — מפענחים לתצוגה.
+const decodeEntities = (str = '') => String(str)
+  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 const PRESETS = new Set(['today', 'yesterday', 'last_7d', 'last_14d', 'last_30d', 'this_month', 'last_month', 'maximum']);
 
@@ -432,7 +501,7 @@ async function campaigns(db, preset = 'last_30d') {
     const leads = leadCount(i.actions);
     const spend = Number(i.spend || 0);
     return {
-      id: x.id, name: x.name, objective: x.objective,
+      id: x.id, name: decodeEntities(x.name), objective: x.objective,
       status: x.effective_status || x.status, configuredStatus: x.status,
       dailyBudget: x.daily_budget ? Number(x.daily_budget) / 100 : null,
       lifetimeBudget: x.lifetime_budget ? Number(x.lifetime_budget) / 100 : null,
@@ -544,6 +613,27 @@ async function searchCities(db, q) {
   return { cities: (r.data || []).map((x) => ({ key: x.key, name: x.name, region: x.region })) };
 }
 
+/* ================================ Sentry (בלי SDK) ================================ */
+// envelope ישיר ל-Sentry עם אותו DSN של הדפדפן (VITE_SENTRY_DSN ב-Vercel). בלי DSN — כלום.
+async function reportToSentry(error, extra = {}) {
+  const dsn = env('VITE_SENTRY_DSN') || env('SENTRY_DSN');
+  if (!dsn) return;
+  try {
+    const u = new URL(dsn);
+    const eventId = crypto.randomUUID().replace(/-/g, '');
+    const event = {
+      event_id: eventId, timestamp: Date.now() / 1000, platform: 'node', level: 'error', environment: 'production',
+      server_name: 'vercel:/api/social', tags: { area: 'social' }, extra: { ...extra, meta: error?.meta },
+      exception: { values: [{ type: error?.name || 'Error', value: String(error?.message || error) }] },
+    };
+    await fetch(`${u.protocol}//${u.host}/api/${u.pathname.replace(/\//g, '')}/envelope/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-sentry-envelope', 'X-Sentry-Auth': `Sentry sentry_version=7, sentry_key=${u.username}, sentry_client=iconair-social/1.0` },
+      body: `${JSON.stringify({ event_id: eventId, dsn })}\n${JSON.stringify({ type: 'event' })}\n${JSON.stringify(event)}`,
+    });
+  } catch { /* ניטור לא מפיל בקשה */ }
+}
+
 /* ================================ handler ================================ */
 
 export default async function handler(req, res) {
@@ -577,6 +667,7 @@ export default async function handler(req, res) {
     }
     res.status(200).json(result);
   } catch (error) {
+    if (!error.status || error.status >= 500) await reportToSentry(error, { action: req.body?.action });
     res.status(error.status || 500).json({ error: error.message || 'Server error' });
   }
 }
