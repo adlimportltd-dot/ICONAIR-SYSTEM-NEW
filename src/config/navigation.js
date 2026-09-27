@@ -19,6 +19,7 @@ export const navItems = [
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
   { id: 'leads',     label: 'לידים מקמפיין',     shortLabel: 'לידים',   icon: 'funnel', adminOnly: true },
+  { id: 'social',    label: 'ניהול סושיאל',      shortLabel: 'סושיאל',  icon: 'megaphone', adminOnly: true },
 ];
 
 export const settingsNavItem = {
@@ -56,6 +57,8 @@ export function screenMeta(id, kpis) {
       return 'קליטת סחורה למחסן והקצאה לטכנאים';
     case 'leads':
       return 'פניות מקמפיין הפייסבוק, עד שהופכות ללקוח פעיל';
+    case 'social':
+      return 'פוסטים, תזמון וקמפיינים בפייסבוק ובאינסטגרם';
     case 'settings':
       return 'חשבון, הרשאות והתראות';
     default:
