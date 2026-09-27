@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StatusChip } from '../ui/DataTable';
 import { TextArea, TextInput, PrimaryButton, SecondaryButton } from '../ui/Field';
 import {
-  approveContent, reviseContent, rejectContent, unscheduleContent, retryContent, clearRenderError,
+  approveContent, launchNow, reviseContent, rejectContent, unscheduleContent, retryContent, clearRenderError,
   STATUS_META, KIND_LABEL, reelSeconds, toLocalDateTime,
   type ClaraContent, type ClaraAsset, type ApproveWhen,
 } from '../../lib/clara';
@@ -44,6 +44,15 @@ export default function ContentCard({ item, assets, rendering, onToast, onRetryR
   }
 
   const approve = (w: ApproveWhen, at?: string) => run(`approve:${w}`, () => approveContent(item.id, w, at));
+
+  const launch = () => run('launch', async () => {
+    const r = await launchNow(item);
+    onToast({
+      tone: r === 'published' ? 'ok' : 'gold',
+      message: r === 'published' ? 'שוגר לרשתות ✓' : isReel ? 'שוגר — Meta מעבדת את הסרטון, הוא יעלה תוך דקות' : 'שוגר — מסיים לעלות בדקה הקרובה',
+    });
+  });
+  const canLaunch = item.status === 'pending_approval' || (item.status === 'scheduled' && Boolean(item.social_post_id));
 
   const images = isReel ? [] : (item.media_urls.length ? item.media_urls : item.asset_ids.map((id) => assets.get(id)?.public_url).filter(Boolean) as string[]);
 
@@ -155,11 +164,16 @@ export default function ContentCard({ item, assets, rendering, onToast, onRetryR
         )}
 
         <div className="mt-auto flex flex-wrap gap-2 pt-1">
+          {canLaunch && mode === 'idle' && (
+            <PrimaryButton className="w-full" loading={busy === 'launch'} disabled={Boolean(busy)}
+              onClick={() => window.confirm(`לשגר עכשיו לפייסבוק ולאינסטגרם את "${item.title}"?`) && launch()}>
+              שגר לרשתות
+            </PrimaryButton>
+          )}
           {item.status === 'pending_approval' && mode === 'idle' && (
             <>
-              <PrimaryButton loading={busy === 'approve:today'} disabled={Boolean(busy)} onClick={() => approve('today')}>לפרסם היום</PrimaryButton>
+              <SecondaryButton disabled={Boolean(busy)} onClick={() => approve('today')}>{busy === 'approve:today' ? '…' : 'לפרסם היום'}</SecondaryButton>
               <SecondaryButton disabled={Boolean(busy)} onClick={() => approve('best')}>{busy === 'approve:best' ? '…' : 'בזמן הכי טוב'}</SecondaryButton>
-              <SecondaryButton disabled={Boolean(busy)} onClick={() => approve('now')}>{busy === 'approve:now' ? '…' : 'עכשיו'}</SecondaryButton>
               <button type="button" className="ghost-btn" onClick={() => setMode('custom')}>מועד אחר</button>
               <button type="button" className="ghost-btn" onClick={() => setMode('revise')}>בקש שינוי</button>
               <button type="button" className="ghost-btn text-crit-soft" disabled={Boolean(busy)}

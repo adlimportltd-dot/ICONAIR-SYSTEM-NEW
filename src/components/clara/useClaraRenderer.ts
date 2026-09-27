@@ -4,6 +4,7 @@ import { renderReel, reelSupport } from '../../lib/reelRenderer';
 import { reportRendered, type ClaraAsset, type ClaraContent } from '../../lib/clara';
 import { uploadSocialImage } from '../../lib/social';
 import { brandLogoUrl } from '../../lib/queries';
+import { buildSoundtrack } from '../../lib/soundtrack';
 
 /**
  * תור רינדור: כל תוכן בסטטוס draft שחסר לו סרטון (רילז) או תמונות-פיד
@@ -59,8 +60,13 @@ export function useClaraRenderer(content: ClaraContent[] | null, assets: ClaraAs
             .map((s) => ({ s, a: byId.get(s.asset_id) }))
             .filter((x): x is { s: typeof x.s; a: ClaraAsset } => Boolean(x.a))
             .map(({ s, a }) => ({ url: a.public_url, type: a.media_type, seconds: s.seconds, onScreen: s.on_screen }));
+          if (!scenes.length) throw new Error('החומרים של הסרטון נמחקו מהספרייה');
+          const seconds = scenes.reduce((sum, s) => sum + s.seconds, 0) + 2.2;
+          // סאונד שנכשל (קובץ פגום/חסום) לא מפיל את הסרטון — ממשיכים בשקט
+          const audio = await buildSoundtrack(next.soundtrack, seconds + 0.5).catch(() => null);
           const out = await renderReel({
             scenes,
+            audio,
             cta: next.cta,
             logoUrl: brandLogoUrl('png'),
             onProgress: (p) => setCurrent((cur) => (cur ? { ...cur, progress: p } : cur)),

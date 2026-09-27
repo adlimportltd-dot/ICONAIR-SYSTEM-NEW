@@ -11,7 +11,7 @@ import ContentCard from './ContentCard';
 import ClaraSettingsCard from './ClaraSettingsCard';
 import { useClaraRenderer } from './useClaraRenderer';
 import {
-  getClaraSettings, listAssets, listContent, listMessages, listSites, isClaraSetupMissing, CLARA_SQL_URL,
+  getClaraSettings, listAssets, listContent, listMessages, listSites, isClaraSetupMissing, CLARA_SQL_URL, CLARA_SQL_URLS,
   type ClaraAsset, type ClaraContent, type ClaraMessage, type ClaraSettings, type Site,
 } from '../../lib/clara';
 
@@ -121,7 +121,8 @@ function ClaraSetup({ onRetry }: { onRetry: () => void }) {
   async function copy() {
     setState('loading');
     try {
-      const sql = await fetch(CLARA_SQL_URL, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(); return r.text(); });
+      const parts = await Promise.all(CLARA_SQL_URLS.map((u) => fetch(u, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(); return r.text(); })));
+      const sql = parts.join('\n\n');
       await navigator.clipboard.writeText(sql);
       setState('copied');
     } catch {

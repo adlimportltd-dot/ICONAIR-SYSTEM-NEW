@@ -3,6 +3,8 @@ import GlassCard, { CardHead } from '../ui/GlassCard';
 import { PlusIcon, TrashIcon } from '../ui/Icons';
 import { Field, TextInput, TextArea, PrimaryButton } from '../ui/Field';
 import { uploadAsset, updateAsset, startBatch, type ClaraAsset, type Site } from '../../lib/clara';
+import ProductPicker from './ProductPicker';
+import SoundtrackPicker from './SoundtrackPicker';
 
 interface Props {
   assets: ClaraAsset[];
@@ -16,7 +18,7 @@ interface UploadItem { name: string; state: 'uploading' | 'done' | 'error'; erro
 
 /**
  * קליטת נכסים: העלאה מהשטח (תמונות/סרטונים + סניף/מיקום + הערות), ספריית
- * נכסים לבחירה, ושליחה לקלרה עם הנחיה קצרה.
+ * נכסים לבחירה, מוצרים מהקטלוג (הפרופיל נשלף אוטומטית), סאונד, ושליחה לקלרה.
  */
 export default function AssetsCard({ assets, sites, aiReady, onChanged, onToast }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -28,6 +30,8 @@ export default function AssetsCard({ assets, sites, aiReady, onChanged, onToast 
   const [brief, setBrief] = useState('');
   const [reels, setReels] = useState(2);
   const [posts, setPosts] = useState(1);
+  const [product, setProduct] = useState<{ scentIds: string[]; modelIds: string[] }>({ scentIds: [], modelIds: [] });
+  const [soundtrack, setSoundtrack] = useState('calm');
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -65,7 +69,9 @@ export default function AssetsCard({ assets, sites, aiReady, onChanged, onToast 
     if (!selected.length) return;
     setBusy(true);
     try {
-      await startBatch(selected, brief.trim(), { reels, posts });
+      await startBatch(selected, brief.trim(), {
+        wanted: { reels, posts }, scentIds: product.scentIds, modelIds: product.modelIds, soundtrack,
+      });
       setSelected([]);
       setBrief('');
       setUploads([]);
@@ -176,6 +182,8 @@ export default function AssetsCard({ assets, sites, aiReady, onChanged, onToast 
       )}
 
       <div className="mt-5 flex flex-col gap-3 rounded-row border border-gold-300/[0.35] bg-gold-500/[0.05] p-4">
+        <ProductPicker scentIds={product.scentIds} modelIds={product.modelIds} onChange={setProduct} onToast={onToast} />
+        {reels > 0 && <SoundtrackPicker value={soundtrack} onChange={setSoundtrack} onToast={onToast} />}
         <Field label="מה לבקש מקלרה? (אופציונלי)">
           <TextArea rows={2} value={brief} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBrief(e.target.value)}
             placeholder="למשל: להדגיש שירות מהיר לעסקים בחיפה, טון קליל" />
