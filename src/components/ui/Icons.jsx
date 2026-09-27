@@ -256,6 +256,17 @@ export function FunnelIcon(props) {
   );
 }
 
+/** מגפון — ניהול סושיאל: פוסטים וקמפיינים בפייסבוק/אינסטגרם */
+export function MegaphoneIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 10v4a1 1 0 0 0 1 1h2l6 4V5L7 9H5a1 1 0 0 0-1 1Z" />
+      <path d="M7 15l1.2 4.2a1 1 0 0 0 1 .8H10" />
+      <path d="M17 9.5a3.5 3.5 0 0 1 0 5" />
+    </svg>
+  );
+}
+
 /** לוגו ICON AIR — שלושה זרמי אוויר מתפתלים */
 export function AirMarkIcon(props) {
   return (
@@ -280,4 +291,5 @@ export const iconMap = {
   box: BoxIcon,
   tag: TagIcon,
   funnel: FunnelIcon,
+  megaphone: MegaphoneIcon,
 };
