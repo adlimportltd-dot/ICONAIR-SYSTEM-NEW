@@ -93,7 +93,11 @@ function Gate() {
 
 function Shell() {
   const { isAdmin } = useAuth();
-  const [activeId, setActiveId] = useState('dashboard');
+  // ?tab=<id> פותח לשונית ישירות — למשל חזרה מ-Meta אחרי חיבור (טאב סושיאל).
+  const [activeId, setActiveId] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('tab');
+    return allNavItems.some((item) => item.id === fromUrl) ? fromUrl : 'dashboard';
+  });
   const [newCallSignal, setNewCallSignal] = useState(0);
 
   const dashboard = useQuery(getDashboard, []);
@@ -340,7 +344,7 @@ function Shell() {
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'catalog' && isAdmin && <CatalogScreen />}
           {activeId === 'leads' && isAdmin && <LeadsScreen />}
-          {activeId === 'social' && isAdmin && <SocialScreen />}
+          {activeId === 'social' && isAdmin && <SocialScreen onNavigate={navigate} />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
 
