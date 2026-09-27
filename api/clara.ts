@@ -58,6 +58,8 @@ interface ContentRow {
   revision: number;
   scheduled_at: string | null;
   social_post_id: string | null;
+  scent_ids?: string[] | null;
+  device_model_ids?: string[] | null;
 }
 
 interface GeneratedItem {
@@ -329,11 +331,47 @@ function toContentRow(item: GeneratedItem, assets: Asset[], batchId: string) {
   };
 }
 
+/* ================================ קטלוג ================================ */
+
+interface ScentProfile { id: string; name: string; description: string | null; notes_top: string | null; notes_heart: string | null; notes_base: string | null; mood: string | null; best_for: string | null }
+interface ModelProfile { id: string; name: string; description: string | null; coverage_m2: number | null; features: string | null; best_for: string | null }
+
+async function loadProducts(db: SupabaseClient, scentIds: string[], modelIds: string[]) {
+  const [scents, models] = await Promise.all([
+    scentIds.length
+      ? must<ScentProfile[]>(db.from('scents').select('id, name, description, notes_top, notes_heart, notes_base, mood, best_for').in('id', scentIds))
+      : Promise.resolve([] as ScentProfile[]),
+    modelIds.length
+      ? must<ModelProfile[]>(db.from('device_models').select('id, name, description, coverage_m2, features, best_for').in('id', modelIds))
+      : Promise.resolve([] as ModelProfile[]),
+  ]);
+  return { scents, models };
+}
+
+/** בלוק טקסט לפרומפט: רק עובדות מהפרופיל. שדה ריק = לא לכתוב עליו. */
+function productBlock(p: { scents: ScentProfile[]; models: ModelProfile[] }): string {
+  if (!p.scents.length && !p.models.length) return '';
+  const line = (label: string, v: string | number | null | undefined) => (v ? `  - ${label}: ${v}` : '');
+  const parts: string[] = ['מוצרים שנבחרו מהקטלוג (העובדות היחידות שמותר לכתוב עליהם; שדה חסר = לא להזכיר):'];
+  for (const s of p.scents) {
+    parts.push(`• ריח "${s.name}"`, line('תיאור', s.description), line('תווי ראש', s.notes_top), line('תווי לב', s.notes_heart),
+      line('תווי בסיס', s.notes_base), line('אווירה', s.mood), line('מתאים ל', s.best_for));
+  }
+  for (const m of p.models) {
+    parts.push(`• מכשיר ${m.name}`, line('תיאור', m.description), line('כיסוי עד', m.coverage_m2 ? `${m.coverage_m2} מ"ר` : null),
+      line('יכולות', m.features), line('מתאים ל', m.best_for));
+  }
+  return parts.filter(Boolean).join('\n');
+}
+
 /* ================================ פעולות ================================ */
 
 async function generate(db: SupabaseClient, batchId: string) {
   const creds = await must<ClaudeSettings>(db.rpc('clara_credentials'));
-  const batch = await must<{ id: string; asset_ids: string[]; brief: string; wanted: { reels?: number; posts?: number }; status: string }>(
+  const batch = await must<{
+    id: string; asset_ids: string[]; brief: string; wanted: { reels?: number; posts?: number }; status: string;
+    scent_ids: string[] | null; device_model_ids: string[] | null; soundtrack: string | null;
+  }>(
     db.from('clara_batches').select('*').eq('id', batchId).single(),
   );
   if (batch.status === 'generating') throw new HttpError('קלרה כבר עובדת על המשימה הזו', 409);
@@ -344,6 +382,8 @@ async function generate(db: SupabaseClient, batchId: string) {
     const ordered = batch.asset_ids.map((id) => assets.find((a) => a.id === id)).filter(Boolean) as Asset[];
     if (!ordered.length) throw new HttpError('הנכסים של המשימה לא נמצאו');
     const hasImage = ordered.some((a) => a.media_type === 'image');
+    const products = await loadProducts(db, batch.scent_ids ?? [], batch.device_model_ids ?? []);
+    const productText = productBlock(products);
     const reels = Math.max(0, Math.min(3, batch.wanted?.reels ?? 2));
     const posts = hasImage ? Math.max(0, Math.min(3, batch.wanted?.posts ?? 1)) : 0;
 
@@ -369,6 +409,8 @@ async function generate(db: SupabaseClient, batchId: string) {
           text: [
             `צרי ${reels} רילז ו-${posts} פוסטים (פוסט עם כמה תמונות = קרוסלה) מהנכסים למעלה.`,
             'כל רילז בזווית אחרת (למשל: לפני/אחרי, תהליך התקנה, חוויית לקוח, מוצר מקרוב).',
+            productText,
+            productText ? 'שלבי את המוצרים בטבעיות: שם הריח/הדגם בכתובית אחת לפחות ובכיתוב.' : '',
             batch.brief ? `הנחיה מהמנהל: ${batch.brief}` : '',
           ].filter(Boolean).join('\n'),
         },
@@ -383,7 +425,12 @@ async function generate(db: SupabaseClient, batchId: string) {
       ? db.from('clara_assets').update({ analysis: { description: data.asset_descriptions[i] } }).eq('id', a.id)
       : Promise.resolve())));
 
-    const rows = items.map((it) => toContentRow(it, ordered, batchId));
+    const rows = items.map((it) => ({
+      ...toContentRow(it, ordered, batchId),
+      soundtrack: batch.soundtrack || 'calm',
+      scent_ids: batch.scent_ids ?? [],
+      device_model_ids: batch.device_model_ids ?? [],
+    }));
     const created = await must<{ id: string; kind: string }[]>(db.from('clara_content').insert(rows).select('id, kind'));
     await must(db.from('clara_batches').update({ status: 'ready', usage }).eq('id', batchId));
 
@@ -461,11 +508,13 @@ async function revise(db: SupabaseClient, body: { contentId: string; instruction
     voiceover: c.voiceover, caption: c.caption, hashtags: c.hashtags, asset_indexes: c.asset_ids.map(indexOf),
   };
 
+  const reviseProducts = productBlock(await loadProducts(db, c.scent_ids ?? [], c.device_model_ids ?? []));
   const { data } = await callClaude<GeneratedItem>(creds, {
     system: `${BRAND_CONTEXT}\n\n${creds.brand_notes || ''}`,
     tool: { name: 'deliver_revision', description: 'גרסה מעודכנת של התוכן', input_schema: ITEM_SCHEMA as unknown as Record<string, unknown> },
     content: [
       ...assetBlocks(pool.length ? pool : assets),
+      ...(reviseProducts ? [{ type: 'text', text: reviseProducts }] : []),
       { type: 'text', text: `זו הגרסה הנוכחית (JSON):\n${JSON.stringify(current)}\n\nבקשת השינוי מהמנהל: ${instructions}\n\nשני רק את מה שהתבקש, ושמרי על אותו kind (${c.kind}).` },
     ],
   });
