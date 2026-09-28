@@ -283,6 +283,7 @@ function TodayLoadCard() {
               <>
                 <NetRequirementPanel net={plan.data.netRequirement} routeLabel={routeLabel}
                   routeName={isAllRoutes ? null : activeRoute} onOrdered={plan.refetch} />
+                <PurchaseOrdersCard embedded onChanged={plan.refetch} />
                 {plan.data.netRequirement.purchasingReady && (
                   <VehicleLoadPanel net={plan.data.netRequirement} routeName={isAllRoutes ? null : activeRoute} onLoaded={plan.refetch} />
                 )}
@@ -661,7 +662,6 @@ export default function StockScreen() {
   return (
     <>
       <TodayLoadCard />
-      {isAdmin && <PurchaseOrdersCard />}
 
       <GlassCard>
         <CardHead
