@@ -310,7 +310,7 @@ export async function listRoutes() {
     bump(c.route_name?.trim() || null, 1, c.devices?.[0]?.count ?? 0);
   }
   for (const s of sites) {
-    bump(cityRoutes.get(s.city) ?? null, 1, s.devices?.[0]?.count ?? 0);
+    bump(routeForCity(cityRoutes, s.city), 1, s.devices?.[0]?.count ?? 0);
   }
 
   return [...groups.values()].sort((a, b) => {
@@ -362,7 +362,7 @@ export async function listStopsByRoute(routeName) {
 
   const customerStops = customers
     .filter((c) => !customersWithSites.has(c.id))
-    .filter((c) => (routeName === null ? !c.route_name : c.route_name === routeName))
+    .filter((c) => (c.route_name?.trim() || null) === routeName)
     .map((c) => ({
       kind: 'customer',
       customer_id: c.id,
@@ -379,7 +379,7 @@ export async function listStopsByRoute(routeName) {
     }));
 
   const siteStops = sites
-    .filter((s) => (cityRoutes.get(s.city) ?? null) === routeName)
+    .filter((s) => routeForCity(cityRoutes, s.city) === routeName)
     .map((s) => ({
       kind: 'site',
       customer_id: s.customer_id,
@@ -407,20 +407,35 @@ export async function listStopsByRoute(routeName) {
 export const listCityRoutes = () =>
   supabase.from('city_routes').select('city, route_name').then(unwrap);
 
+/** קו לפי עיר (city_routes). trim משני הצדדים — "חיפה " ו-"חיפה" הם אותה עיר. */
+function routeForCity(cityRoutes, city) {
+  const key = city?.trim();
+  return key ? cityRoutes.get(key) ?? null : null;
+}
+
 /**
- * הקו האמיתי של מכשיר: אם יש לו devices.city מפורש (רלוונטי בעיקר
- * ללקוחות ריבוי-כתובות), הוא קובע דרך city_routes; אחרת נופלים חזרה
- * ל-customer.route_name הרגיל (כל שאר הלקוחות, חד-כתובתיים). cityRoutes
- * הוא Map<city, route_name> שכבר נטען פעם אחת ע"י הקורא.
+ * הקו האמיתי של מכשיר — **אותו כלל בדיוק כמו מסך המסלולים** (listRoutes/
+ * listStopsByRoute), כדי שדוח ההעמסה/הצריכה לא "יראה" מכשיר בקו שבמסלולים
+ * הוא לא שייך אליו:
+ *   1. מכשיר שמשויך לאתר (customer_sites, לקוח ריבוי-כתובות): הקו נקבע אך
+ *      ורק לפי עיר האתר → city_routes. עיר לא ממופה = ללא שיוך לקו — **לא**
+ *      נופלים ל-customer.route_name (2026-09-28, באג: כל הבניינים של לקוח
+ *      ריבוי-כתובות בנשר/טירה/עכו "דלפו" לדוח ההעמסה של הקו של הלקוח).
+ *   2. מכשיר בלי אתר עם devices.city מפורש → city_routes, ואם העיר לא ממופה
+ *      → customer.route_name.
+ *   3. אחרת → customer.route_name (לקוח חד-כתובתי, הרוב המכריע).
+ * device.site חייב להיטען בשאילתה (site:customer_sites(city)) כדי שכלל 1 יעבוד.
  */
 function effectiveDeviceRoute(device, cityRoutes) {
-  if (device.city) return cityRoutes.get(device.city) ?? device.customer?.route_name ?? null;
-  return device.customer?.route_name ?? null;
+  const customerRoute = device.customer?.route_name?.trim() || null;
+  if (device.site) return routeForCity(cityRoutes, device.site.city);
+  if (device.city?.trim()) return routeForCity(cityRoutes, device.city) ?? customerRoute;
+  return customerRoute;
 }
 
 async function loadCityRoutesMap() {
   const rows = await listCityRoutes();
-  return new Map(rows.map((r) => [r.city, r.route_name]));
+  return new Map(rows.filter((r) => r.city?.trim()).map((r) => [r.city.trim(), r.route_name]));
 }
 
 /**
@@ -1098,7 +1113,7 @@ export async function listFieldNotes({ onlyOpen = false, limit = 200 } = {}) {
       .from('oil_tracking')
       .select(`
         id, notes, recorded_at,
-        device:devices(id, serial, city, customer_id, site_id, customer:customers(id, name, route_name)),
+        device:devices(id, serial, city, customer_id, site_id, site:customer_sites(city), customer:customers(id, name, route_name)),
         recorder:profiles(id, full_name)
       `)
       .not('notes', 'is', null)
@@ -1626,7 +1641,7 @@ export async function getRouteConsumptionReport({ routeName, months = 1 } = {}) 
   const [rows, cityRoutes] = await Promise.all([
     supabase
       .from('oil_tracking')
-      .select('scent_name, liters_added, recorded_at, device:devices!inner(city, customer:customers!inner(route_name))')
+      .select('scent_name, liters_added, recorded_at, device:devices!inner(city, site:customer_sites(city), customer:customers!inner(route_name))')
       .gte('recorded_at', start.toISOString())
       .then(unwrap),
     loadCityRoutesMap(),
@@ -1929,4 +1944,4 @@ export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
         .in('device_id', deviceIds)
         .order('recorded_at', { ascending: false })
         .limit(limit)
-        .then(unwrap);
+        .then(unwrap);
