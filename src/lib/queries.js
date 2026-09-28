@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { indexWarehouseStock, computeNetRequirements } from './netRequirement';
+import { indexWarehouseStock, indexOpenPurchaseLines, computeNetRequirements } from './netRequirement';
 import { enqueue, isNetworkError } from './offlineQueue';
 
 /**
@@ -472,7 +472,7 @@ async function loadCityRoutesMap() {
  * יהיה להבדיל בתצוגה מאיזה קו כל שורה הגיעה כשהכול מאוחד יחד.
  */
 export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
-  const [devicesRows, models, cityRoutes, settings, warehouseRows] = await Promise.all([
+  const [devicesRows, models, cityRoutes, settings, warehouseRows, openPoLines] = await Promise.all([
     supabase
       .from('devices')
       .select(`
@@ -488,6 +488,9 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
     // מלאי נטו (ר' netRequirement.js) — רק למנהל: ל-warehouse_stock יש RLS
     // של מנהל בלבד, וטכנאי היה מקבל "מחסן ריק" ומספרים שגויים.
     includeNet ? listWarehouseStock() : Promise.resolve(null),
+    // כמויות שכבר בהזמנות רכש פתוחות (phase49) — כדי לא להזמין פעמיים.
+    // לפני שהורץ ה-SQL של phase49 הטבלה לא קיימת → מתייחסים כאל 0.
+    includeNet ? listOpenPurchaseLines().catch(() => null) : Promise.resolve(null),
   ]);
 
   // מרווח ביטחון (2026-09-10, בקשה מפורשת): הטכנאי לא טוען בדיוק את
@@ -591,15 +594,17 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
   let netRequirement = null;
   if (warehouseRows) {
     const stock = indexWarehouseStock(warehouseRows);
+    const onOrder = indexOpenPurchaseLines(openPoLines ?? []);
     const unitsByModel = new Map();
     for (const d of newDevices) if (d.model) unitsByModel.set(d.model, (unitsByModel.get(d.model) ?? 0) + 1);
-    const scents = computeNetRequirements(items.map((i) => ({ key: i.scent_name, target: i.liters })), stock.scents);
-    const modelRows = computeNetRequirements([...unitsByModel].map(([key, target]) => ({ key, target })), stock.models);
+    const scents = computeNetRequirements(items.map((i) => ({ key: i.scent_name, target: i.liters })), stock.scents, onOrder.scents);
+    const modelRows = computeNetRequirements([...unitsByModel].map(([key, target]) => ({ key, target })), stock.models, onOrder.models);
     netRequirement = {
       scents,
       models: modelRows,
       totalNetLiters: Math.round(scents.reduce((sum, r) => sum + r.net_required, 0) * 100) / 100,
       totalNetUnits: modelRows.reduce((sum, r) => sum + r.net_required, 0),
+      purchasingReady: openPoLines !== null,
     };
   }
 
@@ -1499,6 +1504,48 @@ export const returnAllStockToWarehouse = (technicianId) =>
  */
 export const resetTechnicianStock = (technicianId) =>
   supabase.rpc('reset_technician_stock', { p_technician_id: technicianId }).then(unwrap);
+
+/* =====================================================================
+   מחזור החיים הלוגיסטי (phase49): רכש מ-ADL → מחסן → רכב טכנאי.
+   כל הכתיבה עוברת דרך RPC אטומיים בשרת (שגם רושמים כל תנועה ב-
+   stock_movements) — אין כאן כתיבה ישירה לטבלאות המלאי.
+   ===================================================================== */
+
+const PO_SELECT = 'id, po_number, supplier, status, route_name, notes, created_at, ordered_at, received_at, lines:purchase_order_lines(id, item_kind, scent_name, model, target_qty, existing_qty, on_order_qty, ordered_qty, received_qty)';
+
+export const listPurchaseOrders = (limit = 20) =>
+  supabase.from('purchase_orders').select(PO_SELECT).order('created_at', { ascending: false }).limit(limit).then(unwrap);
+
+/** שורות בהזמנות פתוחות — ל"בהזמנה" בחישוב הנטו (getRouteLoadPlan). */
+export const listOpenPurchaseLines = () =>
+  supabase
+    .from('purchase_order_lines')
+    .select('item_kind, scent_name, model, ordered_qty, received_qty, po:purchase_orders!inner(status)')
+    .in('po.status', ['draft', 'ordered', 'partially_received'])
+    .then(unwrap);
+
+/**
+ * שלב א׳ — הזמנת רכש נטו. lines: [{ kind: 'scent'|'model', item, target, qty? }].
+ * השרת מחשב בעצמו לכל שורה: max(0, target − מחסן − בהזמנות פתוחות).
+ */
+export const createPurchaseOrder = ({ lines, routeName = null, supplier = 'ADL', notes = '' }) =>
+  supabase.rpc('create_purchase_order', {
+    p_lines: lines, p_route_name: routeName, p_supplier: supplier, p_notes: notes,
+  }).then(unwrap);
+
+/** טיוטה → 'ordered' (נשלחה לספק), או 'cancelled'. */
+export const setPurchaseOrderStatus = (poId, status) =>
+  supabase.rpc('set_purchase_order_status', { p_po_id: poId, p_status: status }).then(unwrap);
+
+/** שלב ב׳ — קליטה למחסן. received: [{ line_id, qty }] או null = כל היתרה. */
+export const receivePurchaseOrder = (poId, received = null) =>
+  supabase.rpc('receive_purchase_order', { p_po_id: poId, p_received: received }).then(unwrap);
+
+/** שלב ג׳ — העמסה לרכב (מלאי נייד). items: [{ kind, item, qty }], הכול-או-כלום. */
+export const loadTechnicianVehicle = ({ technicianId, items, routeName = null }) =>
+  supabase.rpc('load_technician_vehicle', {
+    p_technician_id: technicianId, p_items: items, p_route_name: routeName,
+  }).then(unwrap);
 
 /* =====================================================================
    ניחוחות (scents) — רשימה גלובלית קבועה. כל שדה "ניחוח" באפליקציה
