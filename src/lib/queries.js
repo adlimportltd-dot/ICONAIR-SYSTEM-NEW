@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { indexWarehouseStock, computeNetRequirements } from './netRequirement';
 import { enqueue, isNetworkError } from './offlineQueue';
 
 /**
@@ -470,8 +471,8 @@ async function loadCityRoutesMap() {
  * בעלי שם. missing/newDevices מקבלים route_name פר-מכשיר כדי שאפשר
  * יהיה להבדיל בתצוגה מאיזה קו כל שורה הגיעה כשהכול מאוחד יחד.
  */
-export async function getRouteLoadPlan(routeName) {
-  const [devicesRows, models, cityRoutes, settings] = await Promise.all([
+export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
+  const [devicesRows, models, cityRoutes, settings, warehouseRows] = await Promise.all([
     supabase
       .from('devices')
       .select(`
@@ -484,6 +485,9 @@ export async function getRouteLoadPlan(routeName) {
     listAllDeviceModels(),
     loadCityRoutesMap(),
     getNotificationSettings(),
+    // מלאי נטו (ר' netRequirement.js) — רק למנהל: ל-warehouse_stock יש RLS
+    // של מנהל בלבד, וטכנאי היה מקבל "מחסן ריק" ומספרים שגויים.
+    includeNet ? listWarehouseStock() : Promise.resolve(null),
   ]);
 
   // מרווח ביטחון (2026-09-10, בקשה מפורשת): הטכנאי לא טוען בדיוק את
@@ -582,8 +586,25 @@ export async function getRouteLoadPlan(routeName) {
     .filter((row) => row.liters > 0)
     .sort((a, b) => b.liters - a.liters);
 
+  // מלאי נטו נדרש: יעד (ליטרים לכל ניחוח כולל מרווח הביטחון, יחידות לכל
+  // דגם של מכשיר חדש להתקנה) מול המלאי הקיים במחסן — ר' netRequirement.js.
+  let netRequirement = null;
+  if (warehouseRows) {
+    const stock = indexWarehouseStock(warehouseRows);
+    const unitsByModel = new Map();
+    for (const d of newDevices) if (d.model) unitsByModel.set(d.model, (unitsByModel.get(d.model) ?? 0) + 1);
+    const scents = computeNetRequirements(items.map((i) => ({ key: i.scent_name, target: i.liters })), stock.scents);
+    const modelRows = computeNetRequirements([...unitsByModel].map(([key, target]) => ({ key, target })), stock.models);
+    netRequirement = {
+      scents,
+      models: modelRows,
+      totalNetLiters: Math.round(scents.reduce((sum, r) => sum + r.net_required, 0) * 100) / 100,
+      totalNetUnits: modelRows.reduce((sum, r) => sum + r.net_required, 0),
+    };
+  }
+
   return {
-    items, missing, newDevices, deviceRows, deviceCount: routeDevices.length,
+    items, missing, newDevices, deviceRows, deviceCount: routeDevices.length, netRequirement,
     deviceIds: routeDevices.map((d) => d.id),
     bufferPct: Number(settings?.route_load_buffer_pct ?? 0),
   };
