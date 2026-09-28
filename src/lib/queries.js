@@ -578,6 +578,16 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
     byScent.set(scent, (byScent.get(scent) ?? 0) + neededMl);
   }
 
+  // התקנות חדשות שעוד לא בוצעו (phase50): המכשיר עוד לא קיים ב-devices, אבל
+  // הטכנאי צריך להעמיס אותו + שמן למילוי ראשון, והרכש מ-ADL צריך לספור אותם.
+  const pendingInstalls = await listOpenInstallations().catch(() => []);
+  const routeInstalls = pendingInstalls.filter((i) => routeName === null || i.install_route === routeName);
+  for (const inst of routeInstalls) {
+    const capacity = capacityByModel.get(inst.install_model);
+    const scent = inst.install_scent?.trim();
+    if (capacity && scent) byScent.set(scent, (byScent.get(scent) ?? 0) + capacity);
+  }
+
   deviceRows.sort((a, b) => a.customer_name.localeCompare(b.customer_name, 'he') || (a.address ?? '').localeCompare(b.address ?? '', 'he'));
 
   const items = [...byScent.entries()]
@@ -597,6 +607,8 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
     const onOrder = indexOpenPurchaseLines(openPoLines ?? []);
     const unitsByModel = new Map();
     // מכשירים לא נכנסים לרכש אוטומטי: בלי רישום שמן ≠ לא מותקן (מכשירים מיובאים כבר בשטח).
+    // רק התקנות חדשות פתוחות (phase50) נספרות כמכשירים שצריך להביא.
+    for (const inst of routeInstalls) if (inst.install_model) unitsByModel.set(inst.install_model, (unitsByModel.get(inst.install_model) ?? 0) + 1);
     const scents = computeNetRequirements(items.map((i) => ({ key: i.scent_name, target: i.liters })), stock.scents, onOrder.scents);
     const modelRows = computeNetRequirements([...unitsByModel].map(([key, target]) => ({ key, target })), stock.models, onOrder.models);
     netRequirement = {
@@ -609,7 +621,7 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
   }
 
   return {
-    items, missing, newDevices, deviceRows, deviceCount: routeDevices.length, netRequirement,
+    items, missing, newDevices, deviceRows, deviceCount: routeDevices.length, netRequirement, pendingInstalls: routeInstalls,
     deviceIds: routeDevices.map((d) => d.id),
     bufferPct: Number(settings?.route_load_buffer_pct ?? 0),
   };
@@ -1630,6 +1642,40 @@ export const createServiceCall = (payload) =>
     `)
     .single()
     .then(unwrap);
+
+/* ---------------- התקנות חדשות (phase50) ---------------- */
+
+/** התקנות פתוחות (עוד לא הותקנו) — לתכנון העמסה, רכש ותג ההתראה. */
+export const listOpenInstallations = () =>
+  supabase
+    .from('service_calls')
+    .select('id, code, install_model, install_scent, install_route, assigned_to, scheduled_at, customer:customers(id, name, city)')
+    .eq('call_type', 'installation')
+    .in('status', ['open', 'in_progress'])
+    .then(unwrap);
+
+export const countOpenInstallations = () =>
+  supabase.from('service_calls').select('id', { count: 'exact', head: true })
+    .eq('call_type', 'installation').in('status', ['open', 'in_progress'])
+    .then(({ count, error }) => {
+      if (error) throw error;
+      return count ?? 0;
+    });
+
+/** פתיחת משימת התקנה. customerId או newCustomer ({ name, phone, address, city }). */
+export const createInstallation = ({
+  customerId = null, newCustomer = null, model, scent, route, assignedTo = null,
+  scheduledAt = null, locationNote = null, notes = null,
+}) =>
+  supabase.rpc('create_installation', {
+    p_customer_id: customerId, p_new_customer: newCustomer, p_model: model, p_scent: scent,
+    p_route: route || null, p_assigned_to: assignedTo || null, p_scheduled_at: scheduledAt || null,
+    p_location_note: locationNote || null, p_notes: notes || null,
+  }).then(unwrap);
+
+/** "הותקן": יוצר מכשיר, משייך לקו, מילוי ראשון, ומוריד מהמלאי הנייד — אטומי בשרת. */
+export const completeInstallation = (callId, liters, notes = null) =>
+  supabase.rpc('complete_installation', { p_call_id: callId, p_liters: liters, p_notes: notes || null }).then(unwrap);
 
 /** סגירת קריאה. closed_at חייב להיות מלא — יש על זה CHECK בבסיס הנתונים. */
 export const resolveServiceCall = (id, resolution) =>
