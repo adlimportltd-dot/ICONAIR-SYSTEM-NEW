@@ -306,3 +306,17 @@ bg-gold-500/[0.07] shadow-icon-glow`) לצד הכותרת. אייקונים מג
   הטבלאות/פונקציות שלה. אל תחזיר persona/שיחה/אישורים בלי בקשה מפורשת.
 - **TypeScript:** קבצים חדשים ב-TS/TSX. `npx tsc -p tsconfig.json` חייב לעבור נקי. לרכיבי UI משותפים ב-JS יש
   `.d.ts` צמודים (`src/components/ui/*.d.ts`). Tailwind סורק `ts,tsx`.
+
+## מחזור חיים לוגיסטי: רכש ADL → מחסן → רכב (phase49), מ-2026-09-28
+
+- **שלב א׳ רכש נטו** (`NetRequirementPanel`, `lib/netRequirement.js`): לכל ניחוח/דגם — `max(0, יעד − מחסן − בהזמנה פתוחה)`.
+  היעד = ליטרים מ-`getRouteLoadPlan` (כולל מרווח ביטחון) / מכשירים חדשים לפי דגם. "צור הזמנת רכש" קורא ל-
+  `create_purchase_order`, **שמחשב שוב בשרת** (מחסן + הזמנות פתוחות בזמן אמת) — לחיצה כפולה לא מזמינה פעמיים.
+- **שלב ב׳ קליטה** (`PurchaseOrdersCard`): `purchase_orders`/`purchase_order_lines`, סטטוס draft → ordered →
+  partially_received/received (או cancelled). `receive_purchase_order` מוסיף ל-`warehouse_stock`, גם קליטה חלקית.
+- **שלב ג׳ העמסה** (`VehicleLoadPanel`): `load_technician_vehicle` מעביר כמה פריטים מהמחסן ל-`technician_stock`,
+  **הכול-או-כלום**.
+- **ספר תנועות אחד:** כל קליטה/הקצאה עוברת דרך `_stock_receive`/`_stock_allocate` ונרשמת ב-`stock_movements`
+  (`receive` עם `po_line_id`, `allocate` עם `route_name`). `receive_stock`/`allocate_stock_to_technician` הקיימות
+  נשארו באותה חתימה ועוטפות אותן. תנועת מלאי חדשה = דרך הפונקציות האלה בלבד, לא כתיבה ישירה לטבלאות.
+- מלאי שכבר ברכבים **לא** מקוזז מהיעד (בכוונה, לפי הבקשה המקורית).
