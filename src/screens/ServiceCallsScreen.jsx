@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   listServiceCalls, createServiceCall, resolveServiceCall, startServiceCall, updateServiceCall,
   listCustomerOptions, listDeviceOptions, listProfiles,
+  createInstallation, completeInstallation, listScents, listDeviceModels, listRouteCycles, listCityRoutes,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import {
@@ -58,6 +59,9 @@ export default function ServiceCallsScreen({ openFormSignal }) {
   const [resolving, setResolving] = useState(null);
   const [editing, setEditing] = useState(null);
   const [rowBusy, setRowBusy] = useState(null);
+  // התקנות חדשות (phase50) — נפתחות כמשימה ונסגרות ב"הותקן"
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installing, setInstalling] = useState(null);
 
   const calls = useQuery(() => listServiceCalls({ status, search }), [status, search]);
   const customers = useQuery(listCustomerOptions, []);
@@ -82,6 +86,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       value: c.id,
       name: c.name,
       address: [c.address, c.city].filter(Boolean).join(', '),
+      city: c.city ?? '',
       label: c.city ? `${c.name} · ${c.city}` : c.name,
     })),
     [customers.data]
@@ -140,7 +145,9 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       key: 'device',
       label: 'מכשיר',
       width: '130px',
-      render: (row) => (row.device
+      render: (row) => (row.call_type === 'installation' && !row.device
+        ? <StatusChip tone="gold">{row.install_model} · התקנה</StatusChip>
+        : row.device
         ? (
           <div className="flex items-center gap-2">
             <StatusChip tone={modelTone(row.device.model)}>{row.device.model}</StatusChip>
@@ -202,11 +209,12 @@ export default function ServiceCallsScreen({ openFormSignal }) {
             disabled={rowBusy === row.id}
             onClick={(event) => {
               event.stopPropagation();
-              setResolving(row);
+              if (row.call_type === 'installation') setInstalling(row);
+              else setResolving(row);
             }}
             className="ghost-btn disabled:opacity-50"
           >
-            סגור
+            {row.call_type === 'installation' ? 'הותקן' : 'סגור'}
           </button>
         </>
       )}
@@ -242,6 +250,10 @@ export default function ServiceCallsScreen({ openFormSignal }) {
         }]}
       />
 
+      <div className="mb-3.5 flex justify-end">
+        <PrimaryButton type="button" onClick={() => setInstallOpen(true)}>+ התקנה חדשה</PrimaryButton>
+      </div>
+
       <GlassCard>
         <Async
           loading={calls.loading}
@@ -275,6 +287,26 @@ export default function ServiceCallsScreen({ openFormSignal }) {
         onClose={() => setFormOpen(false)}
         onCreated={() => {
           setFormOpen(false);
+          calls.refetch();
+        }}
+      />
+
+      <NewInstallationModal
+        open={installOpen}
+        customerOptions={customerOptions}
+        technicianOptions={technicianOptions}
+        onClose={() => setInstallOpen(false)}
+        onCreated={() => {
+          setInstallOpen(false);
+          calls.refetch();
+        }}
+      />
+
+      <CompleteInstallationModal
+        call={installing}
+        onClose={() => setInstalling(null)}
+        onDone={() => {
+          setInstalling(null);
           calls.refetch();
         }}
       />
@@ -490,6 +522,224 @@ function NewCallModal({ open, customerOptions, technicianOptions, devices, onClo
 
         <div className="mt-1 flex gap-2.5">
           <PrimaryButton type="submit" loading={busy}>פתח קריאה</PrimaryButton>
+          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * התקנה חדשה (phase50, 2026-09-28, בקשה מפורשת): נפתחת כמשימה ב"קריאות
+ * שירות" עם התראה. המכשיר נוצר רק ב"הותקן" (CompleteInstallationModal),
+ * ואז הוא נכנס לבד לקו שנבחר כאן. הקו מוצע אוטומטית לפי העיר (city_routes),
+ * ואפשר לבחור ידנית — חובה כשהעיר לא משויכת לאף קו.
+ */
+const EMPTY_INSTALL = {
+  mode: 'existing', customer_id: '', name: '', phone: '', address: '', city: '',
+  model: '', scent: '', route: '', assigned_to: '', scheduled_at: '', location_note: '', notes: '',
+};
+
+function NewInstallationModal({ open, customerOptions, technicianOptions, onClose, onCreated }) {
+  const [form, setForm] = useState(EMPTY_INSTALL);
+  const [routeTouched, setRouteTouched] = useState(false);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const scents = useQuery(listScents, [], { enabled: open });
+  const models = useQuery(listDeviceModels, [], { enabled: open });
+  const routes = useQuery(listRouteCycles, [], { enabled: open });
+  const cityRoutes = useQuery(listCityRoutes, [], { enabled: open });
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  // העיר של ההתקנה: לקוח חדש → מה שהוקלד; לקוח קיים → העיר שלו
+  const city = form.mode === 'new'
+    ? form.city.trim()
+    : (customerOptions.find((c) => c.value === form.customer_id)?.city ?? '').trim();
+  const suggestedRoute = city
+    ? (cityRoutes.data ?? []).find((r) => r.city?.trim() === city)?.route_name ?? ''
+    : '';
+
+  useEffect(() => {
+    if (!routeTouched) setForm((prev) => ({ ...prev, route: suggestedRoute }));
+  }, [suggestedRoute, routeTouched]);
+
+  const routeOptions = useMemo(() => {
+    const names = new Set([
+      ...(routes.data ?? []).map((r) => r.name),
+      ...(cityRoutes.data ?? []).map((r) => r.route_name),
+    ].filter(Boolean));
+    return [...names].sort((a, b) => a.localeCompare(b, 'he')).map((n) => ({ value: n, label: n }));
+  }, [routes.data, cityRoutes.data]);
+
+  function close() {
+    setForm(EMPTY_INSTALL);
+    setRouteTouched(false);
+    setError(null);
+    onClose();
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    if (form.mode === 'existing' && !form.customer_id) { setError('יש לבחור לקוח מתוך רשימת ההצעות'); return; }
+    if (form.mode === 'new' && !form.name.trim()) { setError('יש להזין שם ללקוח החדש'); return; }
+    if (!form.route) { setError('העיר לא משויכת לאף קו — יש לבחור קו ידנית'); return; }
+    setBusy(true);
+    try {
+      await createInstallation({
+        customerId: form.mode === 'existing' ? form.customer_id : null,
+        newCustomer: form.mode === 'new'
+          ? { name: form.name, phone: form.phone, address: form.address, city: form.city }
+          : null,
+        model: form.model,
+        scent: form.scent,
+        route: form.route,
+        assignedTo: form.assigned_to || null,
+        scheduledAt: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
+        locationNote: form.location_note,
+        notes: form.notes,
+      });
+      setForm(EMPTY_INSTALL);
+      setRouteTouched(false);
+      onCreated();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tab = (mode, label) => (
+    <button type="button" onClick={() => setForm((prev) => ({ ...prev, mode }))}
+      className={`flex-1 rounded-pill border px-3 py-2 text-[14px] font-semibold ${form.mode === mode
+        ? 'border-gold-500/50 bg-gold-500/[0.12] text-gold-600' : 'border-black/[0.08] text-text-faint'}`}>
+      {label}
+    </button>
+  );
+
+  return (
+    <Modal open={open} title="התקנה חדשה" subtitle="נפתחת כמשימה עם התראה · אחרי 'הותקן' המכשיר נכנס לקו" onClose={close}>
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <div className="flex gap-2">{tab('existing', 'לקוח קיים')}{tab('new', 'לקוח חדש')}</div>
+
+        {form.mode === 'existing' ? (
+          <Field label="לקוח" required>
+            <CustomerCombobox value={form.customer_id} options={customerOptions}
+              onChange={(customerId) => setForm((prev) => ({ ...prev, customer_id: customerId }))} />
+          </Field>
+        ) : (
+          <>
+            <Field label="שם הלקוח" required>
+              <TextInput value={form.name} onChange={set('name')} placeholder="משה כהן" />
+            </Field>
+            <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+              <Field label="טלפון"><TextInput value={form.phone} onChange={set('phone')} inputMode="tel" /></Field>
+              <Field label="עיר"><TextInput value={form.city} onChange={set('city')} placeholder="קריית ביאליק" /></Field>
+            </div>
+            <Field label="כתובת"><TextInput value={form.address} onChange={set('address')} placeholder="רחוב ומספר" /></Field>
+          </>
+        )}
+
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="דגם" required>
+            <Select value={form.model} onChange={set('model')} required placeholder="בחר דגם"
+              options={(models.data ?? []).map((m) => ({ value: m.name, label: m.name }))} />
+          </Field>
+          <Field label="ריח" required>
+            <Select value={form.scent} onChange={set('scent')} required placeholder="בחר ריח"
+              options={(scents.data ?? []).map((sc) => ({ value: sc.name, label: sc.name }))} />
+          </Field>
+        </div>
+
+        <Field label="קו" required
+          hint={suggestedRoute
+            ? (form.route === suggestedRoute ? `לפי העיר ${city}` : `לפי העיר מוצע ${suggestedRoute} — נבחר ידנית`)
+            : (city ? `העיר ${city} לא משויכת לאף קו — בחר ידנית` : 'נבחר לפי העיר, או ידנית')}>
+          <Select value={form.route} placeholder="בחר קו" options={routeOptions}
+            onChange={(e) => { setRouteTouched(true); setForm((prev) => ({ ...prev, route: e.target.value })); }} />
+        </Field>
+
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="טכנאי">
+            <Select value={form.assigned_to} onChange={set('assigned_to')} options={technicianOptions} placeholder="לא שובץ" />
+          </Field>
+          <Field label="מועד מתוכנן">
+            <TextInput type="datetime-local" value={form.scheduled_at} onChange={set('scheduled_at')} />
+          </Field>
+        </div>
+
+        <Field label="מיקום המכשיר אצל הלקוח">
+          <TextInput value={form.location_note} onChange={set('location_note')} placeholder="לובי, כניסה ראשית" />
+        </Field>
+        <Field label="הערות">
+          <TextArea value={form.notes} onChange={set('notes')} rows={2} />
+        </Field>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">{error}</div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <PrimaryButton type="submit" loading={busy}>פתח משימת התקנה</PrimaryButton>
+          <SecondaryButton onClick={close}>ביטול</SecondaryButton>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * "הותקן" — השרת (complete_installation) יוצר את המכשיר, משייך את הלקוח
+ * לקו, רושם מילוי ראשון ומוריד מכשיר + שמן מהמלאי הנייד של הטכנאי המשויך.
+ */
+function CompleteInstallationModal({ call, onClose, onDone }) {
+  const models = useQuery(listDeviceModels, [], { enabled: Boolean(call) });
+  const capacityMl = (models.data ?? []).find((m) => m.name === call?.install_model)?.capacity_ml;
+  const [liters, setLiters] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLiters(capacityMl ? String(Math.round(capacityMl / 10) / 100) : '');
+    setError(null);
+    setNotes('');
+  }, [call?.id, capacityMl]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await completeInstallation(call.id, Number(liters) || 0, notes);
+      onDone();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={Boolean(call)} title={`הותקן · ${call?.code ?? ''}`}
+      subtitle={call ? `${call.customer?.name ?? ''} · ${call.install_model} · ${call.install_scent} · ${call.install_route ?? 'ללא קו'}` : ''}
+      onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <Field label="מילוי ראשון (ליטר)" hint="יורד מהמלאי הנייד של הטכנאי יחד עם המכשיר עצמו">
+          <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={liters}
+            onChange={(e) => setLiters(e.target.value)} className="tabular" />
+        </Field>
+        <Field label="הערות">
+          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="הותקן בלובי, הוסבר ללקוח" />
+        </Field>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">{error}</div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <PrimaryButton type="submit" loading={busy}>הותקן — הוסף לקו</PrimaryButton>
           <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
         </div>
       </form>
