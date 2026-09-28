@@ -476,7 +476,7 @@ export async function getRouteLoadPlan(routeName) {
       .from('devices')
       .select(`
         id, model, oil_level_pct, scent_name, serial, city, location_note, created_at,
-        customer:customers(id, name, route_name, address, city),
+        customer:customers(id, name, route_name, address, city, status),
         site:customer_sites(label, city)
       `)
       .neq('status', 'uninstalled')
@@ -494,9 +494,12 @@ export async function getRouteLoadPlan(routeName) {
 
   const capacityByModel = new Map(models.map((m) => [m.name, m.capacity_ml]));
 
+  // אותו היקף כמו מסך המסלולים: לקוח חד-כתובתי שאינו פעיל (churned וכו')
+  // לא מופיע שם כעצירה — ולכן גם לא נטען עבורו שמן (2026-09-28).
+  const inScope = devicesRows.filter((d) => d.site || d.customer?.status === 'active');
   const routeDevices = routeName === null
-    ? devicesRows
-    : devicesRows.filter((d) => effectiveDeviceRoute(d, cityRoutes) === routeName);
+    ? inScope
+    : inScope.filter((d) => effectiveDeviceRoute(d, cityRoutes) === routeName);
 
   const neverServiced = routeDevices.length
     ? await supabase
