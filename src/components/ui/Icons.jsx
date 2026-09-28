@@ -267,7 +267,7 @@ export function MegaphoneIcon(props) {
   );
 }
 
-/** ניצוץ — קלרה, סוכנת השיווק (AI) */
+/** ניצוץ — סטודיו רילז / יצירה אוטומטית */
 export function SparkleIcon(props) {
   return (
     <svg {...base} {...props}>
