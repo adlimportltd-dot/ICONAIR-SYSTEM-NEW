@@ -66,11 +66,11 @@ function TodayLoadCard() {
   // getRouteLoadPlan(null) = "כל הקווים" מאוחד (ר' ההערה על הפונקציה
   // ב-queries.js) — routeName===null זה סימן מפורש, לא סתם "לא נבחר".
   const plan = useQuery(
-    () => getRouteLoadPlan(isAllRoutes ? null : activeRoute),
-    [activeRoute],
+    () => getRouteLoadPlan(isAllRoutes ? null : activeRoute, { includeNet: isAdmin }),
+    [activeRoute, isAdmin],
     { enabled: Boolean(activeRoute) }
   );
-  useRealtime(['devices', 'oil_tracking'], plan.refetch, { enabled: Boolean(activeRoute) });
+  useRealtime(['devices', 'oil_tracking', ...(isAdmin ? ['warehouse_stock'] : [])], plan.refetch, { enabled: Boolean(activeRoute) });
 
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState(null);
@@ -278,6 +278,8 @@ function TodayLoadCard() {
               </div>
             )}
 
+            {plan.data.netRequirement && <NetRequirementPanel net={plan.data.netRequirement} />}
+
             {plan.data.missing.length > 0 && (
               <button
                 type="button"
@@ -379,6 +381,64 @@ function TodayLoadCard() {
         )}
       </Async>
     </GlassCard>
+  );
+}
+
+/**
+ * מלאי נטו נדרש (2026-09-28): לכל ניחוח/דגם — היעד לקו, מה שכבר יש במחסן,
+ * וכמה חובה להביא/להזמין בפועל (max(0, יעד − מחסן), ר' lib/netRequirement.js).
+ * מנהל בלבד (warehouse_stock חסום לטכנאי ב-RLS).
+ */
+function NetRequirementPanel({ net }) {
+  const rows = [
+    ...net.scents.map((r) => ({ ...r, unit: 'ל׳', kind: 'scent' })),
+    ...net.models.map((r) => ({ ...r, unit: 'יח׳', kind: 'model' })),
+  ];
+  if (!rows.length) return null;
+  const short = rows.filter((r) => r.net_required > 0);
+  const fmt = (n, unit) => `${Number(n).toLocaleString('he-IL', { maximumFractionDigits: 2 })} ${unit}`;
+
+  return (
+    <div className="mt-5">
+      <CardHead
+        icon={BoxIcon}
+        tone="gold"
+        title="מלאי נטו להזמנה"
+        subtitle="יעד הקו פחות מה שכבר יש במחסן — רק ההפרש שחסר באמת"
+      />
+      <div className="mb-3.5 grid grid-cols-2 gap-3">
+        <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
+          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">שמן להזמין</div>
+          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-gold-600">{fmt(net.totalNetLiters, 'ל׳')}</div>
+        </div>
+        <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
+          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">מכשירים להזמין</div>
+          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-gold-600">{fmt(net.totalNetUnits, 'יח׳')}</div>
+        </div>
+      </div>
+      {short.length === 0 && (
+        <div className="mb-2.5 rounded-row border border-ok/25 bg-ok/[0.07] px-4 py-3 text-[14.5px] font-semibold text-ok">
+          יש מספיק במחסן לכל הקו — אין צורך להזמין.
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        {rows.map((r) => (
+          <div key={`${r.kind}:${r.key}`} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[15.5px] font-bold">{r.key}{r.kind === 'model' ? ' · מכשיר חדש' : ''}</div>
+              <div className="tabular mt-0.5 text-[13.5px] text-text-faint">
+                יעד {fmt(r.target_quantity, r.unit)} · במחסן {fmt(r.existing_stock, r.unit)}
+              </div>
+            </div>
+            {r.net_required > 0 ? (
+              <StatusChip tone="gold">להזמין {fmt(r.net_required, r.unit)}</StatusChip>
+            ) : (
+              <StatusChip tone="ok">מכוסה</StatusChip>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
