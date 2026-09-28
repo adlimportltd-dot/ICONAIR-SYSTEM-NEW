@@ -280,41 +280,29 @@ bg-gold-500/[0.07] shadow-icon-glow`) לצד הכותרת. אייקונים מג
 - **לידים לא משוכפלים**: לשונית הלידים כאן היא ניתוח בלבד של אותה טבלת
   `leads` (Make.com ← טפסי Meta). הטיפול בליד נשאר בטאב "לידים מקמפיין".
 
-## קלרה — סוכנת שיווק אוטונומית (phase46), מ-2026-09-28
+## סטודיו רילז (phase48), מ-2026-09-28
 
-- **זרימה:** `clara_assets` (העלאה מהשטח) → `clara_batches` → `/api/clara` (`generate`:
-  Claude עם ראייה, פלט מובנה דרך tool-use) → `clara_content` בסטטוס `draft` →
-  **רינדור בדפדפן** (`useClaraRenderer`) → `pending_approval` + הודעה בשיחה + Push →
-  אישור (`approve`) → שורה ב-`social_posts` (`source='clara'`) → Autopilot של phase45
-  מפרסם → טריגר `clara_sync_from_social` מסמן `published` וכותב הודעה.
-- **מכונת המצבים נאכפת ב-DB** (`clara_content_guard`), לא רק בממשק. מעבר חדש = לעדכן
-  גם את הטריגר וגם את הבדיקות.
-- **רילז = WebCodecs H.264 + `mp4-muxer`** (`src/lib/reelRenderer.ts`), לא MediaRecorder:
-  אינסטגרם דורש moov בתחילת הקובץ ובלי edit lists. הרינדור רץ רק בדפדפן עם מקודד
-  H.264 (כרום/אדג' במחשב). `_testCodec: 'vp9'` קיים לבדיקות בלבד.
-- **רילז באינסטגרם = קונטיינר בין ריצות Autopilot** (`publishInstagramReel` ב-`api/social.js`):
-  יצירה → בדיקת `status_code` בכל ריצה → `media_publish` רק כש-FINISHED. המתנה לעיבוד
-  לא נספרת כ"ניסיון כושל".
-- **תזמון חכם = `clara_next_slot()` ב-SQL**: חלונות קהל בשעון ישראל, תקרה יומית ומרווח
-  מינימלי מ-`clara_settings`.
-- **מפתח Anthropic** ב-`clara_settings` (סגורה ב-RLS, רק דרך `clara_status`/`clara_save_settings`/
-  `clara_credentials`). ברירת מחדל: `claude-sonnet-5`, ניתן לשינוי בהגדרות קלרה.
-- **"וואטסאפ" = שיחה בתוך ה-CRM + Push** (לא WhatsApp Cloud API — לא קיים חיבור כזה;
-  ר' "לא לבנות סטטוס לאינטגרציה שלא קיימת").
-- **TypeScript:** קבצים חדשים של קלרה ב-TS/TSX. `npx tsc -p tsconfig.json` חייב לעבור נקי.
-  לרכיבי UI משותפים ב-JS יש קבצי `.d.ts` צמודים (`src/components/ui/*.d.ts`) — כשמוסיפים
-  prop לרכיב כזה, מעדכנים גם את ה-`.d.ts`. Tailwind סורק `ts,tsx` (`tailwind.config.js`).
-
-## קלרה — מוצרים, סאונד ושיגור ישיר (phase47), מ-2026-09-28
-
-- **פרופיל מוצר בקטלוג:** עמודות תוספתיות ב-`scents` (תיאור, תווי ראש/לב/בסיס, אווירה, מתאים ל)
-  וב-`device_models` (תיאור, `coverage_m2`, יכולות, מתאים ל). נערך מתוך לשונית קלרה (`ProductPicker.tsx`).
-  `api/clara.ts` שולף את הפרופיל (`loadProducts`/`productBlock`) ל-generate ול-revise — **אלה העובדות היחידות
-  שקלרה כותבת על מוצר**; שדה ריק = לא מוזכר. אל תוסיף עובדות מוצר לפרומפט ממקור אחר.
-- **פסקול = `src/lib/soundtrack.ts`:** preset מסונתז ב-OfflineAudioContext (מקורי, בלי זכויות) או קובץ שהועלה
-  ל-`clara-assets/music/`. נשמר כ-`clara_content.soundtrack` (preset | none | URL). הרנדרר מקודד ל-AAC;
-  כישלון בבניית סאונד לא מפיל את הרינדור (ממשיך בשקט).
-- **"שגר לרשתות" = `launchNow`** ב-`lib/clara.ts`: approve('now') ואז `publishSocialPost` מיידי (אותו מנוע
-  של phase45). 409 "כבר בתהליך" = ה-Autopilot תפס אותו — לא שגיאה.
-- `startBatch` שולח עמודות phase47 רק כשיש בהן ערך, כך שהזרימה עובדת גם לפני שהורץ ה-SQL. מסך ההקמה
-  של קלרה מעתיק את phase46+phase47 יחד (`CLARA_SQL_URLS`).
+- **לשונית "סטודיו רילז" בטאב ניהול סושיאל** (`src/components/social/reels/`): תמונות (`MediaDropzone`) +
+  מוצרים מהקטלוג (`ProductPicker`) + הערות/טון/סאונד → `/api/reel-studio` מחזיר הוק, סצנות (תמונה+כתובית+שניות),
+  הנעה לפעולה, קפשן והאשטגים → עריכה (`ScriptEditor`) → רינדור MP4 9:16 בדפדפן → תצוגה מקדימה (`ReelPreview`)
+  → "שגר לרשתות" (`launchReel`: שורה ב-`social_posts` עם `media_kind='reel'`, `source='studio'`, ואז
+  `publishSocialPost`) או תזמון לתור ה-Autopilot. **אין טבלאות משלו ואין מצב שמור בשרת** — התוצר הוא שורת
+  `social_posts` רגילה, ומופיע בלשונית "תוכן" כמו כל פוסט.
+- **"עכשיו" נשמר כ-`is_draft=true` ומפורסם מיד מהדפדפן** — כך ה-Autopilot לא תופס אותו במקביל (אותו דפוס כמו
+  `PostComposer`).
+- **המודל בשרת בלבד:** `ANTHROPIC_API_KEY` (ו-`REEL_STUDIO_MODEL` אופציונלי, ברירת מחדל `claude-sonnet-5`)
+  במשתני הסביבה של Vercel. **אין מסך הגדרות מפתח, אין מפתח ב-DB או בדפדפן.** `/api/reel-studio` מקבל רק תמונות
+  מה-Storage שלנו (`assertOwnImages`) ורק ממנהל מחובר.
+- **פרופיל מוצר = העובדות היחידות על המוצר** (`scents`: תיאור/תווים/אווירה/מתאים ל; `device_models`: תיאור/
+  `coverage_m2`/יכולות/מתאים ל). שדה ריק = לא מוזכר. נערך מתוך `ProductPicker`.
+- **רילז = WebCodecs H.264 + `mp4-muxer`** (`src/lib/reelRenderer.ts`), לא MediaRecorder: אינסטגרם דורש moov
+  בתחילת הקובץ ובלי edit lists. רץ רק בדפדפן עם מקודד H.264 (כרום/אדג' במחשב). `_testCodec: 'vp9'` (+Opus)
+  לבדיקות בלבד.
+- **סאונד = `src/lib/soundtrack.ts`:** preset מסונתז (OfflineAudioContext, מוזיקה מקורית בלי זכויות) או קובץ שהועלה
+  ל-`social-media/reels/music/`, מקודד ל-AAC בתוך ה-MP4. כישלון בסאונד לא מפיל רינדור.
+- **רילז באינסטגרם = קונטיינר בין ריצות Autopilot** (`publishInstagramReel` ב-`api/social.js`): יצירה → בדיקת
+  `status_code` בכל ריצה → `media_publish` רק כש-FINISHED. המתנה לעיבוד לא נספרת כ"ניסיון כושל".
+- **"קלרה" (phase46/47) הוסרה לבקשת המשתמש** — בלי בוט, בלי צ'אט, בלי הגדרות מפתח ב-UI. phase48 מוחק את
+  הטבלאות/פונקציות שלה. אל תחזיר persona/שיחה/אישורים בלי בקשה מפורשת.
+- **TypeScript:** קבצים חדשים ב-TS/TSX. `npx tsc -p tsconfig.json` חייב לעבור נקי. לרכיבי UI משותפים ב-JS יש
+  `.d.ts` צמודים (`src/components/ui/*.d.ts`). Tailwind סורק `ts,tsx`.

@@ -122,6 +122,10 @@ export default {
           from: { opacity: '0', transform: 'translateY(14px)' },
           to: { opacity: '1', transform: 'none' },
         },
+        kenburns: {
+          from: { transform: 'scale(1.04)' },
+          to: { transform: 'scale(1.14)' },
+        },
         pulseDot: {
           '0%,100%': { opacity: '1', boxShadow: '0 0 0 0 rgba(21,128,61,.45)' },
           '50%': { opacity: '.65', boxShadow: '0 0 0 6px rgba(21,128,61,0)' },
@@ -130,6 +134,7 @@ export default {
       animation: {
         rise: 'rise .6s cubic-bezier(.2,.7,.3,1) backwards',
         'pulse-dot': 'pulseDot 2.4s ease-in-out infinite',
+        kenburns: 'kenburns 4s ease-out forwards',
       },
     },
   },
