@@ -12,7 +12,7 @@ import LeadsPanel from '../components/social/LeadsPanel';
 import ConnectPanel, { SetupDatabase } from '../components/social/ConnectPanel';
 import PostComposer from '../components/social/PostComposer';
 import CreativeStudio from '../components/social/CreativeStudio';
-import ClaraPanel from '../components/clara/ClaraPanel';
+import ReelStudioPanel from '../components/social/reels/ReelStudioPanel';
 import {
   listSocialPosts, deleteSocialPost, publishSocialPost, getSocialSettings, getMetaLive, listRecentLeads,
   isSetupMissing, postState,
@@ -62,8 +62,8 @@ export default function SocialScreen({ onNavigate }) {
   // חזרה מ-Meta אחרי OAuth: ?tab=social&meta=connected|error|...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('clara')) {
-      setTab('clara');
+    if (params.get('reels')) {
+      setTab('reels');
       window.history.replaceState(null, '', window.location.pathname);
       return;
     }
@@ -124,7 +124,7 @@ export default function SocialScreen({ onNavigate }) {
 
   const tabs = [
     { id: 'overview', label: 'סקירה', icon: GridIcon },
-    { id: 'clara', label: 'קלרה', icon: SparkleIcon },
+    { id: 'reels', label: 'סטודיו רילז', icon: SparkleIcon },
     { id: 'content', label: 'תוכן', icon: MegaphoneIcon, badge: failedCount },
     { id: 'campaigns', label: 'קמפיינים', icon: ChartIcon },
     { id: 'leads', label: 'לידים', icon: FunnelIcon, badge: newLeads },
@@ -150,7 +150,9 @@ export default function SocialScreen({ onNavigate }) {
             <OverviewPanel posts={posts.data} settings={settings.data} live={live.data} leads={leads.data}
               onOpen={setComposer} onNew={openNew} onGo={setTab} />
           )}
-          {activeTab === 'clara' && <ClaraPanel onToast={notify} />}
+          {activeTab === 'reels' && (
+            <ReelStudioPanel settings={settings.data} onToast={notify} onPublished={posts.refetch} onGoConnect={() => setTab('connect')} />
+          )}
           {activeTab === 'content' && (
             <ContentPanel posts={posts} onOpen={setComposer} onNew={openNew} onPublish={publish} onDelete={remove} busyId={busyId} />
           )}
