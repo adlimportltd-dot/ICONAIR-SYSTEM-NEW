@@ -62,19 +62,31 @@ export function NetRequirementPanel({ net, routeLabel, routeName, onOrdered }) {
     ...net.scents.map((r) => ({ ...r, kind: 'scent' })),
     ...net.models.map((r) => ({ ...r, kind: 'model' })),
   ], [net]);
+  // כמות משיכה חופשית (2026-09-28, בקשה מפורשת): ברירת המחדל = החישוב
+  // (יעד − מחסן − בהזמנה), אבל המנהל רושם ידנית כמה בפועל מושכים מ-ADL.
+  const [qty, setQty] = useState({});
+  const [extras, setExtras] = useState([]);
+  useEffect(() => {
+    setQty(Object.fromEntries(rows.map((r) => [`${r.kind}:${r.key}`, r.net_required > 0 ? String(r.net_required) : ''])));
+  }, [rows]);
   if (!rows.length) return null;
-  const short = rows.filter((r) => r.net_required > 0);
+
+  const num = (v) => Math.max(0, Number(v) || 0);
+  const lines = [
+    ...rows.map((r) => ({ kind: r.kind, item: r.key, target: r.target_quantity, qty: num(qty[`${r.kind}:${r.key}`]) })),
+    ...extras.map((x) => ({ kind: 'scent', item: x.item.trim(), target: 0, qty: num(x.qty) })),
+  ].filter((l) => l.item && l.qty > 0);
+  const totalCalc = net.totalNetLiters;
+  const totalManual = Math.round(lines.filter((l) => l.kind === 'scent').reduce((s, l) => s + l.qty, 0) * 100) / 100;
+  const unitsManual = lines.filter((l) => l.kind === 'model').reduce((s, l) => s + l.qty, 0);
 
   async function order() {
     setBusy(true);
     setMessage(null);
     try {
-      const po = await createPurchaseOrder({
-        routeName,
-        lines: short.map((r) => ({ kind: r.kind, item: r.key, target: r.target_quantity })),
-        notes: `חושב אוטומטית ל${routeLabel}`,
-      });
+      const po = await createPurchaseOrder({ routeName, lines, notes: `כמויות משיכה ל${routeLabel}` });
       setMessage({ tone: 'ok', text: `נוצרה הזמנה ${po.po_number} — מופיעה ב"הזמנות רכש מ-ADL" למטה` });
+      setExtras([]);
       onOrdered?.();
     } catch (e) {
       setMessage({ tone: 'crit', text: describeError(e) });
@@ -85,44 +97,68 @@ export function NetRequirementPanel({ net, routeLabel, routeName, onOrdered }) {
 
   return (
     <div className="mt-5">
-      <CardHead icon={BoxIcon} tone="gold" title="שלב א׳ · רכש נטו מ-ADL" subtitle="יעד הקו פחות מה שכבר במחסן ומה שכבר הוזמן — רק ההפרש שחסר באמת" />
+      <CardHead icon={BoxIcon} tone="gold" title="שלב א׳ · רכש מ-ADL" subtitle="החישוב = יעד פחות מחסן פחות מה שכבר הוזמן. אפשר לשנות כל כמות ולרשום כמה מושכים בפועל" />
       <div className="mb-3.5 grid grid-cols-2 gap-3">
         <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
-          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">שמן להזמין</div>
-          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-gold-600">{fmt(net.totalNetLiters, 'ל׳')}</div>
+          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">לפי החישוב</div>
+          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-text-faint">{fmt(totalCalc, 'ל׳')}</div>
         </div>
-        <div className="rounded-row border border-black/[0.06] bg-ink-800 px-4 py-3.5 text-center">
-          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">מכשירים להזמין</div>
-          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-gold-600">{fmt(net.totalNetUnits, 'יח׳')}</div>
+        <div className="rounded-row border border-gold-300/[0.4] bg-gold-500/[0.08] px-4 py-3.5 text-center">
+          <div className="text-[13px] font-bold uppercase tracking-[0.8px] text-text-faint">מושכים בפועל</div>
+          <div className="tabular mt-1 font-display text-[26px] font-bold leading-none text-gold-600">
+            {fmt(totalManual, 'ל׳')}{unitsManual > 0 && <span className="text-[15px]"> + {fmt(unitsManual, 'יח׳')}</span>}
+          </div>
         </div>
       </div>
 
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {!net.purchasingReady && <div className="mb-3"><SetupNotice /></div>}
-      {short.length === 0 ? (
-        <Notice tone="ok">יש מספיק במחסן ובהזמנות הפתוחות לכל הקו — אין צורך להזמין.</Notice>
-      ) : net.purchasingReady && (
-        <PrimaryButton className="mb-3.5 w-full" loading={busy} onClick={order}>
-          צור הזמנת רכש ל-ADL ({short.length} פריטים)
-        </PrimaryButton>
-      )}
 
       <div className="flex flex-col gap-2">
-        {rows.map((r) => (
-          <div key={`${r.kind}:${r.key}`} className="inner-row flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <div className="min-w-0">
-              <div className="text-[15.5px] font-bold">{r.key}{r.kind === 'model' ? ' · מכשיר חדש' : ''}</div>
-              <div className="tabular mt-0.5 text-[13.5px] text-text-faint">
-                יעד {fmt(r.target_quantity, unitOf(r.kind))} · במחסן {fmt(r.existing_stock, unitOf(r.kind))}
-                {r.on_order > 0 && <> · בהזמנה {fmt(r.on_order, unitOf(r.kind))}</>}
+        {rows.map((r) => {
+          const k = `${r.kind}:${r.key}`;
+          const changed = num(qty[k]) !== r.net_required;
+          return (
+            <div key={k} className="inner-row flex flex-wrap items-center gap-3 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="text-[15.5px] font-bold">{r.key}{r.kind === 'model' ? ' · מכשיר' : ''}</div>
+                <div className="tabular mt-0.5 text-[13.5px] text-text-faint">
+                  יעד {fmt(r.target_quantity, unitOf(r.kind))} · במחסן {fmt(r.existing_stock, unitOf(r.kind))}
+                  {r.on_order > 0 && <> · בהזמנה {fmt(r.on_order, unitOf(r.kind))}</>}
+                  {' · '}<span className="font-semibold">חישוב: {r.net_required > 0 ? fmt(r.net_required, unitOf(r.kind)) : 'מכוסה'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <TextInput type="number" min={0} step={r.kind === 'model' ? 1 : 0.1} inputMode="decimal" value={qty[k] ?? ''} placeholder="0"
+                  onChange={(e) => setQty((q) => ({ ...q, [k]: e.target.value }))}
+                  className={`tabular !w-24 text-center ${changed ? '!border-gold-500/60' : ''}`} aria-label={`כמות למשיכה — ${r.key}`} />
+                <span className="w-7 text-[13.5px] text-text-faint">{unitOf(r.kind)}</span>
               </div>
             </div>
-            {r.net_required > 0
-              ? <StatusChip tone="gold">להזמין {fmt(r.net_required, unitOf(r.kind))}</StatusChip>
-              : <StatusChip tone="ok">מכוסה</StatusChip>}
+          );
+        })}
+
+        {extras.map((x, i) => (
+          <div key={i} className="inner-row flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <TextInput value={x.item} placeholder="שם ניחוח" className="min-w-0 flex-1"
+              onChange={(e) => setExtras((xs) => xs.map((y, j) => (j === i ? { ...y, item: e.target.value } : y)))} />
+            <div className="flex items-center gap-2">
+              <TextInput type="number" min={0} step={0.1} inputMode="decimal" value={x.qty} placeholder="0"
+                onChange={(e) => setExtras((xs) => xs.map((y, j) => (j === i ? { ...y, qty: e.target.value } : y)))}
+                className="tabular !w-24 text-center" />
+              <span className="w-7 text-[13.5px] text-text-faint">ל׳</span>
+              <button type="button" className="ghost-btn" onClick={() => setExtras((xs) => xs.filter((_, j) => j !== i))}>הסר</button>
+            </div>
           </div>
         ))}
+        <button type="button" className="ghost-btn self-start" onClick={() => setExtras((xs) => [...xs, { item: '', qty: '' }])}>+ פריט נוסף</button>
       </div>
+
+      {net.purchasingReady && (
+        <PrimaryButton className="mt-3.5 w-full" loading={busy} disabled={!lines.length} onClick={order}>
+          צור הזמנת רכש ל-ADL ({lines.length} פריטים · {fmt(totalManual, 'ל׳')})
+        </PrimaryButton>
+      )}
     </div>
   );
 }
