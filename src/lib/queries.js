@@ -596,7 +596,7 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
     const stock = indexWarehouseStock(warehouseRows);
     const onOrder = indexOpenPurchaseLines(openPoLines ?? []);
     const unitsByModel = new Map();
-    for (const d of newDevices) if (d.model) unitsByModel.set(d.model, (unitsByModel.get(d.model) ?? 0) + 1);
+    // מכשירים לא נכנסים לרכש אוטומטי: בלי רישום שמן ≠ לא מותקן (מכשירים מיובאים כבר בשטח).
     const scents = computeNetRequirements(items.map((i) => ({ key: i.scent_name, target: i.liters })), stock.scents, onOrder.scents);
     const modelRows = computeNetRequirements([...unitsByModel].map(([key, target]) => ({ key, target })), stock.models, onOrder.models);
     netRequirement = {
@@ -2015,4 +2015,4 @@ export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
         .in('device_id', deviceIds)
         .order('recorded_at', { ascending: false })
         .limit(limit)
-        .then(unwrap);
+        .then(unwrap);
