@@ -267,24 +267,27 @@ function orderText(po) {
 }
 
 /** הזמנות רכש: טיוטה → הוזמן → קליטה למחסן (כל היתרה או כמויות בפועל). */
-export function PurchaseOrdersCard() {
+// embedded: מוצג בתוך כרטיס "מה להעמיס היום" בין שלב א׳ לשלב ג׳ (סדר העבודה).
+export function PurchaseOrdersCard({ embedded = false, onChanged }) {
   const orders = useQuery(listPurchaseOrders, []);
+  const refresh = () => { orders.refetch(); onChanged?.(); };
   useRealtime(['purchase_orders', 'purchase_order_lines'], orders.refetch);
   const setupMissing = orders.error && isSetupMissing(orders.error);
+  const Wrap = embedded ? 'div' : GlassCard;
 
   return (
-    <GlassCard className="mb-3.5">
+    <Wrap className={embedded ? 'mt-5' : 'mb-3.5'}>
       <CardHead icon={TagIcon} tone="gold" title="שלב ב׳ · הזמנות רכש מ-ADL" subtitle="מה הוזמן, מה הגיע ונקלט למחסן המרכזי" />
       {setupMissing ? <SetupNotice /> : (
         <Async loading={orders.loading} error={orders.error} onRetry={orders.refetch}
           isEmpty={!orders.data?.length}
           empty={<EmptyState title="עוד אין הזמנות רכש" hint="צור הזמנה מ״שלב א׳ · רכש נטו״ למעלה." />}>
           <div className="flex flex-col gap-3">
-            {(orders.data ?? []).map((po) => <PurchaseOrderRow key={po.id} po={po} onChanged={orders.refetch} />)}
+            {(orders.data ?? []).map((po) => <PurchaseOrderRow key={po.id} po={po} onChanged={refresh} />)}
           </div>
         </Async>
       )}
-    </GlassCard>
+    </Wrap>
   );
 }
 
