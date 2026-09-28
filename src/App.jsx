@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads, countOpenInstallations } from './lib/queries';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -114,6 +114,9 @@ function Shell() {
   // adminOnly ממילא.
   const newLeadsCount = useQuery(countNewLeads, [], { enabled: isAdmin });
   useRealtime(['leads'], newLeadsCount.refetch, { enabled: isAdmin });
+  // התקנות חדשות פתוחות (phase50) נספרות בתג של "קריאות שירות" — כמו משימה.
+  const openInstalls = useQuery(() => countOpenInstallations().catch(() => 0), []);
+  useRealtime(['service_calls'], openInstalls.refetch);
 
   // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
@@ -301,7 +304,7 @@ function Shell() {
         <Sidebar
           activeId={activeId}
           onSelect={navigate}
-          criticalCalls={kpis?.calls_critical ?? 0}
+          criticalCalls={(kpis?.calls_critical ?? 0) + (openInstalls.data ?? 0)}
           newLeadsCount={newLeadsCount.data ?? 0}
         />
 
@@ -348,7 +351,7 @@ function Shell() {
           {activeId === 'settings' && <SettingsScreen />}
         </main>
 
-        <BottomNav activeId={activeId} onSelect={navigate} criticalCalls={kpis?.calls_critical ?? 0} />
+        <BottomNav activeId={activeId} onSelect={navigate} criticalCalls={(kpis?.calls_critical ?? 0) + (openInstalls.data ?? 0)} />
       </div>
     </>
   );
