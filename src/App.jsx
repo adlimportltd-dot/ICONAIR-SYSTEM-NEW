@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads, countOpenInstallations, countNewWebOrders, listRecentWebOrderAlerts } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads, countOpenInstallations, countNewWebOrders, listRecentWebOrderAlerts, listRecentUnpaidAlerts } from './lib/queries';
 import { playOrderChime, flashTitle, unlockOrderSound } from './lib/orderAlert';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
@@ -162,6 +162,33 @@ function Shell() {
     const timer = setTimeout(() => setOrderToast(null), 15000);
     return () => clearTimeout(timer);
   }, [orderToast]);
+
+  // phase53 (בקשה מפורשת ודחופה — הזמנות שלא שולמו מתבטלות): pg_cron מסמן
+  // unpaid_alerted_at אחרי 10 דקות בלי תשלום → כאן טוסט אדום + צליל, עם
+  // מעבר לפאנל "להתקשר עכשיו". נשאר על המסך עד שסוגרים — לא נעלם לבד.
+  const unpaidAlerts = useQuery(() => listRecentUnpaidAlerts().catch(() => []), [], { enabled: isAdmin });
+  useRealtime(['web_orders'], unpaidAlerts.refetch, { enabled: isAdmin });
+  const seenUnpaidIds = useRef(null);
+  const [unpaidToast, setUnpaidToast] = useState(null);
+
+  useEffect(() => {
+    if (!isAdmin || !unpaidAlerts.data) return;
+    if (seenUnpaidIds.current === null) {
+      seenUnpaidIds.current = new Set(unpaidAlerts.data.map((o) => o.id));
+      return;
+    }
+    const fresh = unpaidAlerts.data.find((o) => !seenUnpaidIds.current.has(o.id));
+    if (fresh) {
+      seenUnpaidIds.current = new Set(unpaidAlerts.data.map((o) => o.id));
+      const total = Number(fresh.total ?? 0).toLocaleString('he-IL', { maximumFractionDigits: 2 });
+      setUnpaidToast({
+        title: `הזמנה #${fresh.order_number} לא שולמה — להתקשר עכשיו`,
+        body: `${fresh.customer_name ?? 'לקוח'}${fresh.phone ? ` · ${fresh.phone}` : ''} · ₪${total}`,
+      });
+      playOrderChime();
+      flashTitle(`● לא שולמה #${fresh.order_number}`);
+    }
+  }, [isAdmin, unpaidAlerts.data]);
 
   // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
@@ -342,6 +369,38 @@ function Shell() {
         >
           <span className="h-2 w-2 flex-none rounded-full bg-gold-500" />
           {reportToast}
+        </div>
+      )}
+
+      {unpaidToast && (
+        <div
+          role="alert"
+          className="glass fixed inset-x-0 bottom-[96px] z-[55] mx-auto flex w-fit max-w-[94vw] items-center
+                     gap-3 rounded-panel border-crit/40 px-4 py-3 shadow-lift animate-rise lg:bottom-6"
+        >
+          <span className="relative flex h-3 w-3 flex-none">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-crit opacity-60" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-crit" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[15px] font-extrabold text-crit">{unpaidToast.title}</div>
+            <div className="truncate text-[14px] text-text-dim">{unpaidToast.body}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setUnpaidToast(null); navigate('web_orders'); }}
+            className="flex-none rounded-pill bg-gold-500 px-3.5 py-2 text-[14px] font-extrabold text-slate-950 hover:bg-amber-600"
+          >
+            לטיפול
+          </button>
+          <button
+            type="button"
+            onClick={() => setUnpaidToast(null)}
+            aria-label="סגור"
+            className="flex-none rounded-pill px-2 py-2 text-[14px] text-text-faint hover:text-text"
+          >
+            ✕
+          </button>
         </div>
       )}
 
