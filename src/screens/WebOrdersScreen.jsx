@@ -9,7 +9,7 @@ import { Async, EmptyState } from '../components/ui/States';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
-import { listWebOrders, updateWebOrder, deleteWebOrder } from '../lib/queries';
+import { listWebOrders, listUnpaidWebOrders, updateWebOrder, deleteWebOrder } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { formatDateTime } from '../lib/mappers';
 import { wazeLink } from '../lib/navLinks';
@@ -60,6 +60,36 @@ function whatsappHref(phone) {
   return `https://wa.me/${digits}`;
 }
 
+/**
+ * הודעת וואטסאפ להשלמת תשלום (phase53) — עם קישור "השלמת תשלום" של
+ * WooCommerce, שמחזיר את הלקוח ישר לעמוד התשלום של אותה הזמנה בדיוק.
+ */
+function payReminderText(order) {
+  const first = (order.customer_name ?? '').split(' ')[0] || '';
+  return [
+    `שלום${first ? ` ${first}` : ''}, כאן ICONAIR.`,
+    `ראינו שההזמנה שלך #${order.order_number} באתר לא הושלמה בשלב התשלום.`,
+    order.pay_url ? `אפשר להשלים אותה כאן בלחיצה: ${order.pay_url}` : null,
+    'אם הייתה תקלה בתשלום — נשמח לעזור גם בטלפון 055-915-8248.',
+  ].filter(Boolean).join('\n');
+}
+
+function whatsappPayHref(order) {
+  const base = whatsappHref(order.phone);
+  return base ? `${base}?text=${encodeURIComponent(payReminderText(order))}` : null;
+}
+
+function minutesSince(value) {
+  return Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+}
+
+function agoLabel(value) {
+  const m = minutesSince(value);
+  if (m < 60) return `לפני ${m} דק׳`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `לפני ${h} שע׳` : `לפני ${Math.floor(h / 24)} ימים`;
+}
+
 const wooAdminLink = (wooOrderId) =>
   `https://iconair.co.il/wp-admin/admin.php?page=wc-orders&action=edit&id=${wooOrderId}`;
 
@@ -87,6 +117,10 @@ export default function WebOrdersScreen() {
 
   const orders = useQuery(() => listWebOrders({ includeUnpaid }), [includeUnpaid]);
   useRealtime(['web_orders'], orders.refetch);
+
+  // phase53: הזמנות שלא שולמו — פאנל הצלה נפרד, תמיד גלוי (גם בלי "כולל לא שולמו")
+  const unpaid = useQuery(listUnpaidWebOrders, []);
+  useRealtime(['web_orders'], unpaid.refetch);
 
   const rows = orders.data ?? [];
 
@@ -116,12 +150,16 @@ export default function WebOrdersScreen() {
   }, [rows, handling, search]);
 
   // תמיד מציגים את הגרסה העדכנית מהרשימה (רילטיים), לא עותק שנשמר בפתיחה
-  const openOrder = useMemo(() => rows.find((o) => o.id === openOrderId) ?? null, [rows, openOrderId]);
+  const openOrder = useMemo(
+    () => rows.find((o) => o.id === openOrderId) ?? (unpaid.data ?? []).find((o) => o.id === openOrderId) ?? null,
+    [rows, unpaid.data, openOrderId]
+  );
 
   async function changeHandling(order, next) {
     try {
       await updateWebOrder(order.id, { handling_status: next, handled_by: profile?.id ?? null });
       orders.refetch();
+      unpaid.refetch();
     } catch (caught) {
       window.alert(describeError(caught));
     }
@@ -251,6 +289,12 @@ export default function WebOrdersScreen() {
             </button>
           </div>
         }
+      />
+
+      <UnpaidPanel
+        orders={unpaid.data ?? []}
+        onOpen={(o) => setOpenOrderId(o.id)}
+        onMark={changeHandling}
       />
 
       <div className="mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -398,6 +442,22 @@ function OrderModal({ order, isAdmin, onClose, onChangeHandling, onSaved, onDele
           />
         </Field>
 
+        {order.woo_status === 'pending' && order.pay_url && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.06] px-4 py-3">
+            <div className="text-[14.5px] font-bold text-crit-soft">ההזמנה לא שולמה</div>
+            <div className="mt-1 text-[13.5px] text-text-dim">שלח ללקוח קישור להשלמת התשלום של ההזמנה הזו בדיוק.</div>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {whatsappPayHref(order) && (
+                <a href={whatsappPayHref(order)} target="_blank" rel="noreferrer"
+                   className="rounded-pill bg-gold-500 px-3.5 py-2 text-[14px] font-extrabold text-slate-950 hover:bg-amber-600">
+                  וואטסאפ עם קישור תשלום
+                </a>
+              )}
+              <CopyLinkButton url={order.pay_url} />
+            </div>
+          </div>
+        )}
+
         {/* פעולות מהירות — חיוג / וואטסאפ / ניווט */}
         <div className="grid grid-cols-3 gap-2">
           {order.phone ? (
@@ -493,5 +553,81 @@ function OrderModal({ order, isAdmin, onClose, onChangeHandling, onSaved, onDele
         </div>
       </div>
     </Modal>
+  );
+}
+
+function CopyLinkButton({ url }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('העתק את קישור התשלום:', url);
+    }
+  }
+  return (
+    <button type="button" onClick={copy} className="ghost-btn px-3 py-2 text-[13.5px]">
+      {copied ? 'הועתק ✓' : 'העתקת קישור תשלום'}
+    </button>
+  );
+}
+
+/**
+ * phase53 — "להתקשר עכשיו": הזמנות שהלקוח התחיל ולא שילם (נתקע בעמוד
+ * iCredit). לפי האבחון, 42% מההזמנות נפלו כאן; שיחה או וואטסאפ עם קישור
+ * תשלום בשעה הראשונה הם הדרך הכי מהירה להחזיר את הכסף.
+ */
+function UnpaidPanel({ orders, onOpen, onMark }) {
+  if (!orders.length) return null;
+  const total = orders.reduce((sum, o) => sum + Number(o.total ?? 0), 0);
+
+  return (
+    <GlassCard className="mb-3.5 border-crit/30">
+      <CardHead
+        icon={PhoneIcon}
+        tone="crit"
+        title={`ממתינות לתשלום — להתקשר עכשיו (${orders.length})`}
+        subtitle={`לקוחות שהתחילו הזמנה ולא השלימו תשלום · ${money(total)} על השולחן`}
+      />
+      <div className="flex flex-col gap-2.5">
+        {orders.map((o) => (
+          <div key={o.id} className="inner-row flex flex-wrap items-center gap-x-4 gap-y-2.5 px-4 py-3.5">
+            <button type="button" onClick={() => onOpen(o)} className="min-w-0 flex-1 text-start">
+              <div className="flex flex-wrap items-baseline gap-x-2.5">
+                <span className="tabular font-mono text-[14px] font-bold">#{o.order_number}</span>
+                <span className="font-semibold">{o.customer_name ?? 'לקוח'}</span>
+                <span className="tabular font-display text-[16px] font-bold text-gold-600">{money(o.total)}</span>
+                <span className={`text-[13px] font-semibold ${minutesSince(o.order_date ?? o.created_at) >= 10 ? 'text-crit' : 'text-text-faint'}`}>
+                  {agoLabel(o.order_date ?? o.created_at)}
+                </span>
+              </div>
+              <div className="mt-0.5 truncate text-[13.5px] text-text-faint">{itemsSummary(o.items)}{o.city ? ` · ${o.city}` : ''}</div>
+            </button>
+            <div className="flex flex-wrap gap-2">
+              {o.phone && (
+                <a href={telHref(o.phone)} className="ghost-btn flex items-center gap-1.5 px-3 py-2 text-[13.5px]">
+                  <PhoneIcon className="h-3.5 w-3.5" /> חיוג
+                </a>
+              )}
+              {whatsappPayHref(o) && (
+                <a href={whatsappPayHref(o)} target="_blank" rel="noreferrer"
+                   className="rounded-pill bg-gold-500 px-3 py-2 text-[13.5px] font-extrabold text-slate-950 hover:bg-amber-600">
+                  וואטסאפ + קישור תשלום
+                </a>
+              )}
+              <button type="button" onClick={() => onMark(o, 'in_progress')} className="ghost-btn px-3 py-2 text-[13.5px]">
+                בטיפול
+              </button>
+              <button type="button" onClick={() => onMark(o, 'cancelled')}
+                      className="rounded-pill px-2.5 py-2 text-[13px] font-semibold text-text-faint hover:text-crit-soft">
+                לא רלוונטי
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </GlassCard>
   );
 }
