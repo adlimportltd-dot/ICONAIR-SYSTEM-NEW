@@ -288,6 +288,17 @@ export function AirMarkIcon(props) {
   );
 }
 
+/** עגלת קניות — הזמנות מהאתר */
+export function CartIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 4h2.2l2.1 10.2a1.8 1.8 0 0 0 1.8 1.4h7.9a1.8 1.8 0 0 0 1.7-1.3L20.5 8H6.2" />
+      <circle cx="9.5" cy="19.5" r="1.3" />
+      <circle cx="17" cy="19.5" r="1.3" />
+    </svg>
+  );
+}
+
 /** מיפוי שם→קומפוננטה, כדי שנתוני הניווט יוכלו להחזיק מחרוזת בלבד */
 export const iconMap = {
   grid: GridIcon,
@@ -303,4 +314,5 @@ export const iconMap = {
   funnel: FunnelIcon,
   megaphone: MegaphoneIcon,
   sparkle: SparkleIcon,
+  cart: CartIcon,
 };
