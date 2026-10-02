@@ -2062,3 +2062,46 @@ export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
         .order('recorded_at', { ascending: false })
         .limit(limit)
         .then(unwrap);
+
+/* =====================================================================
+   הזמנות אתר (phase51) — נקלטות אוטומטית מ-WooCommerce דרך
+   /api/woo-order → ingest_woo_order. מהממשק אפשר לעדכן רק את
+   handling_status / internal_notes / handled_by (הרשאות עמודה ב-DB).
+   "הזמנה אמיתית" = notified_at לא ריק (שולמה / ממתינה להעברה / הושלמה);
+   הזמנות "ממתין לתשלום" (נטישה בעמוד האשראי) מוסתרות כברירת מחדל.
+   ===================================================================== */
+
+const WEB_ORDER_FIELDS =
+  'id, woo_order_id, order_number, woo_status, handling_status, order_date, created_at, updated_at, ' +
+  'customer_name, phone, email, city, address, postcode, shipping_method, payment_method, customer_note, ' +
+  'items, subtotal, shipping_total, discount_total, total, currency, coupons, internal_notes, handled_by, notified_at';
+
+export const listWebOrders = ({ includeUnpaid = false } = {}) => {
+  let query = supabase
+    .from('web_orders')
+    .select(WEB_ORDER_FIELDS)
+    .order('order_date', { ascending: false, nullsFirst: false })
+    .limit(300);
+  if (!includeUnpaid) query = query.not('notified_at', 'is', null);
+  return query.then(unwrap);
+};
+
+/** מונה התג האדום בתפריט — הזמנות אמיתיות שעוד לא התחילו לטפל בהן. */
+export const countNewWebOrders = () =>
+  countRows('web_orders', (q) => q.eq('handling_status', 'new').not('notified_at', 'is', null));
+
+/** מקור ההתראה החיה (טוסט + צליל) — ההזמנות האחרונות שהוכרזו. */
+export const listRecentWebOrderAlerts = () =>
+  supabase
+    .from('web_orders')
+    .select('id, order_number, customer_name, city, total, notified_at')
+    .not('notified_at', 'is', null)
+    .order('notified_at', { ascending: false })
+    .limit(20)
+    .then(unwrap);
+
+export const updateWebOrder = (id, patch) =>
+  supabase.from('web_orders').update(patch).eq('id', id).select('id').single().then(unwrap);
+
+/** מנהל בלבד (RLS) — למשל הזמנות בדיקה. ההזמנה באתר עצמה לא נמחקת. */
+export const deleteWebOrder = (id) => supabase.from('web_orders').delete().eq('id', id).then(unwrap);
