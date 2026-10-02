@@ -2074,7 +2074,8 @@ export const listOilHistoryForDevices = (deviceIds, limit = 20) =>
 const WEB_ORDER_FIELDS =
   'id, woo_order_id, order_number, woo_status, handling_status, order_date, created_at, updated_at, ' +
   'customer_name, phone, email, city, address, postcode, shipping_method, payment_method, customer_note, ' +
-  'items, subtotal, shipping_total, discount_total, total, currency, coupons, internal_notes, handled_by, notified_at';
+  'items, subtotal, shipping_total, discount_total, total, currency, coupons, internal_notes, handled_by, notified_at, ' +
+  'pay_url, unpaid_alerted_at';
 
 export const listWebOrders = ({ includeUnpaid = false } = {}) => {
   let query = supabase
@@ -2105,3 +2106,29 @@ export const updateWebOrder = (id, patch) =>
 
 /** מנהל בלבד (RLS) — למשל הזמנות בדיקה. ההזמנה באתר עצמה לא נמחקת. */
 export const deleteWebOrder = (id) => supabase.from('web_orders').delete().eq('id', id).then(unwrap);
+
+/* ---- הצלת הזמנות שלא שולמו (phase53) ---- */
+
+/** ממתינות לתשלום מה-48 שעות האחרונות — לפאנל "להתקשר עכשיו". */
+export const listUnpaidWebOrders = () => {
+  const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+  return supabase
+    .from('web_orders')
+    .select(WEB_ORDER_FIELDS)
+    .eq('woo_status', 'pending')
+    .is('notified_at', null)
+    .eq('handling_status', 'new')
+    .gte('order_date', since)
+    .order('order_date', { ascending: false })
+    .then(unwrap);
+};
+
+/** מקור הטוסט "הזמנה לא שולמה" — מתעדכן כש-pg_cron מסמן unpaid_alerted_at. */
+export const listRecentUnpaidAlerts = () =>
+  supabase
+    .from('web_orders')
+    .select('id, order_number, customer_name, phone, total, unpaid_alerted_at')
+    .not('unpaid_alerted_at', 'is', null)
+    .order('unpaid_alerted_at', { ascending: false })
+    .limit(20)
+    .then(unwrap);
