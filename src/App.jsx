@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isSupabaseConfigured } from './lib/supabase';
-import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads, countOpenInstallations } from './lib/queries';
+import { getDashboard, listRecentCompletedVisits, listRecentServiceReports, countNewLeads, countOpenInstallations, countNewWebOrders, listRecentWebOrderAlerts } from './lib/queries';
+import { playOrderChime, flashTitle, unlockOrderSound } from './lib/orderAlert';
 import { useQuery } from './hooks/useQuery';
 import { useRealtime } from './hooks/useRealtime';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -30,6 +31,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import CatalogScreen from './screens/CatalogScreen';
 import LeadsScreen from './screens/LeadsScreen';
 import SocialScreen from './screens/SocialScreen';
+import WebOrdersScreen from './screens/WebOrdersScreen';
 
 /** קישור חתימה ציבורי (?sign=<token>) — נבדק לפני SetupScreen/AuthProvider במכוון: הלקוח שחותם לא מחובר ולא צריך להיות. */
 function useSignToken() {
@@ -117,6 +119,49 @@ function Shell() {
   // התקנות חדשות פתוחות (phase50) נספרות בתג של "קריאות שירות" — כמו משימה.
   const openInstalls = useQuery(() => countOpenInstallations().catch(() => 0), []);
   useRealtime(['service_calls'], openInstalls.refetch);
+
+  // הזמנות אתר (phase51, 2026-10-02 — בקשה מפורשת: "התראה חזותית/קולית
+  // ברגע שהזמנה נכנסת, בדיוק כמו ליד חדש") — לכל המשתמשים (גם טכנאי שטח),
+  // לא רק מנהל. תג אדום בתפריט + טוסט + צליל + הבהוב בכותרת הלשונית.
+  // ה-Push לטלפון נשלח בנפרד מה-DB (notify_new_web_order).
+  const newOrdersCount = useQuery(() => countNewWebOrders().catch(() => 0), []);
+  const orderAlerts = useQuery(() => listRecentWebOrderAlerts().catch(() => []), []);
+  useRealtime(['web_orders'], () => {
+    newOrdersCount.refetch();
+    orderAlerts.refetch();
+  });
+
+  useEffect(() => unlockOrderSound(), []);
+
+  const seenOrderIds = useRef(null);
+  const [orderToast, setOrderToast] = useState(null);
+
+  useEffect(() => {
+    if (!orderAlerts.data) return;
+
+    if (seenOrderIds.current === null) {
+      seenOrderIds.current = new Set(orderAlerts.data.map((o) => o.id));
+      return;
+    }
+
+    const fresh = orderAlerts.data.find((o) => !seenOrderIds.current.has(o.id));
+    if (fresh) {
+      seenOrderIds.current = new Set(orderAlerts.data.map((o) => o.id));
+      const total = Number(fresh.total ?? 0).toLocaleString('he-IL', { maximumFractionDigits: 2 });
+      setOrderToast({
+        title: `הזמנה חדשה מהאתר #${fresh.order_number}`,
+        body: `${fresh.customer_name ?? 'לקוח'}${fresh.city ? ` · ${fresh.city}` : ''} · ₪${total}`,
+      });
+      playOrderChime();
+      flashTitle(`● הזמנה חדשה #${fresh.order_number}`);
+    }
+  }, [orderAlerts.data]);
+
+  useEffect(() => {
+    if (!orderToast) return undefined;
+    const timer = setTimeout(() => setOrderToast(null), 15000);
+    return () => clearTimeout(timer);
+  }, [orderToast]);
 
   // דוחות = לשונית ניהולית, מוסתרת מהתפריט לטכנאי. הגנה נוספת כאן: אם
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
@@ -300,12 +345,45 @@ function Shell() {
         </div>
       )}
 
+      {orderToast && (
+        <div
+          role="alert"
+          className="glass fixed inset-x-0 top-4 z-[55] mx-auto flex w-fit max-w-[94vw] items-center
+                     gap-3 rounded-panel border-gold-300/[0.5] px-4 py-3 shadow-lift animate-rise"
+        >
+          <span className="relative flex h-3 w-3 flex-none">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-500 opacity-60" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-gold-500" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[15px] font-extrabold text-text">{orderToast.title}</div>
+            <div className="truncate text-[14px] text-text-dim">{orderToast.body}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setOrderToast(null); navigate('web_orders'); }}
+            className="flex-none rounded-pill bg-gold-500 px-3.5 py-2 text-[14px] font-extrabold text-slate-950 hover:bg-amber-600"
+          >
+            לצפייה
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderToast(null)}
+            aria-label="סגור"
+            className="flex-none rounded-pill px-2 py-2 text-[14px] text-text-faint hover:text-text"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="relative z-[1] min-h-screen">
         <Sidebar
           activeId={activeId}
           onSelect={navigate}
           criticalCalls={(kpis?.calls_critical ?? 0) + (openInstalls.data ?? 0)}
           newLeadsCount={newLeadsCount.data ?? 0}
+          newOrdersCount={newOrdersCount.data ?? 0}
         />
 
         <main className="max-w-[1560px] px-[18px] pb-[108px] pt-[18px] lg:ms-[300px] lg:px-[22px] lg:pb-10">
@@ -346,6 +424,7 @@ function Shell() {
           {activeId === 'stock' && <StockScreen />}
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'catalog' && isAdmin && <CatalogScreen />}
+          {activeId === 'web_orders' && <WebOrdersScreen />}
           {activeId === 'leads' && isAdmin && <LeadsScreen />}
           {activeId === 'social' && isAdmin && <SocialScreen onNavigate={navigate} />}
           {activeId === 'settings' && <SettingsScreen />}
