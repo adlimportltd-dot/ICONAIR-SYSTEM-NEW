@@ -18,6 +18,7 @@ export const navItems = [
   { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'הכנה לקו', icon: 'box', inTabBar: true, tabBarOrder: 3 },
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
+  { id: 'web_orders', label: 'הזמנות אתר',     shortLabel: 'הזמנות',  icon: 'cart' },
   { id: 'leads',     label: 'לידים מקמפיין',     shortLabel: 'לידים',   icon: 'funnel', adminOnly: true },
   { id: 'social',    label: 'ניהול סושיאל',      shortLabel: 'סושיאל',  icon: 'megaphone', adminOnly: true },
 ];
@@ -55,6 +56,8 @@ export function screenMeta(id, kpis) {
       return 'סיכומים וייצוא נתונים';
     case 'catalog':
       return 'קליטת סחורה למחסן והקצאה לטכנאים';
+    case 'web_orders':
+      return 'הזמנות מאתר iconair.co.il — נקלטות אוטומטית ברגע התשלום';
     case 'leads':
       return 'פניות מקמפיין הפייסבוק, עד שהופכות ללקוח פעיל';
     case 'social':
