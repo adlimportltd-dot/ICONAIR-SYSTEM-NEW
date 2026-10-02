@@ -18,7 +18,7 @@ export const navItems = [
   { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'הכנה לקו', icon: 'box', inTabBar: true, tabBarOrder: 3 },
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
-  { id: 'web_orders', label: 'הזמנות אתר',     shortLabel: 'הזמנות',  icon: 'cart' },
+  { id: 'web_orders', label: 'הזמנות אתר',     shortLabel: 'הזמנות',  icon: 'cart', adminOnly: true },
   { id: 'leads',     label: 'לידים מקמפיין',     shortLabel: 'לידים',   icon: 'funnel', adminOnly: true },
   { id: 'social',    label: 'ניהול סושיאל',      shortLabel: 'סושיאל',  icon: 'megaphone', adminOnly: true },
 ];
