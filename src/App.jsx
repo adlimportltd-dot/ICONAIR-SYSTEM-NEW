@@ -121,15 +121,15 @@ function Shell() {
   useRealtime(['service_calls'], openInstalls.refetch);
 
   // הזמנות אתר (phase51, 2026-10-02 — בקשה מפורשת: "התראה חזותית/קולית
-  // ברגע שהזמנה נכנסת, בדיוק כמו ליד חדש") — לכל המשתמשים (גם טכנאי שטח),
-  // לא רק מנהל. תג אדום בתפריט + טוסט + צליל + הבהוב בכותרת הלשונית.
+  // ברגע שהזמנה נכנסת, בדיוק כמו ליד חדש"). phase52 (אותו יום, בקשה
+  // מפורשת): מנהלים בלבד — לא טכנאים. גם ה-RLS ב-DB חוסם אותם. תג אדום בתפריט + טוסט + צליל + הבהוב בכותרת הלשונית.
   // ה-Push לטלפון נשלח בנפרד מה-DB (notify_new_web_order).
-  const newOrdersCount = useQuery(() => countNewWebOrders().catch(() => 0), []);
-  const orderAlerts = useQuery(() => listRecentWebOrderAlerts().catch(() => []), []);
+  const newOrdersCount = useQuery(() => countNewWebOrders().catch(() => 0), [], { enabled: isAdmin });
+  const orderAlerts = useQuery(() => listRecentWebOrderAlerts().catch(() => []), [], { enabled: isAdmin });
   useRealtime(['web_orders'], () => {
     newOrdersCount.refetch();
     orderAlerts.refetch();
-  });
+  }, { enabled: isAdmin });
 
   useEffect(() => unlockOrderSound(), []);
 
@@ -137,7 +137,7 @@ function Shell() {
   const [orderToast, setOrderToast] = useState(null);
 
   useEffect(() => {
-    if (!orderAlerts.data) return;
+    if (!isAdmin || !orderAlerts.data) return;
 
     if (seenOrderIds.current === null) {
       seenOrderIds.current = new Set(orderAlerts.data.map((o) => o.id));
@@ -155,7 +155,7 @@ function Shell() {
       playOrderChime();
       flashTitle(`● הזמנה חדשה #${fresh.order_number}`);
     }
-  }, [orderAlerts.data]);
+  }, [isAdmin, orderAlerts.data]);
 
   useEffect(() => {
     if (!orderToast) return undefined;
@@ -167,7 +167,7 @@ function Shell() {
   // activeId בכל זאת מצביע על 'reports' (למשל תפקיד שהשתנה תוך כדי session),
   // מחזירים אוטומטית לדשבורד — לא רק שהלשונית מוסתרת מהתפריט.
   useEffect(() => {
-    if (activeId === 'reports' && !isAdmin) setActiveId('dashboard');
+    if ((activeId === 'reports' || activeId === 'web_orders') && !isAdmin) setActiveId('dashboard');
   }, [activeId, isAdmin]);
 
   // המספרים בכותרת ובתגי הניווט מתעדכנים גם כשלא נמצאים בדשבורד.
@@ -424,7 +424,7 @@ function Shell() {
           {activeId === 'stock' && <StockScreen />}
           {activeId === 'reports' && isAdmin && <ReportsScreen />}
           {activeId === 'catalog' && isAdmin && <CatalogScreen />}
-          {activeId === 'web_orders' && <WebOrdersScreen />}
+          {activeId === 'web_orders' && isAdmin && <WebOrdersScreen />}
           {activeId === 'leads' && isAdmin && <LeadsScreen />}
           {activeId === 'social' && isAdmin && <SocialScreen onNavigate={navigate} />}
           {activeId === 'settings' && <SettingsScreen />}
