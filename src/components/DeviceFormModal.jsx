@@ -191,7 +191,7 @@ export function DeviceForm({
           <Select value={form.scent_name} onChange={set('scent_name')} options={scentOptions}
                   placeholder="בחר ניחוח" />
         </Field>
-        <Field label="מיקום במתחם" hint="לובי ראשי, קומה 2…">
+        <Field label="קומה / מיקום במתחם" hint="לדוגמה: קומה 3, לובי ראשי, שירותים קומה 2">
           <TextInput value={form.location_note} onChange={set('location_note')} />
         </Field>
         <Field label="מפלס שמן התחלתי (%)">
