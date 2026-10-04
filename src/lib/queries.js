@@ -2007,8 +2007,8 @@ export const reviewDeviceChangeRequest = ({ requestId, approve, note }) =>
 export const listRecentCompletedVisits = (limit = 8) =>
   supabase
     .from('route_assignments')
-    .select('id, updated_at, customer:customers(name), site:customer_sites(label), route:routes(name)')
-    .eq('status', 'done')
+    .select('id, status, closed_reason, updated_at, customer:customers(name), site:customer_sites(label), route:routes(name)')
+    .in('status', ['done', 'skipped'])
     .order('updated_at', { ascending: false })
     .limit(limit)
     .then(unwrap);
