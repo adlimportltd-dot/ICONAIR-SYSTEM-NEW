@@ -7,6 +7,7 @@ import { ChartIcon, BoxIcon, DropIcon, DeviceIcon } from '../components/ui/Icons
 import { useQuery } from '../hooks/useQuery';
 import { getReportSummary, listRoutes, getRouteConsumptionReport, getStockMovementsSummary } from '../lib/queries';
 import { HEBREW_MONTHS, modelTone, formatNumber } from '../lib/mappers';
+import VisitsReportSection from '../components/VisitsReportSection';
 
 const TONE_HEX = { slate: '#475569', teal: '#0F766E', gold: '#D97706' };
 
@@ -32,6 +33,8 @@ export default function ReportsScreen() {
       <Async loading={report.loading} error={report.error} onRetry={report.refetch}>
         {report.data && <Report data={report.data} />}
       </Async>
+
+      <VisitsReportSection />
 
       <RouteConsumptionSection />
     </>
