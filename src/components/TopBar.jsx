@@ -156,7 +156,7 @@ function NotificationsBell({
                      overflow-y-auto rounded-panel p-2 shadow-lift"
         >
           <div className="px-2.5 py-2 text-[13px] font-semibold tracking-wide text-text-faint">
-            ביקורים שהושלמו לאחרונה
+            ביקורים אחרונים — בוצע / סגור
           </div>
 
           {loading && (
@@ -169,10 +169,11 @@ function NotificationsBell({
 
           {!loading && completedVisits.map((visit) => (
             <div key={visit.id} className="inner-row mb-1.5 flex items-center gap-2.5 px-3 py-2.5 last:mb-0">
-              <span className="h-2 w-2 flex-none rounded-full bg-ok" />
+              <span className={`h-2 w-2 flex-none rounded-full ${visit.status === 'skipped' ? 'bg-crit' : 'bg-ok'}`} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-semibold">{stopLabel(visit)}</div>
                 <div className="mt-0.5 truncate text-[13px] text-text-faint">
+                  {visit.status === 'skipped' ? `סגור / לא נמצא${visit.closed_reason ? ` (${visit.closed_reason})` : ''} · ` : ''}
                   {visit.route?.name ?? 'ללא קו'} · {relativeTime(visit.updated_at)}
                 </div>
               </div>
