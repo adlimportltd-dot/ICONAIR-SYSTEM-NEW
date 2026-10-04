@@ -226,7 +226,8 @@ function Shell() {
       seenVisitIds.current = new Set(completedVisits.data.map((v) => v.id));
       const name = fresh.customer?.name ?? fresh.site?.label ?? 'לקוח';
       const stop = fresh.site?.label && fresh.customer?.name ? `${name} — ${fresh.site.label}` : name;
-      setVisitToast(`בוצע: ${stop}${fresh.route?.name ? ` (${fresh.route.name})` : ''}`);
+      const prefix = fresh.status === 'skipped' ? 'עסק סגור / לא נמצא' : 'בוצע';
+      setVisitToast(`${prefix}: ${stop}${fresh.route?.name ? ` (${fresh.route.name})` : ''}`);
     }
   }, [isAdmin, completedVisits.data]);
 
