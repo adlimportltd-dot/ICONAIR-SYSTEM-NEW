@@ -486,6 +486,7 @@ function Shell() {
           {activeId === 'catalog' && isAdmin && <CatalogScreen />}
           {activeId === 'web_orders' && isAdmin && <WebOrdersScreen />}
           {activeId === 'leads' && isAdmin && <LeadsScreen />}
+                    {activeId === 'rental_billing' && isAdmin && <RentalBillingScreen />}
           {activeId === 'social' && isAdmin && <SocialScreen onNavigate={navigate} />}
           {activeId === 'settings' && <SettingsScreen />}
         </main>
