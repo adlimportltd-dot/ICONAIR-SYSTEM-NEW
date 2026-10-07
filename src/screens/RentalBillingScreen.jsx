@@ -40,6 +40,7 @@ const WARNING_TEXT = {
   offline_not_billed: 'מכשיר "לא מחובר" — לא מחויב',
   no_site: 'מכשיר בלי בניין',
   no_install_date: 'מכשיר בלי תאריך התקנה — מחויב חודש מלא',
+    theft_pending: 'דיווח "מכשיר חסר/נגנב" מהשטח ממתין לאישור (טאב מסלולים) — לטפל לפני ההפקה',
 };
 
 const money = (value) =>
