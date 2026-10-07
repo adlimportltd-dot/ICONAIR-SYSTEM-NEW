@@ -49,11 +49,11 @@ const qty = (value) => Number(value ?? 0).toLocaleString('he-IL', { maximumFract
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-/** 12 החודשים האחרונים, ברירת מחדל = החודש הקודם (החשבונית יוצאת ב-1 לחודש על החודש שעבר) */
+/** החודש הנוכחי + 12 החודשים האחרונים, ברירת מחדל = החודש הקודם (החשבונית יוצאת ב-1 לחודש על החודש שעבר) */
 function monthOptions() {
   const now = new Date();
-  return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1 - i, 1);
+  return Array.from({ length: 13 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
     return { value, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` };
   });
@@ -117,7 +117,7 @@ async function invokeRivhit(action, runId) {
 export default function RentalBillingScreen() {
   const { profile } = useAuth();
   const months = useMemo(monthOptions, []);
-  const [month, setMonth] = useState(months[0].value);
+  const [month, setMonth] = useState(months[1].value);
   const [customerId, setCustomerId] = useState('');
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState(null);
@@ -203,6 +203,11 @@ export default function RentalBillingScreen() {
     }, 'האישור בוטל — החשבונית חזרה לטיוטה');
 
   const issue = () => {
+    // הגנה: לא מפיקים חשבונית על החודש הנוכחי שעוד לא נגמר
+    if (month >= months[0].value) {
+      window.alert('החודש עוד לא הסתיים — את החשבונית מפיקים רק מה-1 לחודש הבא.');
+      return;
+    }
     const ok = window.confirm(
       `להפיק חשבונית מס אמיתית בריווחית?\n\n${activeCustomer?.name ?? ''}\n${monthLabel}\nסה"כ לתשלום: ${money(run.total)}\n\nאחרי ההפקה אי אפשר לשנות את החשבונית.`
     );
