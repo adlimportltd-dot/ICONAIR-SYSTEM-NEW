@@ -25,7 +25,7 @@ import {
   listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute, closeVisit,
   listFieldNotes,
 } from '../lib/queries';
-import { describeError } from '../lib/supabase';
+import { supabase, describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
@@ -59,6 +59,7 @@ export default function RoutesScreen() {
   return (
     <>
       <PendingChangeRequestsCard />
+      <PendingTheftReportsCard />
 
       <GlassCard className="mb-3.5">
         <Async loading={routes.loading} error={routes.error} onRetry={routes.refetch}
@@ -1482,6 +1483,8 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
  */
 function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
+  const [missingOpen, setMissingOpen] = useState(false);
+  const [missingSent, setMissingSent] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
   const fillMl = model?.capacity_ml
     ? Math.round((model.capacity_ml * (100 - (device.oil_level_pct ?? 0))) / 100)
@@ -1552,6 +1555,33 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
       >
         עדכון שמן
       </button>
+
+      {/* 2026-10-07 (בקשת ליאור): הטכנאי מגיע לכתובת ולא מוצא את המכשיר —
+          מדווח מכאן. הדיווח רק ממתין לאישור מנהל; שום חיוב לא נוצר מהשטח. */}
+      {device.status !== 'uninstalled' && (
+        missingSent ? (
+          <div className="mt-2 flex items-center justify-center gap-2 rounded-[10px] border border-warn/30 bg-warn/[0.08] px-3 py-2 text-[13.5px] font-semibold text-warn">
+            דווח כחסר/נגנב · ממתין לאישור מנהל
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setMissingOpen(true)}
+            className="mt-2 w-full rounded-[10px] border border-crit/25 bg-transparent px-3 py-2 text-[13.5px]
+                       font-semibold text-crit-soft transition-colors hover:border-crit/45 hover:bg-crit/[0.06]"
+          >
+            המכשיר חסר / נגנב
+          </button>
+        )
+      )}
+
+      <MissingDeviceModal
+        open={missingOpen}
+        device={device}
+        customer={customer}
+        onClose={() => setMissingOpen(false)}
+        onSent={() => { setMissingOpen(false); setMissingSent(true); }}
+      />
 
       <CompleteVisitModal
         open={oilModalOpen}
@@ -1931,5 +1961,181 @@ function PendingChangeRequestsCard() {
         </div>
       </Async>
     </GlassCard>
+  );
+}
+
+
+/* =====================================================================
+   מכשיר חסר / נגנב (2026-10-07, בקשת ליאור)
+   טכנאי מדווח מהשטח → המנהל בודק מול הלקוח (אוורסט) ומאשר או דוחה.
+   רק אחרי אישור: המכשיר יורד מהמצבה והחיוב נכנס לחשבונית של חודש
+   הגניבה (phase57: report_device_missing / review_theft_report).
+   ===================================================================== */
+function MissingDeviceModal({ open, device, customer, onClose, onSent }) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => { if (open) { setNote(''); setError(null); } }, [open]);
+
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('report_device_missing', { p_device_id: device.id, p_note: note || null });
+      if (rpcError) throw rpcError;
+      onSent();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title="המכשיר חסר / נגנב"
+      subtitle={`${customer?.name ?? ''} · ${device.model}${device.location_note ? ` · ${device.location_note}` : ''}`}
+      onClose={busy ? () => {} : onClose}
+      footer={(
+        <>
+          <PrimaryButton onClick={send} loading={busy} className="!bg-crit !text-white hover:!bg-crit/90">
+            שלח דיווח למנהל
+          </PrimaryButton>
+          <SecondaryButton onClick={onClose} disabled={busy}>ביטול</SecondaryButton>
+        </>
+      )}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="rounded-row border border-warn/30 bg-warn/[0.08] px-4 py-3 text-[14px] leading-relaxed text-text-dim">
+          הדיווח עובר למנהל לבדיקה מול הלקוח. שום חיוב לא נוצר עד שהמנהל מאשר.
+        </div>
+        <Field label="מה ראית? (לא חובה)" hint="למשל: המתקן על הקיר ריק, אין מכשיר בקומה">
+          <TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
+        </Field>
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-4 py-3 text-[14px] text-crit-soft">{error}</div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * מנהל בלבד: דיווחי "מכשיר חסר/נגנב" מהשטח שממתינים לאישור.
+ * אישור = המכשיר יורד מהמצבה + חיוב חד-פעמי לפי מחירון הגניבות
+ * בחשבונית של חודש הגניבה (או החודש הפתוח הבא אם היא כבר הופקה).
+ */
+function PendingTheftReportsCard() {
+  const { isAdmin } = useAuth();
+  const reports = useQuery(
+    () => supabase
+      .from('device_theft_reports')
+      .select(`id, theft_date, note, reported_at,
+               reporter:profiles!device_theft_reports_reported_by_fkey(full_name),
+               site:customer_sites(label),
+               device:devices(id, serial, model, location_note, customer:customers(name))`)
+      .eq('status', 'pending')
+      .order('reported_at', { ascending: true })
+      .then(({ data, error }) => { if (error) throw error; return data; }),
+    [],
+    { enabled: isAdmin }
+  );
+  const prices = useQuery(
+    () => supabase.from('theft_prices').select('model, price').then(({ data, error }) => { if (error) throw error; return data; }),
+    [],
+    { enabled: isAdmin }
+  );
+  useRealtime(['device_theft_reports'], reports.refetch, { enabled: isAdmin });
+
+  if (!isAdmin) return null;
+  if (!reports.loading && !reports.error && (reports.data?.length ?? 0) === 0) return null;
+
+  const priceOf = (model) => (prices.data ?? []).find((p) => p.model === model)?.price ?? null;
+
+  return (
+    <GlassCard className="mb-3.5 border-crit/25">
+      <CardHead icon={NavigationIcon} tone="slate" title="דיווחי מכשיר חסר / נגנב" subtitle="מהשטח — לבדוק מול הלקוח ורק אז לאשר. אישור מוסיף חיוב לחשבונית" />
+      <Async loading={reports.loading} error={reports.error} onRetry={reports.refetch}>
+        <div className="flex flex-col gap-2.5">
+          {(reports.data ?? []).map((r) => (
+            <TheftReportRow key={r.id} report={r} listPrice={priceOf(r.device?.model)} onDone={reports.refetch} />
+          ))}
+        </div>
+      </Async>
+    </GlassCard>
+  );
+}
+
+function TheftReportRow({ report, listPrice, onDone }) {
+  const [price, setPrice] = useState(listPrice != null ? String(Number(listPrice)) : '');
+  const [date, setDate] = useState(report.theft_date);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [rejectArmed, setRejectArmed] = useState(false);
+
+  useEffect(() => { if (listPrice != null && price === '') setPrice(String(Number(listPrice))); }, [listPrice]);
+
+  async function review(approve) {
+    if (!approve && !rejectArmed) { setRejectArmed(true); return; }
+    const amount = Number(price);
+    if (approve && (!amount || amount <= 0)) { setError('צריך להזין סכום חיוב'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('review_theft_report', {
+        p_report_id: report.id,
+        p_approve: approve,
+        p_price: approve ? amount : null,
+        p_theft_date: approve ? date : null,
+        p_save_price: approve && listPrice == null,
+      });
+      if (rpcError) throw rpcError;
+      onDone();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+      setRejectArmed(false);
+    }
+  }
+
+  const d = report.device;
+  return (
+    <div className="inner-row px-3.5 py-3 text-[14px]">
+      <div className="font-semibold">
+        {d?.customer?.name ?? '—'} · {report.site?.label ?? 'ללא כתובת'} · {d?.model} <span dir="ltr" className="font-mono text-[13px] text-text-faint">{d?.serial}</span>
+      </div>
+      <div className="mt-0.5 text-text-faint">
+        דווח ע״י {report.reporter?.full_name ?? 'טכנאי'} · {formatDateTime(report.reported_at)}
+        {d?.location_note ? ` · מיקום: ${d.location_note}` : ''}
+      </div>
+      {report.note && <div className="mt-1 text-text-dim">״{report.note}״</div>}
+
+      <div className="mt-2.5 flex flex-wrap items-end gap-2.5">
+        <label className="flex flex-col gap-1 text-[13px] text-text-faint">
+          תאריך הגניבה
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                 className="rounded-[8px] border border-black/[0.12] bg-ink-800 px-2.5 py-1.5 text-[14px] text-text" />
+        </label>
+        <label className="flex flex-col gap-1 text-[13px] text-text-faint">
+          חיוב לפני מע״מ {listPrice == null && <span className="text-warn">(אין מחיר במחירון)</span>}
+          <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)}
+                 className="w-[110px] rounded-[8px] border border-black/[0.12] bg-ink-800 px-2.5 py-1.5 text-[14px] text-text" />
+        </label>
+        <div className="ms-auto flex gap-2">
+          <button type="button" disabled={busy} onClick={() => review(true)}
+                  className="rounded-[8px] border border-ok/30 bg-ok/10 px-3 py-1.5 text-[13.5px] font-semibold text-ok">
+            {busy ? '…' : 'אשר גניבה וחייב'}
+          </button>
+          <button type="button" disabled={busy} onClick={() => review(false)}
+                  className="rounded-[8px] border border-crit/30 bg-crit/10 px-3 py-1.5 text-[13.5px] font-semibold text-crit-soft">
+            {rejectArmed ? 'לאשר דחייה' : 'דחה (המכשיר נמצא)'}
+          </button>
+        </div>
+      </div>
+      {error && <div className="mt-2 text-[13.5px] text-crit-soft">{error}</div>}
+    </div>
   );
 }
