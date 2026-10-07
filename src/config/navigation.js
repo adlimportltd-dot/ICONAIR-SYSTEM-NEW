@@ -19,6 +19,7 @@ export const navItems = [
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
   { id: 'web_orders', label: 'הזמנות אתר',     shortLabel: 'הזמנות',  icon: 'cart', adminOnly: true },
+    { id: 'rental_billing', label: 'חשבוניות שכירות', shortLabel: 'חשבוניות', icon: 'tag', adminOnly: true },
   { id: 'leads',     label: 'לידים מקמפיין',     shortLabel: 'לידים',   icon: 'funnel', adminOnly: true },
   { id: 'social',    label: 'ניהול סושיאל',      shortLabel: 'סושיאל',  icon: 'megaphone', adminOnly: true },
 ];
