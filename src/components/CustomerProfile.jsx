@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import GlassCard, { CardHead } from './ui/GlassCard';
 import GenerateContractModal from './GenerateContractModal';
+import Modal from './ui/Modal';
 import CustomerDetailsForm from './CustomerDetailsForm';
 import { DeviceForm } from './DeviceFormModal';
 import { StatusChip, MiniMeter, oilTone } from './ui/DataTable';
@@ -27,7 +28,7 @@ import {
   getContractUrl,
   deleteContract,
 } from '../lib/queries';
-import { describeError } from '../lib/supabase';
+import { supabase, describeError } from '../lib/supabase';
 import {
   DEVICE_STATUS_LABEL, CUSTOMER_STATUS_LABEL, PAYMENT_TYPE_LABEL, modelTone, relativeTime,
   formatDate, formatDateTime, summarizeDevicesByModel, computeVat, formatCurrency,
@@ -49,6 +50,14 @@ const CONTRACT_STATUS_TONE = {
 };
 
 const UNASSIGNED = '__none__';
+
+/*
+ * 2026-10-07 (בקשת ליאור): דיווח "נגנב" על מכשיר של לקוח שכירות (אוורסט).
+ * הכרטיס מעביר דרך ה-context פונקציה שפותחת את חלון הדיווח, כדי שלא
+ * יהיה צריך להעביר prop דרך SiteCard → DeviceGroup → DeviceRow.
+ * null = אין הרשאה (לא מנהל) → הכפתור לא מוצג.
+ */
+const TheftContext = createContext(null);
 
 /*
  * תמחור — מקור אמת אחד לכל המערכת, לא רק לכרטיס הזה: computeDeviceBreakdown/
@@ -89,6 +98,8 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
   const [detailsEditing, setDetailsEditing] = useState(startEditing);
   const [deviceForm, setDeviceForm] = useState(null); // null | { site, editDevice }
   const [actionError, setActionError] = useState(null);
+  const [theftDevice, setTheftDevice] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     setDetailsEditing(startEditing);
@@ -140,6 +151,7 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
   const activeCount = rows.filter((d) => d.status !== 'uninstalled').length;
 
   return (
+    <TheftContext.Provider value={isAdmin ? setTheftDevice : null}>
     <div className="animate-rise">
       {/*
         --- כותרת המסך --- כפתור החזרה (2026-09-09, בעקבות משוב "צריך
@@ -183,6 +195,12 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
       {actionError && (
         <div className="mb-5 rounded-row border border-crit/25 bg-crit/[0.07] px-4 py-3 text-[14px] text-crit-soft">
           {actionError}
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-5 rounded-row border border-ok/25 bg-ok/[0.08] px-4 py-3 text-[14px] font-semibold text-ok">
+          {notice}
         </div>
       )}
 
@@ -334,7 +352,122 @@ export default function CustomerProfile({ customer: initialCustomer, onBack, onC
           )}
         </div>
       </div>
+
+      <TheftModal
+        device={theftDevice}
+        onClose={() => setTheftDevice(null)}
+        onDone={(message) => { setTheftDevice(null); setActionError(null); setNotice(message); refreshAll(); }}
+      />
     </div>
+    </TheftContext.Provider>
+  );
+}
+
+/* =====================================================================
+   דיווח מכשיר גנוב (לקוחות שכירות עם חשבונית חודשית — אוורסט)
+   המכשיר יורד מהמצבה בתאריך הגניבה, ונוסף חיוב חד-פעמי לחשבונית של
+   אותו חודש לפי הכתובת, הדגם ומחירון הגניבות (phase57, report_device_theft).
+   ===================================================================== */
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+function TheftModal({ device, onClose, onDone }) {
+  const [date, setDate] = useState(todayISO());
+  const [price, setPrice] = useState('');
+  const [listPrice, setListPrice] = useState(null); // מחיר מהמחירון, null = אין
+  const [savePrice, setSavePrice] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!device) return;
+    setDate(todayISO());
+    setError(null);
+    setSavePrice(false);
+    setListPrice(null);
+    setPrice('');
+    let cancelled = false;
+    supabase.from('theft_prices').select('price').eq('model', device.model).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data?.price != null) { setListPrice(Number(data.price)); setPrice(String(Number(data.price))); }
+        else setSavePrice(true);
+      });
+    return () => { cancelled = true; };
+  }, [device?.id]);
+
+  async function submit() {
+    const amount = Number(price);
+    if (!date) { setError('צריך לבחור תאריך גניבה'); return; }
+    if (!amount || amount <= 0) { setError('צריך להזין סכום חיוב'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('report_device_theft', {
+        p_device_id: device.id,
+        p_theft_date: date,
+        p_price: amount,
+        p_save_price: savePrice,
+      });
+      if (rpcError) throw rpcError;
+      const [y, m] = String(data?.billing_month ?? date).split('-');
+      onDone(`המכשיר ${device.serial} סומן כגנוב. נוסף חיוב של ${formatCurrency(amount)} + מע״מ לחשבונית ${m}/${y}: ${data?.description ?? ''}`);
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={Boolean(device)}
+      title={device ? `דיווח גניבה · ${device.serial}` : ''}
+      subtitle={device ? `${device.model}${device.location_note ? ` · ${device.location_note}` : ''}` : ''}
+      onClose={busy ? () => {} : onClose}
+      footer={(
+        <>
+          <PrimaryButton onClick={submit} loading={busy} className="!bg-crit !text-white hover:!bg-crit/90">
+            אישור — המכשיר נגנב
+          </PrimaryButton>
+          <SecondaryButton onClick={onClose} disabled={busy}>ביטול</SecondaryButton>
+        </>
+      )}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="rounded-row border border-warn/30 bg-warn/[0.08] px-4 py-3 text-[14px] leading-relaxed text-text-dim">
+          המכשיר יירד מהמצבה, וחיוב חד-פעמי ייכנס לחשבונית של חודש הגניבה.
+          השכירות של אותו חודש עדיין מחויבת בחודש מלא.
+        </div>
+
+        <Field label="תאריך הגניבה" required>
+          <TextInput type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+
+        <Field
+          label="סכום חיוב לפני מע״מ"
+          required
+          hint={listPrice != null
+            ? `לפי מחירון הגניבות ל-${device?.model}: ${formatCurrency(listPrice)}. אפשר לשנות.`
+            : `אין עדיין מחיר גניבה ל-${device?.model} — הזן סכום.`}
+        >
+          <TextInput type="number" min={0} step="1" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </Field>
+
+        {(listPrice == null || Number(price) !== listPrice) && price !== '' && (
+          <label className="flex items-center gap-2.5 text-[14.5px] font-semibold text-text-dim">
+            <input type="checkbox" checked={savePrice} onChange={(e) => setSavePrice(e.target.checked)} className="h-[18px] w-[18px] accent-amber-500" />
+            לשמור את הסכום הזה במחירון לדגם {device?.model}
+          </label>
+        )}
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-4 py-3 text-[14px] text-crit-soft">{error}</div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -685,6 +818,7 @@ function ModelPriceRow({ site, line, isAdmin, onSaved, onError }) {
 
 /** שורת מכשיר: זיהוי, מצב, מחיר אפקטיבי עם דריסה ידנית, עריכה ומחיקה — הכול במקום */
 function DeviceRow({ device, effective, isAdmin, onEdit, onChanged, onError }) {
+  const reportTheft = useContext(TheftContext);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [priceEditing, setPriceEditing] = useState(false);
@@ -773,6 +907,16 @@ function DeviceRow({ device, effective, isAdmin, onEdit, onChanged, onError }) {
                 <EditIcon className="h-4 w-4" />
                 עריכה
               </button>
+              {reportTheft && device.site_id && device.status !== 'uninstalled' && (
+                <button
+                  type="button"
+                  onClick={() => reportTheft(device)}
+                  title="דיווח על מכשיר שנגנב — חיוב לפי מחירון הגניבות"
+                  className="rounded-pill border border-black/[0.09] px-3.5 py-2 text-[14px] font-semibold text-text-faint transition-colors hover:border-crit/35 hover:text-crit-soft"
+                >
+                  נגנב
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleDelete}
