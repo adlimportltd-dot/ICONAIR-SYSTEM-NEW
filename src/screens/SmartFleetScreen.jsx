@@ -15,12 +15,15 @@ import {
   listIotModelMap,
   listLinkableDevices,
   updateIotDevice,
+  listCommandLog,
+  sendWorkTime,
 } from '../lib/smartFleetQueries';
 
 /**
  * צי חכם — מצב חי של המכשירים שמחוברים לענן Aroma Link.
  * שלב פיילוט: קריאה בלבד. הנתונים מגיעים מ-/api/aroma-sync כל 5 דקות.
- * הפעולה היחידה כאן: מנהל מסווג מכשיר ענן (שכירות / פרטי / ניסוי) ומשייך דגם.
+ * פעולות מנהל: סיווג מכשיר (שכירות / פרטי / ניסוי) ודגם, ועריכת שעון ועוצמה
+ * (phase57) — רק במכשירים ש-control_enabled שלהם פעיל (בהתחלה: ניסוי בלבד).
  */
 
 /** סוג המכשיר — iot_devices.owner_type (phase56) */
@@ -92,6 +95,7 @@ export default function SmartFleetScreen() {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [linking, setLinking] = useState(null);
+  const [scheduling, setScheduling] = useState(null);
 
   const iot = useQuery(listIotDevices, []);
   const modelMap = useQuery(listIotModelMap, []);
@@ -261,7 +265,23 @@ export default function SmartFleetScreen() {
             columns={columns}
             rows={rows}
             rowKey={(row) => row.id}
-            onRowClick={isAdmin ? (row) => setLinking(row) : undefined}
+            actions={isAdmin ? (row) => (
+              <>
+                <SecondaryButton className="!px-3 !py-2 !text-[13.5px]" onClick={(e) => { e.stopPropagation(); setLinking(row); }}>
+                  סיווג
+                </SecondaryButton>
+                {row.control_enabled && (
+                  <SecondaryButton
+                    className="!px-3 !py-2 !text-[13.5px]"
+                    disabled={!row.online}
+                    title={row.online ? '' : 'המכשיר מנותק'}
+                    onClick={(e) => { e.stopPropagation(); setScheduling(row); }}
+                  >
+                    שעון
+                  </SecondaryButton>
+                )}
+              </>
+            ) : undefined}
           />
         </Async>
       </GlassCard>
@@ -272,6 +292,14 @@ export default function SmartFleetScreen() {
           modelOptions={(modelMap.data ?? []).map((m) => ({ value: m.supplier_model, label: `${m.supplier_model} · ${m.iconair_model}` }))}
           onClose={() => setLinking(null)}
           onSaved={() => { setLinking(null); iot.refetch(); }}
+        />
+      )}
+
+      {isAdmin && (
+        <ScheduleModal
+          row={scheduling}
+          onClose={() => setScheduling(null)}
+          onSent={() => iot.refetch()}
         />
       )}
     </>
@@ -372,6 +400,253 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
         </Field>
         {error && <p className="text-[14px] font-semibold text-crit-soft">{error}</p>}
       </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------
+// עריכת שעון ועוצמה (phase57)
+// ---------------------------------------------------------------------
+const DAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+const LEVELS = [
+  { value: '1', label: 'A (חלש)' },
+  { value: '2', label: 'B (בינוני)' },
+  { value: '3', label: 'C (חזק)' },
+];
+const LEVEL_LETTER = { 1: 'A', 2: 'B', 3: 'C' };
+const EMPTY_PROGRAM = { enabled: false, start: '08:00', end: '20:00', work_sec: 10, pause_sec: 120, level: 1 };
+
+function normPrograms(programs) {
+  const list = (programs ?? []).slice(0, 5).map((p) => ({
+    enabled: !!p.enabled,
+    start: p.start || '00:00',
+    end: p.end || '00:00',
+    work_sec: Number(p.work_sec) || 10,
+    pause_sec: Number(p.pause_sec) || 120,
+    level: Number(p.level) || 1,
+  }));
+  while (list.length < 5) list.push({ ...EMPTY_PROGRAM });
+  return list;
+}
+
+function programKey(programs) {
+  return JSON.stringify(normPrograms(programs).map((p) => (p.enabled ? [p.start, p.end, p.work_sec, p.pause_sec, p.level] : 0)));
+}
+
+function describe(p) {
+  return `${p.start}–${p.end} · ריסוס ${p.work_sec}ש׳ · הפסקה ${p.pause_sec}ש׳ · עוצמה ${LEVEL_LETTER[p.level] ?? p.level}`;
+}
+
+function ScheduleModal({ row, onClose, onSent }) {
+  const todayIdx = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })).getDay();
+  const [templateDay, setTemplateDay] = useState(todayIdx);
+  const [programs, setPrograms] = useState(normPrograms([]));
+  const [weeks, setWeeks] = useState([todayIdx]);
+  const [step, setStep] = useState('edit'); // edit → confirm → done
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+
+  const log = useQuery(() => listCommandLog(row.id), [row?.id, step], { enabled: !!row });
+
+  const scheduleOf = (day) => (Array.isArray(row?.schedule) ? row.schedule.find((d) => d.week === day)?.programs : null);
+
+  // טעינת תבנית מיום מסוים + סימון כל הימים שיש להם בדיוק אותו שעון
+  function loadDay(day) {
+    setTemplateDay(day);
+    const progs = normPrograms(scheduleOf(day) ?? []);
+    setPrograms(progs);
+    const key = programKey(progs);
+    const same = [0, 1, 2, 3, 4, 5, 6].filter((d) => programKey(scheduleOf(d) ?? []) === key);
+    setWeeks(same.length ? same : [day]);
+  }
+
+  const rowId = row?.id;
+  useEffect(() => {
+    if (!row) return;
+    setStep('edit');
+    setError('');
+    setResult(null);
+    loadDay(todayIdx);
+  }, [rowId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function setProgram(i, patch) {
+    setPrograms((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+
+  function toggleWeek(d) {
+    setWeeks((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+  }
+
+  function check() {
+    if (!weeks.length) return 'צריך לבחור לפחות יום אחד';
+    for (let i = 0; i < 5; i++) {
+      const p = programs[i];
+      if (!p.enabled) continue;
+      if (!(p.end > p.start)) return `תוכנית ${i + 1}: שעת הסיום חייבת להיות אחרי שעת ההתחלה`;
+      if (p.work_sec < 5 || p.work_sec > 900) return `תוכנית ${i + 1}: זמן ריסוס בין 5 ל-900 שניות`;
+      if (p.pause_sec < 5 || p.pause_sec > 900) return `תוכנית ${i + 1}: זמן הפסקה בין 5 ל-900 שניות`;
+    }
+    return '';
+  }
+
+  function toConfirm() {
+    const msg = check();
+    setError(msg);
+    if (!msg) setStep('confirm');
+  }
+
+  async function send() {
+    setSending(true);
+    setError('');
+    try {
+      const r = await sendWorkTime(row.id, weeks, programs);
+      setResult(r);
+      setStep('done');
+      onSent();
+    } catch (e) {
+      setError(e.message || 'השליחה נכשלה');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const before = normPrograms(scheduleOf(templateDay) ?? []);
+
+  const footer =
+    step === 'edit' ? (
+      <>
+        <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        <PrimaryButton onClick={toConfirm}>המשך לאישור</PrimaryButton>
+      </>
+    ) : step === 'confirm' ? (
+      <>
+        <SecondaryButton onClick={() => setStep('edit')} disabled={sending}>חזרה לעריכה</SecondaryButton>
+        <PrimaryButton onClick={send} loading={sending}>שלח למכשיר</PrimaryButton>
+      </>
+    ) : (
+      <PrimaryButton onClick={onClose}>סגירה</PrimaryButton>
+    );
+
+  return (
+    <Modal
+      open={!!row}
+      title="שעון ועוצמה"
+      wide
+      subtitle={row ? `${displayName(row)} · ${row.aroma_name ?? ''}` : ''}
+      onClose={onClose}
+      footer={footer}
+    >
+      {step === 'edit' && (
+        <div className="flex flex-col gap-4">
+          <Field label="טען את השעון של יום" hint="הימים עם אותו שעון בדיוק מסומנים אוטומטית למטה">
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_SHORT.map((d, i) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => loadDay(i)}
+                  className={`chip ${templateDay === i ? 'text-gold-600 border-gold-500/30 bg-gold-500/[0.14]' : ''}`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {programs.map((p, i) => (
+            <div key={i} className="inner-row flex flex-col gap-2.5 px-3 py-3">
+              <label className="flex items-center gap-2 text-[15px] font-bold">
+                <input type="checkbox" checked={p.enabled} onChange={(e) => setProgram(i, { enabled: e.target.checked })} />
+                תוכנית {i + 1}
+                {!p.enabled && <span className="text-[13px] font-medium text-text-faint">(כבויה)</span>}
+              </label>
+              {p.enabled && (
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+                  <Field label="התחלה">
+                    <TextInput type="time" value={p.start} onChange={(e) => setProgram(i, { start: e.target.value })} dir="ltr" />
+                  </Field>
+                  <Field label="סיום">
+                    <TextInput type="time" value={p.end} onChange={(e) => setProgram(i, { end: e.target.value })} dir="ltr" />
+                  </Field>
+                  <Field label="ריסוס (שנ׳)">
+                    <TextInput type="number" min={5} max={900} value={p.work_sec} onChange={(e) => setProgram(i, { work_sec: Number(e.target.value) })} dir="ltr" />
+                  </Field>
+                  <Field label="הפסקה (שנ׳)">
+                    <TextInput type="number" min={5} max={900} value={p.pause_sec} onChange={(e) => setProgram(i, { pause_sec: Number(e.target.value) })} dir="ltr" />
+                  </Field>
+                  <Field label="עוצמה">
+                    <Select value={String(p.level)} onChange={(e) => setProgram(i, { level: Number(e.target.value) })} options={LEVELS} />
+                  </Field>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <Field label="להחיל על הימים">
+            <div className="flex flex-wrap gap-3">
+              {DAY_SHORT.map((d, i) => (
+                <label key={d} className="flex items-center gap-1.5 text-[15px] font-semibold">
+                  <input type="checkbox" checked={weeks.includes(i)} onChange={() => toggleWeek(i)} />
+                  {d}
+                </label>
+              ))}
+            </div>
+          </Field>
+          {error && <p className="text-[14px] font-semibold text-crit-soft">{error}</p>}
+        </div>
+      )}
+
+      {step === 'confirm' && (
+        <div className="flex flex-col gap-3 text-[15px]">
+          <p className="font-bold">
+            לשלוח את השעון הזה למכשיר, לימים: {weeks.map((w) => DAY_SHORT[w]).join(', ')}?
+          </p>
+          {programs.map((p, i) => {
+            const was = before[i];
+            const changed = programKey([p]) !== programKey([was]);
+            return (
+              <div key={i} className="inner-row px-3 py-2.5">
+                <div className="font-semibold">
+                  תוכנית {i + 1}: {p.enabled ? describe(p) : 'כבויה'}
+                  {changed && <span className="ms-2 text-[13px] text-gold-600">שינוי</span>}
+                </div>
+                {changed && (
+                  <div className="text-[13px] text-text-faint">היה ({DAY_SHORT[templateDay]}): {was.enabled ? describe(was) : 'כבויה'}</div>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-[13.5px] text-text-faint">השעון הקודם נשמר ביומן, כך שתמיד אפשר לחזור אליו.</p>
+          {error && <p className="text-[14px] font-semibold text-crit-soft">{error}</p>}
+        </div>
+      )}
+
+      {step === 'done' && (
+        <div className="flex flex-col gap-2 text-[15px]">
+          {result?.verified ? (
+            <p className="font-bold text-ok">✓ השעון נשלח ונקלט במכשיר.</p>
+          ) : (
+            <p className="font-bold text-warn">השינוי נשלח, אבל המכשיר עוד לא אישר אותו. בדוק שוב בעוד דקה.</p>
+          )}
+        </div>
+      )}
+
+      {(log.data ?? []).length > 0 && (
+        <div className="mt-5 flex flex-col gap-1.5">
+          <span className="text-[13.5px] font-bold text-text-dim">שינויים אחרונים</span>
+          {log.data.map((l) => (
+            <div key={l.id} className="flex items-baseline justify-between gap-3 text-[13px] text-text-faint">
+              <span className="truncate">
+                {(l.payload?.weeks ?? []).map((w) => DAY_SHORT[w]).join(',')} · {l.created_by_email ?? ''}
+              </span>
+              <span className="flex-none">
+                {l.ok === true ? '✓' : l.ok === false ? '✗' : '…'} {relativeTime(l.created_at)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }
