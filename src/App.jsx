@@ -33,6 +33,7 @@ import LeadsScreen from './screens/LeadsScreen';
 import SocialScreen from './screens/SocialScreen';
 import WebOrdersScreen from './screens/WebOrdersScreen';
 import RentalBillingScreen from './screens/RentalBillingScreen';
+import SmartFleetScreen from './screens/SmartFleetScreen';
 
 /** קישור חתימה ציבורי (?sign=<token>) — נבדק לפני SetupScreen/AuthProvider במכוון: הלקוח שחותם לא מחובר ולא צריך להיות. */
 function useSignToken() {
@@ -478,6 +479,7 @@ function Shell() {
           )}
 
           {activeId === 'devices' && <DevicesScreen />}
+          {activeId === 'smart_fleet' && isAdmin && <SmartFleetScreen />}
           {activeId === 'customers' && <CustomersScreen />}
           {activeId === 'oils' && <OilScreen />}
           {activeId === 'service' && <ServiceCallsScreen openFormSignal={newCallSignal} />}
