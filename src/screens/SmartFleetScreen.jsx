@@ -3,7 +3,7 @@ import GlassCard, { CardHead } from '../components/ui/GlassCard';
 import DataTable, { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
-import { Field, Select, PrimaryButton, SecondaryButton } from '../components/ui/Field';
+import { Field, Select, TextInput, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { DeviceIcon } from '../components/ui/Icons';
 import { useQuery } from '../hooks/useQuery';
@@ -20,8 +20,31 @@ import {
 /**
  * צי חכם — מצב חי של המכשירים שמחוברים לענן Aroma Link.
  * שלב פיילוט: קריאה בלבד. הנתונים מגיעים מ-/api/aroma-sync כל 5 דקות.
- * הפעולה היחידה כאן: מנהל משייך מכשיר ענן למכשיר במערכת + לדגם.
+ * הפעולה היחידה כאן: מנהל מסווג מכשיר ענן (שכירות / פרטי / ניסוי) ומשייך דגם.
  */
+
+/** סוג המכשיר — iot_devices.owner_type (phase56) */
+const OWNER_TYPES = {
+  rental:  { label: 'לקוח שכירות', tone: 'gold' },
+  private: { label: 'לקוח פרטי',   tone: 'teal' },
+  test:    { label: 'ניסוי',        tone: 'slate' },
+};
+const OWNER_OPTIONS = Object.entries(OWNER_TYPES).map(([value, t]) => ({ value, label: t.label }));
+
+/** השם שמוצג בשורה: לקוח במערכת / שם הלקוח הפרטי / השם מהאפליקציה */
+function displayName(row) {
+  if (row.owner_type === 'rental' && row.device?.customer?.name) return row.device.customer.name;
+  if (row.owner_type === 'private' && row.owner_name) return row.owner_name;
+  return row.aroma_name ?? '—';
+}
+
+function subLine(row) {
+  if (row.owner_type === 'rental' && row.device) {
+    return row.device.location_note || row.device.customer?.city || row.device.serial;
+  }
+  if (row.owner_type === 'private' && row.owner_phone) return `${row.owner_phone} · בענן: ${row.aroma_name ?? ''}`;
+  return `בענן: ${row.aroma_name ?? ''}`;
+}
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -67,6 +90,7 @@ export default function SmartFleetScreen() {
   const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [linking, setLinking] = useState(null);
 
   const iot = useQuery(listIotDevices, []);
@@ -83,15 +107,19 @@ export default function SmartFleetScreen() {
     return (iot.data ?? []).filter((row) => {
       if (statusFilter === 'online' && !row.online) return false;
       if (statusFilter === 'offline' && row.online) return false;
-      if (statusFilter === 'unlinked' && row.device) return false;
+      if (typeFilter === 'none' && row.owner_type) return false;
+      if (typeFilter && typeFilter !== 'none' && row.owner_type !== typeFilter) return false;
       if (!q) return true;
-      return [row.aroma_name, row.mac, row.device?.serial, row.device?.customer?.name, row.device?.customer?.city]
+      return [row.aroma_name, row.mac, row.owner_name, row.owner_phone, row.device?.serial, row.device?.customer?.name, row.device?.customer?.city]
         .some((v) => String(v ?? '').toLowerCase().includes(q));
     });
-  }, [iot.data, search, statusFilter]);
+  }, [iot.data, search, statusFilter, typeFilter]);
 
   const all = iot.data ?? [];
   const onlineCount = all.filter((r) => r.online).length;
+  // מכשירי ניסוי לא נספרים כ"מנותקים" — הם לא אצל לקוחות
+  const offlineCount = all.filter((r) => !r.online && r.owner_type !== 'test').length;
+  const unclassified = all.filter((r) => !r.owner_type).length;
   const lastSync = all.reduce((max, r) => (r.last_sync_at > max ? r.last_sync_at : max), '');
 
   const columns = [
@@ -101,12 +129,19 @@ export default function SmartFleetScreen() {
       width: 'minmax(0,1.4fr)',
       render: (row) => (
         <div className="min-w-0">
-          <div className="truncate font-semibold">{row.device?.customer?.name ?? row.aroma_name ?? '—'}</div>
-          <div className="truncate text-[13px] text-text-faint">
-            {row.device ? (row.device.location_note || row.device.customer?.city || row.device.serial) : `בענן: ${row.aroma_name ?? ''}`}
-          </div>
+          <div className="truncate font-semibold">{displayName(row)}</div>
+          <div className="truncate text-[13px] text-text-faint">{subLine(row)}</div>
         </div>
       ),
+    },
+    {
+      key: 'owner',
+      label: 'סוג',
+      width: '116px',
+      render: (row) => {
+        const t = OWNER_TYPES[row.owner_type];
+        return t ? <StatusChip tone={t.tone}>{t.label}</StatusChip> : <span className="text-[13px] text-text-faint">לא מסווג</span>;
+      },
     },
     {
       key: 'model',
@@ -177,15 +212,15 @@ export default function SmartFleetScreen() {
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <Kpi label="מחוברים לענן" value={all.length} />
           <Kpi label="מקוונים" value={onlineCount} tone="text-ok" />
-          <Kpi label="מנותקים" value={all.length - onlineCount} tone={all.length - onlineCount ? 'text-crit' : 'text-text'} />
-          <Kpi label="לא משויכים ללקוח" value={all.filter((r) => !r.device).length} tone="text-gold-600" />
+          <Kpi label="מנותקים" value={offlineCount} tone={offlineCount ? 'text-crit' : 'text-text'} />
+          <Kpi label="לא מסווגים" value={unclassified} tone={unclassified ? 'text-gold-600' : 'text-text'} />
         </div>
       </GlassCard>
 
       <ScreenToolbar
         search={search}
         onSearch={setSearch}
-        searchPlaceholder="חיפוש לפי לקוח, עיר או MAC…"
+        searchPlaceholder="חיפוש לפי לקוח, טלפון, עיר או MAC…"
         count={rows.length}
         countLabel="מכשירים"
         filters={[
@@ -197,8 +232,14 @@ export default function SmartFleetScreen() {
             options: [
               { value: 'online', label: 'מקוונים' },
               { value: 'offline', label: 'מנותקים' },
-              { value: 'unlinked', label: 'לא משויכים' },
             ],
+          },
+          {
+            key: 'type',
+            value: typeFilter,
+            onChange: setTypeFilter,
+            placeholder: 'כל הסוגים',
+            options: [...OWNER_OPTIONS, { value: 'none', label: 'לא מסווג' }],
           },
         ]}
       />
@@ -237,17 +278,24 @@ export default function SmartFleetScreen() {
   );
 }
 
-/** שיוך מכשיר ענן למכשיר במערכת (ומשם ללקוח) ולדגם */
+/** סיווג מכשיר ענן: לקוח שכירות (מכשיר במערכת) / לקוח פרטי (שם + טלפון) / ניסוי, ודגם */
 function LinkModal({ row, modelOptions, onClose, onSaved }) {
-  const devices = useQuery(listLinkableDevices, [], { enabled: !!row });
+  const [ownerType, setOwnerType] = useState('');
   const [deviceId, setDeviceId] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerPhone, setOwnerPhone] = useState('');
   const [supplierModel, setSupplierModel] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const devices = useQuery(listLinkableDevices, [], { enabled: !!row && ownerType === 'rental' });
+
   const rowId = row?.id;
   useEffect(() => {
+    setOwnerType(row?.owner_type ?? '');
     setDeviceId(row?.device?.id ?? '');
+    setOwnerName(row?.owner_name ?? '');
+    setOwnerPhone(row?.owner_phone ?? '');
     setSupplierModel(row?.supplier_model ?? '');
     setError('');
   }, [rowId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -258,10 +306,24 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
   }));
 
   async function save() {
+    if (ownerType === 'rental' && !deviceId) {
+      setError('ללקוח שכירות צריך לבחור את המכשיר במערכת');
+      return;
+    }
+    if (ownerType === 'private' && !ownerName.trim()) {
+      setError('ללקוח פרטי צריך לרשום שם');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      await updateIotDevice(row.id, { device_id: deviceId || null, supplier_model: supplierModel || null });
+      await updateIotDevice(row.id, {
+        owner_type: ownerType || null,
+        device_id: ownerType === 'rental' ? deviceId : null,
+        owner_name: ownerType === 'private' ? ownerName.trim() : null,
+        owner_phone: ownerType === 'private' ? (ownerPhone.trim() || null) : null,
+        supplier_model: supplierModel || null,
+      });
       onSaved();
     } catch (e) {
       setError(e.message || 'השמירה נכשלה');
@@ -273,7 +335,7 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
   return (
     <Modal
       open={!!row}
-      title="שיוך מכשיר"
+      title="סיווג מכשיר"
       subtitle={row ? `בענן: ${row.aroma_name ?? ''} · MAC ${row.mac ?? ''}` : ''}
       onClose={onClose}
       footer={
@@ -284,9 +346,27 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="מכשיר במערכת" hint="המכשיר הפיזי אצל הלקוח, מתוך טאב מכשירים">
-          <Select value={deviceId} onChange={(e) => setDeviceId(e.target.value)} options={deviceOptions} placeholder="לא משויך" />
+        <Field label="סוג">
+          <Select value={ownerType} onChange={(e) => setOwnerType(e.target.value)} options={OWNER_OPTIONS} placeholder="לא מסווג" />
         </Field>
+
+        {ownerType === 'rental' && (
+          <Field label="מכשיר במערכת" hint="המכשיר הפיזי אצל הלקוח, מתוך טאב מכשירים">
+            <Select value={deviceId} onChange={(e) => setDeviceId(e.target.value)} options={deviceOptions} placeholder="בחר מכשיר" />
+          </Field>
+        )}
+
+        {ownerType === 'private' && (
+          <>
+            <Field label="שם הלקוח" required>
+              <TextInput value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="למשל: בר קיוסק" />
+            </Field>
+            <Field label="טלפון">
+              <TextInput value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} placeholder="05X-XXX-XXXX" inputMode="tel" dir="ltr" />
+            </Field>
+          </>
+        )}
+
         <Field label="דגם אצל היצרן">
           <Select value={supplierModel} onChange={(e) => setSupplierModel(e.target.value)} options={modelOptions} placeholder="לא ידוע" />
         </Field>
