@@ -32,24 +32,58 @@ const SUPABASE_ANON = () => env('VITE_SUPABASE_ANON_KEY') || env('SUPABASE_ANON_
 // ---------------------------------------------------------------------
 // Aroma Link — התחברות וקריאות
 // ---------------------------------------------------------------------
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
+
+// אוסף את העוגיות שהשרת מחזיר (Set-Cookie) לתוך "צנצנת" אחת
+function collectCookies(res, jar) {
+  const list = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : (res.headers.get('set-cookie') || '').split(/,(?=\s*\w+=)/);
+  for (const c of list) {
+    const pair = String(c).split(';')[0].trim();
+    const eq = pair.indexOf('=');
+    if (eq > 0) jar.set(pair.slice(0, eq), pair.slice(eq + 1));
+  }
+}
+const jarToHeader = (jar) => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+
+// כמו בדפדפן: קודם פותחים את דף הכניסה (מקבלים עוגיית סשן),
+// ואז שולחים שם משתמש וסיסמה עם אותה עוגייה. הצלחה = code 0.
 async function aromaLogin() {
+  const jar = new Map();
+
+  const first = await fetch(`${AROMA}/login`, { headers: { 'User-Agent': UA }, redirect: 'manual' });
+  collectCookies(first, jar);
+  await first.text().catch(() => '');
+
   const res = await fetch(`${AROMA}/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      'User-Agent': UA,
+      Origin: AROMA,
+      Referer: `${AROMA}/login`,
+      ...(jar.size ? { Cookie: jarToHeader(jar) } : {}),
+    },
     body: new URLSearchParams({ username: env('AROMA_USERNAME'), password: env('AROMA_PASSWORD') }),
     redirect: 'manual',
   });
-  const cookies = typeof res.headers.getSetCookie === 'function'
-    ? res.headers.getSetCookie()
-    : (res.headers.get('set-cookie') || '').split(/,(?=\s*\w+=)/);
-  const cookie = cookies.map((c) => c.split(';')[0].trim()).filter(Boolean).join('; ');
-  if (!cookie) throw new Error(`Aroma login failed (HTTP ${res.status}, no session cookie)`);
-  return cookie;
+  collectCookies(res, jar);
+
+  const text = await res.text();
+  let r = null;
+  try { r = JSON.parse(text); } catch { r = null; }
+  if (!r) throw new Error(`Aroma login: not JSON (HTTP ${res.status})`);
+  if (r.code !== 0) throw new Error(`Aroma login rejected: code ${r.code} — ${r.msg || 'no message'}`);
+  if (!jar.size) throw new Error(`Aroma login OK (code 0) but no session cookie (HTTP ${res.status})`);
+  return jarToHeader(jar);
 }
 
 async function aromaGet(cookie, path) {
   const res = await fetch(`${AROMA}${path}`, {
-    headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+    headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json', 'User-Agent': UA },
     redirect: 'manual',
   });
   const text = await res.text();
