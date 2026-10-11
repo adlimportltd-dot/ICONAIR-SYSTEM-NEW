@@ -11,6 +11,7 @@
 export const navItems = [
   { id: 'dashboard', label: 'דשבורד',         shortLabel: 'דשבורד',  icon: 'grid' },
   { id: 'devices',   label: 'מכשירים בשטח',   shortLabel: 'מכשירים', icon: 'device' },
+  { id: 'smart_fleet', label: 'צי חכם', shortLabel: 'צי חכם', icon: 'device', adminOnly: true },
   { id: 'customers', label: 'לקוחות',          shortLabel: 'לקוחות',  icon: 'users',  inTabBar: true, tabBarOrder: 2 },
   { id: 'oils',      label: 'מעקב שמנים',      shortLabel: 'שמנים',   icon: 'drop' },
   { id: 'service',   label: 'קריאות שירות/התקנות', shortLabel: 'שירות/התקנות', icon: 'wrench', inTabBar: true, tabBarOrder: 4 },
