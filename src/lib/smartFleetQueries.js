@@ -19,7 +19,7 @@ export const listIotDevices = () =>
       id, aroma_device_id, mac, aroma_name, supplier_model, aroma_type_code, firmware, net_type,
       online, online_error, is_locked, power_on, work_status, work_remain_sec, pause_remain_sec,
       device_time, schedule, last_online_at, last_offline_at, last_sync_at,
-      owner_type, owner_name, owner_phone, control_enabled,
+      owner_type, owner_name, owner_phone, control_enabled, remain_oil, has_oil_gauge,
       device:devices(id, serial, model, location_note, customer:customers(name, city))
     `)
     .order('online', { ascending: true })
