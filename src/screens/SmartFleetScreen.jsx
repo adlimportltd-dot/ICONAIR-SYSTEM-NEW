@@ -80,7 +80,7 @@ function liveState(row) {
   return { tone: 'ok', label: 'פעיל' };
 }
 
-function Kpi({ label, value, tone = 'text-text' }) {
+function TankCell({ row }) { if (!row.has_oil_gauge || row.remain_oil == null) return <span className="text-[13px] text-text-faint">—</span>; const pct = Math.max(0, Math.min(100, Math.round(Number(row.remain_oil)))); const tone = pct <= 0 ? 'crit' : pct < 15 ? 'warn' : 'ok'; return <StatusChip tone={tone}>{pct <= 0 ? 'ריק' : pct + '%'}</StatusChip>; } function Kpi({ label, value, tone = 'text-text' }) {
   return (
     <div className="inner-row flex flex-col gap-1 px-4 py-3">
       <span className="text-[13px] font-medium text-text-faint">{label}</span>
@@ -168,7 +168,7 @@ export default function SmartFleetScreen() {
       },
     },
     {
-      key: 'today',
+      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'today',
       label: 'שעון היום',
       width: '150px',
       render: (row) => {
