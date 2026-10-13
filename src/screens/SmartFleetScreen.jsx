@@ -228,7 +228,7 @@ export default function SmartFleetScreen() {
       },
     },
     {
-      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} refill={lastRefillOf.get(row.device?.id)} fillMl={capOf.get(modelNameOf(row))} /> }, { key: 'today',
+      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} refill={lastRefillOf.get(row.device?.id)} fillMl={Number(row.device?.fill_ml) || capOf.get(modelNameOf(row))} /> }, { key: 'today',
       label: 'שעון היום',
       width: '150px',
       render: (row) => {
