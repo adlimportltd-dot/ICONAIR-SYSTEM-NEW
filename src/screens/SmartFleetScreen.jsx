@@ -17,6 +17,7 @@ import {
   updateIotDevice,
   listCommandLog,
   sendWorkTime,
+  listLastRefills,
 } from '../lib/smartFleetQueries';
 
 /**
@@ -105,13 +106,24 @@ function UsageCell({ row, models }) {
 }
 
 /** ימים עד ריק: עם מד מיכל — לפי האחוז; בלי מד — כמה ימים מחזיק מיכל מלא */
-function DaysCell({ row, models }) {
+function DaysCell({ row, models, refill }) {
   const u = dailyUsage(row, models);
   if (!u || !u.tank || u.ml <= 0) return <span className="text-[13px] text-text-faint">—</span>;
   if (row.has_oil_gauge && row.remain_oil != null) {
     const d = Math.floor(((Number(row.remain_oil) / 100) * u.tank) / u.ml);
     const tone = d <= 3 ? 'crit' : d <= 7 ? 'warn' : 'ok';
     return <StatusChip tone={tone}>{d} ימים</StatusChip>;
+  }
+  if (refill && refill.level_after_pct != null) {
+    const days = (Date.now() - new Date(refill.recorded_at).getTime()) / 86400000;
+    const left = Math.max(0, Math.floor(((Number(refill.level_after_pct) / 100) * u.tank - u.ml * days) / u.ml));
+    const tone = left <= 3 ? 'crit' : left <= 7 ? 'warn' : 'ok';
+    return (
+      <div className="leading-tight">
+        <StatusChip tone={tone}>{left} ימים</StatusChip>
+        <div className="mt-0.5 text-[11.5px] text-text-faint">לפי מילוי {new Date(refill.recorded_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</div>
+      </div>
+    );
   }
   return <span className="tabular text-[12.5px] text-text-faint">מלא: {Math.floor(u.tank / u.ml)} ימים</span>;
 }
@@ -136,6 +148,14 @@ export default function SmartFleetScreen() {
   const iot = useQuery(listIotDevices, []);
   const modelMap = useQuery(listIotModelMap, []);
   useRealtime(['iot_devices'], iot.refetch);
+  // phase62: המילוי האחרון לכל מכשיר במערכת — לימים עד ריק במכשירים בלי מד
+  const linkedIds = useMemo(() => (iot.data ?? []).map((r) => r.device?.id).filter(Boolean), [iot.data]);
+  const refills = useQuery(() => listLastRefills(linkedIds), [linkedIds.join(',')]);
+  const lastRefillOf = useMemo(() => {
+    const m = new Map();
+    (refills.data ?? []).forEach((r) => { if (!m.has(r.device_id)) m.set(r.device_id, r); });
+    return m;
+  }, [refills.data]);
 
   const modelNameOf = useMemo(() => {
     const map = new Map((modelMap.data ?? []).map((m) => [m.supplier_model, m.iconair_model]));
@@ -204,7 +224,7 @@ export default function SmartFleetScreen() {
       },
     },
     {
-      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} /> }, { key: 'today',
+      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} refill={lastRefillOf.get(row.device?.id)} /> }, { key: 'today',
       label: 'שעון היום',
       width: '150px',
       render: (row) => {
