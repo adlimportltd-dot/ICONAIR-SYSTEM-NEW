@@ -96,6 +96,61 @@ async function run() {
     } else {
       ok('אכיפת קיבולת מיכלים', 'הטריגר קיים ופעיל');
     }
+
+    // --- phase65: משימות מתוזמנות (cron) — כל משימה רצה ב-24 השעות האחרונות ובלי כשלונות ---
+    const cronJobs = await client.query(`
+      select j.jobname,
+        count(r.*) filter (where r.start_time > now() - interval '24 hours') as runs,
+        count(r.*) filter (where r.start_time > now() - interval '24 hours' and r.status <> 'succeeded') as failed,
+        max(r.start_time) as last_run
+      from cron.job j
+      left join cron.job_run_details r on r.jobid = j.jobid
+      group by j.jobname
+    `);
+    for (const job of cronJobs.rows) {
+      const lastRun = job.last_run ? new Date(job.last_run) : null;
+      const minutesAgo = lastRun ? Math.round((Date.now() - lastRun.getTime()) / 60000) : null;
+      if (!lastRun || minutesAgo > 60) {
+        fail(`משימה מתוזמנת ${job.jobname}`, lastRun ? `לא רצה כבר ${minutesAgo} דקות` : 'לא רצה אף פעם');
+      } else if (Number(job.failed) > 0) {
+        fail(`משימה מתוזמנת ${job.jobname}`, `${job.failed} כשלונות מתוך ${job.runs} ריצות ב-24 שעות`);
+      } else {
+        ok(`משימה מתוזמנת ${job.jobname}`, `${job.runs} ריצות ב-24 שעות, בלי כשלונות`);
+      }
+    }
+
+    // --- phase65: צי חכם — הסנכרון מ-Aroma Link באמת מעדכן נתונים (לא רק שהמשימה רצה) ---
+    const iotSync = await client.query(`select max(last_sync_at) as last_sync, count(*) as devices from iot_devices`);
+    const lastSync = iotSync.rows[0].last_sync ? new Date(iotSync.rows[0].last_sync) : null;
+    const syncMinutes = lastSync ? Math.round((Date.now() - lastSync.getTime()) / 60000) : null;
+    if (Number(iotSync.rows[0].devices) === 0) {
+      ok('סנכרון צי חכם', 'אין עדיין מכשירים מחוברים');
+    } else if (!lastSync || syncMinutes > 30) {
+      fail('סנכרון צי חכם', lastSync ? `הסנכרון האחרון לפני ${syncMinutes} דקות (אמור להיות כל 5 דקות)` : 'אף מכשיר לא סונכרן');
+    } else {
+      ok('סנכרון צי חכם', `סונכרן לפני ${syncMinutes} דקות, ${iotSync.rows[0].devices} מכשירים`);
+    }
+
+    // --- phase65: רישום מילויים מהשטח — הטכנאים מזינים (4 ימים כדי לא להתריע על סוף שבוע) ---
+    const oilEntries = await client.query(`select max(recorded_at) as last_entry from oil_tracking`);
+    const lastEntry = oilEntries.rows[0].last_entry ? new Date(oilEntries.rows[0].last_entry) : null;
+    const entryDays = lastEntry ? Math.floor((Date.now() - lastEntry.getTime()) / 86400000) : null;
+    if (!lastEntry || entryDays > 4) {
+      fail('רישום מילויים מהשטח', lastEntry ? `לא נרשם מילוי כבר ${entryDays} ימים` : 'אין רישומי מילוי');
+    } else {
+      ok('רישום מילויים מהשטח', `המילוי האחרון נרשם לפני ${entryDays} ימים`);
+    }
+
+    // --- phase64/65: כמות מילוי למכשיר — השדה קיים (אחרת המסלולים חוזרים לכמות של הדגם בלבד) ---
+    const fillCol = await client.query(`
+      select count(*) from information_schema.columns
+      where table_schema = 'public' and table_name = 'devices' and column_name = 'fill_ml'
+    `);
+    if (Number(fillCol.rows[0].count) === 0) {
+      fail('כמות מילוי למכשיר', 'השדה devices.fill_ml חסר');
+    } else {
+      ok('כמות מילוי למכשיר', 'השדה קיים');
+    }
   } finally {
     await client.end();
   }
