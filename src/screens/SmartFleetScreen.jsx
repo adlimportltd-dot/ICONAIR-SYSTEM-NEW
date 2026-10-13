@@ -80,6 +80,42 @@ function liveState(row) {
   return { tone: 'ok', label: 'פעיל' };
 }
 
+/** צריכת שמן ממוצעת ליום (מ"ל) לפי השעון של המכשיר ונתוני היצרן (iot_model_map, phase61) */
+function dailyUsage(row, models) {
+  const m = (models ?? []).find((x) => x.supplier_model === row.supplier_model);
+  if (!m || !m.ml_per_sec || !Array.isArray(row.schedule) || !row.schedule.length) return null;
+  let secs = 0;
+  row.schedule.forEach((d) => (d.programs ?? []).forEach((p) => {
+    if (!p.enabled || p.start === p.end) return;
+    const s = toMinutes(p.start);
+    const e = toMinutes(p.end);
+    if (s === null || e === null) return;
+    const dur = ((e - s + 1440) % 1440) * 60;
+    const w = Number(p.work_sec) || 0;
+    const pa = Number(p.pause_sec) || 0;
+    if (w + pa > 0) secs += (dur * w) / (w + pa);
+  }));
+  return { ml: (secs / row.schedule.length) * Number(m.ml_per_sec), tank: Number(m.tank_ml) || null };
+}
+
+function UsageCell({ row, models }) {
+  const u = dailyUsage(row, models);
+  if (!u) return <span className="text-[13px] text-text-faint">—</span>;
+  return <span className="tabular text-[13.5px]">{u.ml.toFixed(1)} מ״ל</span>;
+}
+
+/** ימים עד ריק: עם מד מיכל — לפי האחוז; בלי מד — כמה ימים מחזיק מיכל מלא */
+function DaysCell({ row, models }) {
+  const u = dailyUsage(row, models);
+  if (!u || !u.tank || u.ml <= 0) return <span className="text-[13px] text-text-faint">—</span>;
+  if (row.has_oil_gauge && row.remain_oil != null) {
+    const d = Math.floor(((Number(row.remain_oil) / 100) * u.tank) / u.ml);
+    const tone = d <= 3 ? 'crit' : d <= 7 ? 'warn' : 'ok';
+    return <StatusChip tone={tone}>{d} ימים</StatusChip>;
+  }
+  return <span className="tabular text-[12.5px] text-text-faint">מלא: {Math.floor(u.tank / u.ml)} ימים</span>;
+}
+
 function TankCell({ row }) { if (!row.has_oil_gauge || row.remain_oil == null) return <span className="text-[13px] text-text-faint">—</span>; const pct = Math.max(0, Math.min(100, Math.round(Number(row.remain_oil)))); const tone = pct <= 0 ? 'crit' : pct < 15 ? 'warn' : 'ok'; return <StatusChip tone={tone}>{pct <= 0 ? 'ריק' : pct + '%'}</StatusChip>; } function Kpi({ label, value, tone = 'text-text' }) {
   return (
     <div className="inner-row flex flex-col gap-1 px-4 py-3">
@@ -168,7 +204,7 @@ export default function SmartFleetScreen() {
       },
     },
     {
-      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'today',
+      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} /> }, { key: 'today',
       label: 'שעון היום',
       width: '150px',
       render: (row) => {
