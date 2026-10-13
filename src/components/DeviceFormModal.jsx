@@ -7,7 +7,7 @@ import { DEVICE_STATUS_LABEL } from '../lib/mappers';
 
 const EMPTY_FORM = {
   model: 'Icon 500', customer_id: '', site_id: '', scent_name: '',
-  oil_level_pct: 100, location_note: '', status: 'active', unit_price: '',
+  oil_level_pct: 100, location_note: '', status: 'active', unit_price: '', fill_ml: '',
 };
 
 // ערך-סנטינל בבורר הכתובת: לא id אמיתי, רק דגל "פתח טופס כתובת חדשה
@@ -27,6 +27,7 @@ function fromDevice(device, customerId, siteId) {
     location_note: device.location_note ?? '',
     status: device.status ?? 'active',
     unit_price: device.unit_price ?? '',
+    fill_ml: device.fill_ml ?? '',
   };
 }
 
@@ -99,6 +100,10 @@ export function DeviceForm({
         oil_level_pct: Number(form.oil_level_pct),
         location_note: form.location_note || null,
         unit_price: form.unit_price === '' || form.unit_price == null ? null : Number(form.unit_price),
+        // phase64: כמות מילוי ידנית — נשלחת רק כשהמכשיר נטען עם השדה, כדי לא למחוק ערך קיים בטעות
+        ...(!isEdit || (editDevice && 'fill_ml' in editDevice)
+          ? { fill_ml: form.fill_ml === '' || form.fill_ml == null ? null : Number(form.fill_ml) }
+          : {}),
       };
 
       // serial לא נשלח — טריגר בבסיס הנתונים מייצר אותו לפי הדגם
@@ -211,6 +216,12 @@ export function DeviceForm({
           hint="אופציונלי. ריק = לפי מחיר הדגם בכתובת; מלא = מחיר ידני למכשיר הזה בלבד"
         >
           <TextInput type="number" min={0} step="0.01" value={form.unit_price} onChange={set('unit_price')} placeholder="לפי דגם" />
+        </Field>
+        <Field
+          label="כמות מילוי למכשיר הזה (מ״ל)"
+          hint="אופציונלי. ריק = לפי הדגם; מלא = כמה הטכנאי ממלא במכשיר הזה בלבד (למשל מכשיר שמתרוקן לפני הביקור)"
+        >
+          <TextInput type="number" min={10} max={3000} step="10" value={form.fill_ml} onChange={set('fill_ml')} placeholder="לפי דגם" />
         </Field>
       </div>
 
