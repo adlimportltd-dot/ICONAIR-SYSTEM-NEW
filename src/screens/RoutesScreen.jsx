@@ -1486,8 +1486,10 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingSent, setMissingSent] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
-  const fillMl = model?.capacity_ml
-    ? Math.round((model.capacity_ml * (100 - (device.oil_level_pct ?? 0))) / 100)
+  // phase64: כמות מילוי ידנית למכשיר (devices.fill_ml) קודמת לכמות של הדגם
+  const capMl = Number(device.fill_ml) || model?.capacity_ml || null;
+  const fillMl = capMl
+    ? Math.round((capMl * (100 - (device.oil_level_pct ?? 0))) / 100)
     : null;
 
   return (
@@ -1588,7 +1590,7 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         device={device}
         customer={customer}
         scents={scents}
-        capacityMl={model?.capacity_ml ?? null}
+        capacityMl={capMl}
         batteryCount={model?.battery_count ?? null}
         onClose={() => setOilModalOpen(false)}
         onMarkDone={onMarkDone}
