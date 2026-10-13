@@ -39,7 +39,7 @@ async function run() {
     const unrouted = await client.query(`
       select count(*) from devices d
       join customers cu on cu.id = d.customer_id
-      where d.city is null and (cu.route_name is null or cu.route_name = '')
+      where d.status <> 'uninstalled' and d.city is null and (cu.route_name is null or cu.route_name = '')
     `);
     const unroutedCount = Number(unrouted.rows[0].count);
     if (unroutedCount > 0) {
