@@ -261,7 +261,7 @@ export const listDeviceOptions = () =>
   supabase
     .from('devices')
     .select(`
-      id, serial, model, oil_level_pct, location_note,
+      id, serial, model, oil_level_pct, fill_ml, location_note,
       customer:customers(id, name, address, city, phone, email),
       site:customer_sites(id, label, city)
     `)
@@ -351,10 +351,10 @@ export async function updateRouteCycle(routeName, cycleEndDay) {
 export async function listStopsByRoute(routeName) {
   const [customers, sites, cityRoutes] = await Promise.all([
     supabase.from('customers')
-      .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct, location_note)')
+      .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note)')
       .eq('status', 'active').then(unwrap),
     supabase.from('customer_sites')
-      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, location_note)')
+      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note)')
       .then(unwrap),
     loadCityRoutesMap(),
   ]);
@@ -476,7 +476,7 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
     supabase
       .from('devices')
       .select(`
-        id, model, oil_level_pct, scent_name, serial, city, location_note, created_at,
+        id, model, oil_level_pct, fill_ml, scent_name, serial, city, location_note, created_at,
         customer:customers(id, name, route_name, address, city, status),
         site:customer_sites(label, city)
       `)
@@ -544,7 +544,8 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
       });
     }
 
-    const capacity = capacityByModel.get(device.model);
+    // phase64: כמות מילוי ידנית למכשיר (devices.fill_ml) קודמת לכמות של הדגם
+    const capacity = Number(device.fill_ml) || capacityByModel.get(device.model);
     const scent = device.scent_name?.trim();
 
     // דוח ה-PDF (loadPlanReport.js) צריך שורה לכל מכשיר בהיקף — גם
