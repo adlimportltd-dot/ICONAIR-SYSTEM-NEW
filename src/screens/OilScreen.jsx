@@ -277,8 +277,10 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, deviceMo
 
   const selectedDevice = devices.find((d) => d.id === form.device_id) ?? null;
   const selectedModel = selectedDevice ? deviceModels.find((m) => m.name === selectedDevice.model) : null;
-  const sliderMaxMl = selectedModel?.capacity_ml
-    ? Math.round(selectedModel.capacity_ml / ML_STEP) * ML_STEP
+  // phase64: כמות מילוי ידנית למכשיר (devices.fill_ml) קודמת לכמות של הדגם
+  const capMlOil = Number(selectedDevice?.fill_ml) || selectedModel?.capacity_ml || null;
+  const sliderMaxMl = capMlOil
+    ? Math.round(capMlOil / ML_STEP) * ML_STEP
     : DEFAULT_SLIDER_MAX_ML;
 
   /** בחירת מכשיר ממלאת מראש את המפלס הנוכחי — הטכנאי לא צריך לזכור אותו */
