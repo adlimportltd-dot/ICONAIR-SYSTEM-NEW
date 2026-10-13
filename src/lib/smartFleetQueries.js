@@ -42,6 +42,10 @@ export const listLastRefills = (deviceIds) =>
         .then(unwrap)
     : Promise.resolve([]);
 
+/** כמות המילוי שמוגדרת לכל דגם במערכת (device_models.capacity_ml) — בסיס לימים עד ריק אחרי מילוי (phase63) */
+export const listModelCapacity = () =>
+  supabase.from('device_models').select('name, capacity_ml').then(unwrap);
+
 /** מכשירים קיימים במערכת שעוד לא שויכו לענן — לבחירה בשיוך */
 export const listLinkableDevices = () =>
   supabase
