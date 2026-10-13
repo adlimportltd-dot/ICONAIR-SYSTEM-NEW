@@ -20,7 +20,7 @@ export const listIotDevices = () =>
       online, online_error, is_locked, power_on, work_status, work_remain_sec, pause_remain_sec,
       device_time, schedule, last_online_at, last_offline_at, last_sync_at,
       owner_type, owner_name, owner_phone, control_enabled, remain_oil, has_oil_gauge,
-      device:devices(id, serial, model, location_note, customer:customers(name, city))
+      device:devices(id, serial, model, fill_ml, location_note, customer:customers(name, city))
     `)
     .order('online', { ascending: true })
     .order('aroma_name', { ascending: true })
