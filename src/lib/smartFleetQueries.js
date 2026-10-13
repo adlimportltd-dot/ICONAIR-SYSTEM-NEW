@@ -29,6 +29,19 @@ export const listIotDevices = () =>
 export const listIotModelMap = () =>
   supabase.from('iot_model_map').select('supplier_model, iconair_model, factory_model, ml_per_sec, tank_ml').order('supplier_model').then(unwrap);
 
+/** המילוי האחרון (או החלפת מיכל) לכל מכשיר במערכת — לחישוב ימים עד ריק במכשירים בלי מד (phase62) */
+export const listLastRefills = (deviceIds) =>
+  deviceIds.length
+    ? supabase
+        .from('oil_tracking')
+        .select('device_id, event_type, level_after_pct, recorded_at')
+        .in('device_id', deviceIds)
+        .in('event_type', ['refill', 'replacement'])
+        .order('recorded_at', { ascending: false })
+        .limit(1000)
+        .then(unwrap)
+    : Promise.resolve([]);
+
 /** מכשירים קיימים במערכת שעוד לא שויכו לענן — לבחירה בשיוך */
 export const listLinkableDevices = () =>
   supabase
