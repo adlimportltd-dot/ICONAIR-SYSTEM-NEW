@@ -8,6 +8,7 @@ import { Async, EmptyState } from '../components/ui/States';
 import { DeviceIcon } from '../components/ui/Icons';
 import FleetMap from '../components/FleetMap';
 import DeviceHistory from '../components/DeviceHistory';
+import GroupControlModal from '../components/GroupControlModal';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -414,6 +415,7 @@ export default function SmartFleetScreen() {
   const [openId, setOpenId] = useState(null);
   const [linking, setLinking] = useState(null);
   const [scheduling, setScheduling] = useState(null);
+  const [groupCtl, setGroupCtl] = useState(null); // phase71: שליטה קבוצתית
 
   const iot = useQuery(listIotDevices, []);
   const modelMap = useQuery(listIotModelMap, []);
@@ -756,6 +758,15 @@ export default function SmartFleetScreen() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setGroupCtl(g)}
+                              className="rounded-[9px] border border-gold-500/30 bg-gold-500/[0.1] px-3 py-1 text-[13px] font-bold text-gold-600 transition-colors hover:bg-gold-500/[0.18]"
+                            >
+                              שליטה קבוצתית
+                            </button>
+                          )}
                           {g.items.some((it) => it.row.online) && (
                             <StatusChip tone="ok">{g.items.filter((it) => it.row.online).length} פעילים</StatusChip>
                           )}
@@ -794,6 +805,14 @@ export default function SmartFleetScreen() {
           row={scheduling}
           onClose={() => setScheduling(null)}
           onSent={() => iot.refetch()}
+        />
+      )}
+
+      {isAdmin && (
+        <GroupControlModal
+          group={groupCtl}
+          onClose={() => setGroupCtl(null)}
+          onDone={() => iot.refetch()}
         />
       )}
     </>
