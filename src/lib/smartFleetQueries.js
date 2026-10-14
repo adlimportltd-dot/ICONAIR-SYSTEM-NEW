@@ -195,6 +195,8 @@ export async function getDeviceHistory(iotDeviceId, deviceId, days = 30) {
         .from('oil_tracking')
         .select('id, event_type, liters_added, level_after_pct, recorded_at, notes, recorder:profiles(full_name)')
         .eq('device_id', deviceId)
+        // בלי 'reading' — אלה איפוסי תחילת מחזור אוטומטיים (phase27), לא ביקורים בשטח
+        .neq('event_type', 'reading')
         .order('recorded_at', { ascending: false })
         .limit(8)
         .then(unwrap)
