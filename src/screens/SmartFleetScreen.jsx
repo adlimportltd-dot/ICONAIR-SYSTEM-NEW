@@ -152,18 +152,27 @@ function severity(row, oil) {
 
 const DOT = { ok: 'bg-ok', warn: 'bg-warn', crit: 'bg-crit', slate: 'bg-slate-400', gold: 'bg-gold-500', teal: 'bg-teal-500' };
 
+const PILL = {
+  ok: 'text-ok border-ok/25 bg-ok/10',
+  warn: 'text-warn border-warn/30 bg-warn/[0.09]',
+  crit: 'text-crit-soft border-crit/30 bg-crit/10',
+  slate: 'text-slate-500 border-slate-500/25 bg-slate-500/10',
+};
+
 function StateBadge({ row, compact = false }) {
   const s = liveState(row);
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[14px] font-semibold">
-      <span className="relative flex h-2.5 w-2.5 flex-none">
-        {s.tone === 'ok' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />}
-        {s.tone === 'crit' && <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-crit opacity-50" />}
-        <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${DOT[s.tone] ?? 'bg-slate-400'}`} />
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[13px] font-bold ${PILL[s.tone] ?? PILL.slate}`}>
+        <span className="relative flex h-2 w-2 flex-none">
+          {s.tone === 'ok' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />}
+          {s.tone === 'crit' && <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-crit opacity-50" />}
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${DOT[s.tone] ?? 'bg-slate-400'}`} />
+        </span>
+        {s.label}
       </span>
-      <span>{s.label}</span>
       {!row.online && !compact && (
-        <span className="text-[12.5px] font-medium text-text-faint">· {relativeTime(row.last_online_at)}</span>
+        <span className="ps-1 text-[12px] font-medium text-text-faint">מנותק {relativeTime(row.last_online_at)}</span>
       )}
     </span>
   );
@@ -171,7 +180,9 @@ function StateBadge({ row, compact = false }) {
 
 /** תא השמן: מיכל באחוזים (אם יש מד) + ימים עד ריק */
 function OilCell({ oil }) {
-  if (oil.pct == null && oil.days == null) return <span className="text-[13px] text-text-faint">—</span>;
+  if (oil.pct == null && oil.days == null) {
+    return <span className="text-[12.5px] text-text-faint">ממתין לנתונים</span>;
+  }
   return (
     <div className="flex flex-wrap items-center gap-1.5 leading-tight">
       {oil.pct != null && (
@@ -197,15 +208,15 @@ function OilCell({ oil }) {
 
 function TodayCell({ row, full = false }) {
   const today = todayPrograms(row.schedule);
-  if (!today) return <span className="text-[13px] text-text-faint">עוד לא נקרא</span>;
+  if (!today) return <span className="text-[12.5px] text-text-faint" title="השעון נקרא מהענן פעם ביום לכל מכשיר">ממתין לקריאת שעון</span>;
   if (!today.programs.length) return <span className="text-[13px] text-text-faint">לא פועל היום</span>;
   const list = full ? today.programs : today.programs.slice(0, 1);
   return (
     <div className="tabular flex flex-col gap-0.5 leading-tight">
       {list.map((p, i) => (
         <div key={i}>
-          <span className="text-[14px] font-semibold">{p.start}–{p.end}</span>
-          <span className="ms-1.5 text-[12.5px] text-text-faint">{p.work_sec}ש׳ / {p.pause_sec}ש׳</span>
+          <div className="text-[14px] font-semibold" dir="ltr" style={{ textAlign: 'right' }}>{p.start} – {p.end}</div>
+          <div className="text-[12px] text-text-faint">ריסוס {p.work_sec} שנ׳ · הפסקה {p.pause_sec} שנ׳</div>
         </div>
       ))}
       {!full && today.programs.length > 1 && (
@@ -249,13 +260,19 @@ function Detail({ label, children }) {
   );
 }
 
-const GRID = 'md:grid md:grid-cols-[minmax(0,1fr)_150px_170px_96px_150px_20px] md:items-center md:gap-4';
+const GRID = 'md:grid md:grid-cols-[minmax(190px,1.5fr)_minmax(120px,1fr)_minmax(150px,1.1fr)_minmax(80px,0.7fr)_minmax(150px,1.1fr)_20px] md:items-center md:gap-5';
 
 function DeviceRow({ row, oil, modelName, open, onToggle, isAdmin, onClassify, onSchedule, nested }) {
   const owner = OWNER_TYPES[row.owner_type];
+  // פס צבע בצד השורה — סורקים בעין מה דורש טיפול
+  const accent = row.owner_type === 'test' ? 'border-s-slate-400/40'
+    : !row.online || oil.empty ? 'border-s-crit'
+    : oil.low ? 'border-s-warn'
+    : !owner ? 'border-s-gold-500'
+    : 'border-s-ok/60';
   return (
-    <div className={`inner-row overflow-hidden ${nested ? '!rounded-xl' : ''}`}>
-      <button type="button" onClick={onToggle} aria-expanded={open} className="block w-full px-4 py-3 text-start">
+    <div className={`inner-row overflow-hidden border-s-4 transition-colors hover:border-gold-300/40 ${accent} ${nested ? '!rounded-xl' : ''} ${open ? '!bg-gold-500/[0.06]' : ''}`}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="block w-full cursor-pointer px-4 py-3 text-start">
         {/* --- מחשב: שורה אחת --- */}
         <div className={`hidden ${GRID}`}>
           <div className="min-w-0">
@@ -270,7 +287,7 @@ function DeviceRow({ row, oil, modelName, open, onToggle, isAdmin, onClassify, o
           </div>
           <StateBadge row={row} />
           <OilCell oil={oil} />
-          <span className="tabular text-[13.5px]">{oil.usage != null ? `${oil.usage.toFixed(1)} מ״ל` : <span className="text-text-faint">—</span>}</span>
+          <span className="tabular text-[14px] font-semibold">{oil.usage != null ? `${oil.usage.toFixed(1)} מ״ל` : <span className="text-[12.5px] font-normal text-text-faint">—</span>}</span>
           <TodayCell row={row} />
           <Chevron open={open} />
         </div>
@@ -532,18 +549,28 @@ export default function SmartFleetScreen() {
             {groups.map((g) => (g.items.length === 1 ? (
               <DeviceRow key={g.key} {...rowProps(g.items[0], false)} />
             ) : (
-              <div key={g.key} className="rounded-2xl border border-slate-500/15 bg-slate-500/[0.03] p-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 px-2 pb-2 pt-1">
-                  <div className="min-w-0">
-                    <span className="text-[15.5px] font-bold">{g.name}</span>
-                    {g.city && <span className="ms-2 text-[13px] text-text-faint">{g.city}</span>}
+              <div key={g.key} className="rounded-2xl border border-slate-500/15 bg-slate-500/[0.04] p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-2.5 pt-0.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-gold-500/[0.14] text-[15px] font-extrabold text-gold-600">
+                      {g.items.length}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-[16px] font-bold">{g.name}</div>
+                      <div className="text-[12.5px] text-text-faint">{g.city ? `${g.city} · ` : ''}{g.items.length} מכשירים</div>
+                    </div>
                   </div>
-                  <span className="text-[13px] text-text-faint">
-                    {g.items.length} מכשירים
-                    {g.items.some((i) => !i.row.online) && (
-                      <span className="ms-1.5 font-semibold text-crit-soft">· {g.items.filter((i) => !i.row.online).length} מנותקים</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {g.items.some((i) => i.row.online) && (
+                      <StatusChip tone="ok">{g.items.filter((i) => i.row.online).length} פעילים</StatusChip>
                     )}
-                  </span>
+                    {g.items.some((i) => !i.row.online) && (
+                      <StatusChip tone="crit">{g.items.filter((i) => !i.row.online).length} מנותקים</StatusChip>
+                    )}
+                    {g.items.some((i) => i.oil.low) && (
+                      <StatusChip tone="warn">{g.items.filter((i) => i.oil.low).length} מיכל נמוך</StatusChip>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {g.items.map((e) => <DeviceRow key={e.row.id} {...rowProps(e, true)} />)}
