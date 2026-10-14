@@ -758,7 +758,7 @@ export default function SmartFleetScreen() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {isAdmin && g.items.some((it) => it.row.control_enabled) && (
+                          {isAdmin && (
                             <button
                               type="button"
                               onClick={() => setGroupCtl(g)}
