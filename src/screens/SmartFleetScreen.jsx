@@ -6,6 +6,7 @@ import Modal from '../components/ui/Modal';
 import { Field, Select, TextInput, PrimaryButton, SecondaryButton } from '../components/ui/Field';
 import { Async, EmptyState } from '../components/ui/States';
 import { DeviceIcon } from '../components/ui/Icons';
+import FleetMap from '../components/FleetMap';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,7 @@ import {
   listLastRefills,
   listModelCapacity,
   listFleetRouteMaps,
+  listMapLocations,
 } from '../lib/smartFleetQueries';
 
 /**
@@ -403,6 +405,7 @@ export default function SmartFleetScreen() {
   const [kpiFilter, setKpiFilter] = useState(''); // '' | online | offline | low | none
   const [typeFilter, setTypeFilter] = useState('');
   const [lineFilter, setLineFilter] = useState('');
+  const [view, setView] = useState('list'); // list | map (phase67)
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [openId, setOpenId] = useState(null);
   const [linking, setLinking] = useState(null);
@@ -484,6 +487,37 @@ export default function SmartFleetScreen() {
         .some((v) => String(v ?? '').toLowerCase().includes(q));
     });
   }, [enriched, search, typeFilter, kpiFilter, lineFilter]);
+
+  // phase67: מפה חיה — כל המיקומים בשטח, צבועים לפי מצב המכשירים המחוברים לענן
+  const mapQuery = useQuery(listMapLocations, [], { enabled: view === 'map' });
+  const mapLocations = useMemo(() => {
+    if (!mapQuery.data) return [];
+    const iotByDevice = new Map();
+    enriched.forEach((e) => {
+      if (e.row.owner_type === 'rental' && e.row.device?.id) {
+        iotByDevice.set(e.row.device.id, { online: e.row.online, low: e.oil.low, pct: e.oil.pct, where: subLine(e.row) });
+      }
+    });
+    const q = search.trim().toLowerCase();
+    return mapQuery.data
+      .map((loc) => {
+        const iot = loc.deviceIds.map((id) => iotByDevice.get(id)).filter(Boolean);
+        const tone = iot.some((i) => !i.online) ? 'crit' : iot.some((i) => i.low) ? 'warn' : iot.length ? 'ok' : 'none';
+        const line = loc.kind === 'site'
+          ? (loc.city?.trim() ? cityRouteMap.get(loc.city.trim()) ?? NO_LINE : NO_LINE)
+          : (loc.routeName || NO_LINE);
+        return { ...loc, iot, tone, line };
+      })
+      .filter((loc) => {
+        if (lineFilter && loc.line !== lineFilter) return false;
+        if (kpiFilter === 'offline' && loc.tone !== 'crit') return false;
+        if (kpiFilter === 'low' && !loc.iot.some((i) => i.low)) return false;
+        if (kpiFilter === 'online' && !loc.iot.some((i) => i.online)) return false;
+        if (kpiFilter === 'none') return false;
+        if (q && ![loc.name, loc.address, loc.city].some((v) => String(v ?? '').toLowerCase().includes(q))) return false;
+        return true;
+      });
+  }, [mapQuery.data, enriched, cityRouteMap, lineFilter, kpiFilter, search]);
 
   const lineOptions = useMemo(
     () => [...new Set(enriched.filter((e) => e.row.owner_type !== 'test').map((e) => e.line))]
@@ -608,6 +642,39 @@ export default function SmartFleetScreen() {
         ]}
       />
 
+      {/* רשימה | מפה */}
+      <div className="mb-3 flex justify-center sm:justify-start">
+        <div className="inline-flex rounded-xl border border-slate-500/20 bg-slate-500/[0.06] p-1">
+          {[['list', 'רשימה'], ['map', 'מפה חיה']].map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`rounded-lg px-5 py-2 text-[14px] font-bold transition-colors ${
+                view === v ? 'bg-gold-500/[0.18] text-gold-600 shadow-sm' : 'text-text-faint hover:text-text'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'map' && (
+        <GlassCard>
+          <Async
+            loading={mapQuery.loading && !mapQuery.data}
+            error={mapQuery.error}
+            onRetry={mapQuery.refetch}
+            isEmpty={false}
+          >
+            <FleetMap locations={mapLocations} onSaved={mapQuery.refetch} />
+          </Async>
+        </GlassCard>
+      )}
+
+      {view === 'list' && (
       <GlassCard>
         <Async
           loading={iot.loading}
@@ -707,6 +774,7 @@ export default function SmartFleetScreen() {
           </div>
         </Async>
       </GlassCard>
+      )}
 
       {isAdmin && (
         <LinkModal
