@@ -103,3 +103,65 @@ export async function sendWorkTime(iotDeviceId, weeks, programs) {
   if (!res.ok) throw new Error(json.error || `השליחה נכשלה (${res.status})`);
   return json;
 }
+
+/* =====================================================================
+   מפה חיה (phase67) — כל המיקומים בשטח (לקוח חד-כתובתי או אתר של לקוח
+   ריבוי-כתובות) עם הקואורדינטות שנשמרו (lat/lng). מיקום בלי קואורדינטות
+   מומר לנקודה פעם אחת דרך Google Geocoder בצד הדפדפן ונשמר כאן.
+   ===================================================================== */
+
+export async function listMapLocations() {
+  const [customers, sites] = await Promise.all([
+    supabase
+      .from('customers')
+      .select('id, name, address, city, route_name, status, lat, lng, geocode_query, devices(id, status)')
+      .eq('status', 'active')
+      .then(unwrap),
+    supabase
+      .from('customer_sites')
+      .select('id, customer_id, label, city, lat, lng, geocode_query, customer:customers(name, status), devices(id, status)')
+      .then(unwrap),
+  ]);
+  const withSites = new Set(sites.map((s) => s.customer_id));
+  const live = (list) => (list ?? []).filter((d) => d.status !== 'uninstalled');
+
+  const fromCustomers = customers
+    .filter((c) => !withSites.has(c.id))
+    .map((c) => ({
+      kind: 'customer',
+      id: c.id,
+      name: c.name,
+      address: [c.address, c.city].filter(Boolean).join(', '),
+      city: c.city,
+      routeName: c.route_name?.trim() || null,
+      lat: c.lat,
+      lng: c.lng,
+      geocodeQuery: c.geocode_query,
+      deviceIds: live(c.devices).map((d) => d.id),
+    }));
+
+  const fromSites = sites
+    .filter((s) => s.customer?.status === 'active')
+    .map((s) => ({
+      kind: 'site',
+      id: s.id,
+      name: `${s.customer?.name ?? ''} — ${s.label}`,
+      address: [s.label, s.city].filter(Boolean).join(', '),
+      city: s.city,
+      routeName: null, // אתר: הקו נקבע לפי העיר (city_routes) במסך
+      lat: s.lat,
+      lng: s.lng,
+      geocodeQuery: s.geocode_query,
+      deviceIds: live(s.devices).map((d) => d.id),
+    }));
+
+  return [...fromCustomers, ...fromSites].filter((l) => l.deviceIds.length > 0);
+}
+
+/** שמירת קואורדינטות של מיקום (מנהל בלבד, RLS). query = הכתובת שהומרה, כדי לזהות שינוי כתובת בעתיד. */
+export const saveLocationCoords = (loc, lat, lng, query) =>
+  supabase
+    .from(loc.kind === 'site' ? 'customer_sites' : 'customers')
+    .update({ lat, lng, geocode_query: query, geocoded_at: new Date().toISOString() })
+    .eq('id', loc.id)
+    .then(unwrap);
