@@ -6,6 +6,7 @@ import { serviceReportUrl, sendServiceReportToCustomer } from '../lib/queries';
 import { describeError } from '../lib/supabase';
 import { navItems, settingsNavItem } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
+import AlertCenter, { useAlertCenter } from './AlertCenter';
 
 /** שם עצירה קריא: שם הלקוח, ועם תווית הבניין אם זו עצירת-אתר (אוורסט וכו') */
 function stopLabel(visit) {
@@ -112,6 +113,7 @@ function ServiceReportRow({ report }) {
 function NotificationsBell({
   alerts, completedVisits, loading, onOpen,
   serviceReports = [], serviceReportsLoading = false,
+  alertCount = 0, renderAlerts = null,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -144,7 +146,11 @@ function NotificationsBell({
                    transition-colors hover:border-amber-400/40 hover:text-amber-300"
       >
         <BellIcon className="h-[18px] w-[18px]" />
-        {alerts > 0 && (
+        {alertCount > 0 ? (
+          <span className="tabular absolute -left-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-crit px-1 text-[11px] font-bold text-white ring-2 ring-navy-900">
+            {alertCount > 99 ? '99+' : alertCount}
+          </span>
+        ) : alerts > 0 && (
           <span className="absolute left-2.5 top-[9px] h-[7px] w-[7px] rounded-full bg-crit
                            ring-[2.5px] ring-navy-900" />
         )}
@@ -152,9 +158,11 @@ function NotificationsBell({
 
       {open && (
         <div
-          className="glass absolute end-0 top-[calc(100%+8px)] z-30 max-h-[460px] w-[320px]
+          className="glass absolute end-0 top-[calc(100%+8px)] z-30 max-h-[75vh] w-[360px] max-w-[calc(100vw-24px)]
                      overflow-y-auto rounded-panel p-2 shadow-lift"
         >
+          {renderAlerts && renderAlerts(() => setOpen(false))}
+
           <div className="px-2.5 py-2 text-[13px] font-semibold tracking-wide text-text-faint">
             ביקורים אחרונים — בוצע / סגור
           </div>
@@ -286,6 +294,8 @@ export default function TopBar({
   onOpenNotifications, onNewCall, onSearch, onLogoClick,
 }) {
   const { isAdmin } = useAuth();
+  // phase69: מרכז התראות — רק למנהלים
+  const alertCenter = useAlertCenter(isAdmin);
   const allOnline = total > 0 && online === total;
 
   return (
@@ -362,7 +372,9 @@ export default function TopBar({
         loading={completedVisitsLoading}
         serviceReports={serviceReports}
         serviceReportsLoading={serviceReportsLoading}
-        onOpen={onOpenNotifications}
+        onOpen={() => { onOpenNotifications?.(); if (isAdmin) alertCenter.refresh(); }}
+        alertCount={isAdmin ? alertCenter.count : 0}
+        renderAlerts={isAdmin ? (close) => <AlertCenter ac={alertCenter} onNavigate={onNavigate} onClose={close} /> : null}
       />
 
       {isAdmin && <MobileMenu activeId={activeId} onNavigate={onNavigate} />}
