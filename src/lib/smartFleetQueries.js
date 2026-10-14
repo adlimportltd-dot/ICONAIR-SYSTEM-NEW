@@ -165,3 +165,42 @@ export const saveLocationCoords = (loc, lat, lng, query) =>
     .update({ lat, lng, geocode_query: query, geocoded_at: new Date().toISOString() })
     .eq('id', loc.id)
     .then(unwrap);
+
+/* =====================================================================
+   היסטוריה לכל מכשיר (phase68) — בלי שינוי במסד הנתונים:
+   iot_status_events (מעברי מחובר/מנותק מהסנכרון) + oil_tracking (מילויים).
+   ===================================================================== */
+
+export async function getDeviceHistory(iotDeviceId, deviceId, days = 30) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const [events, before, refills] = await Promise.all([
+    supabase
+      .from('iot_status_events')
+      .select('online, happened_at')
+      .eq('iot_device_id', iotDeviceId)
+      .gte('happened_at', since)
+      .order('happened_at', { ascending: true })
+      .then(unwrap),
+    // המצב בתחילת החלון = האירוע האחרון שלפניו (אם יש)
+    supabase
+      .from('iot_status_events')
+      .select('online, happened_at')
+      .eq('iot_device_id', iotDeviceId)
+      .lt('happened_at', since)
+      .order('happened_at', { ascending: false })
+      .limit(1)
+      .then(unwrap),
+    deviceId
+      ? supabase
+        .from('oil_tracking')
+        .select('id, event_type, liters_added, level_after_pct, recorded_at, notes, recorder:profiles(full_name)')
+        .eq('device_id', deviceId)
+        // בלי 'reading' — אלה איפוסי תחילת מחזור אוטומטיים (phase27), לא ביקורים בשטח
+        .neq('event_type', 'reading')
+        .order('recorded_at', { ascending: false })
+        .limit(8)
+        .then(unwrap)
+      : Promise.resolve([]),
+  ]);
+  return { since, days, events, before: before[0] ?? null, refills };
+}
