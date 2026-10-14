@@ -19,6 +19,7 @@ import {
   sendWorkTime,
   listLastRefills,
   listModelCapacity,
+  listFleetRouteMaps,
 } from '../lib/smartFleetQueries';
 
 /**
@@ -29,7 +30,8 @@ import {
  *
  * phase66 (עיצוב מחדש): שורה נקייה + פירוט בלחיצה, בעיות קודם, קיבוץ לפי לקוח,
  * כרטיסי סיכום שמסננים בלחיצה, מכשירי ניסוי מוסתרים כברירת מחדל,
- * ובטלפון כרטיס קצר שנפתח בנגיעה.
+ * ובטלפון כרטיס קצר שנפתח בנגיעה. המכשירים מחולקים לפי קו (כמו מסך המסלולים),
+ * ובתוך כל קו לפי לקוח.
  */
 
 /** סוג המכשיר — iot_devices.owner_type (phase56) */
@@ -49,10 +51,36 @@ function displayName(row) {
 
 function subLine(row) {
   if (row.owner_type === 'rental' && row.device) {
-    return row.device.location_note || row.device.customer?.city || row.device.serial;
+    const parts = [row.device.site?.label, row.device.location_note].filter(Boolean);
+    return parts.length ? parts.join(' · ') : (row.device.customer?.city || row.device.serial);
   }
   if (row.owner_type === 'private' && row.owner_phone) return `${row.owner_phone} · בענן: ${row.aroma_name ?? ''}`;
   return `בענן: ${row.aroma_name ?? ''}`;
+}
+
+const NO_LINE = 'ללא שיוך לקו';
+
+/**
+ * הקו של מכשיר — אותו כלל בדיוק כמו effectiveDeviceRoute במסך המסלולים (queries.js):
+ * אתר (לקוח ריבוי-כתובות) → לפי עיר האתר בלבד; מכשיר עם עיר משלו → לפי העיר,
+ * ואם לא ממופה → הקו של הלקוח; אחרת → הקו של הלקוח.
+ */
+function lineOf(row, cityRoutes) {
+  const d = row.owner_type === 'rental' ? row.device : null;
+  if (!d) return NO_LINE;
+  const byCity = (c) => (c?.trim() ? cityRoutes.get(c.trim()) ?? null : null);
+  const customerLine = d.customer?.route_name?.trim() || null;
+  let line;
+  if (d.site) line = byCity(d.site.city);
+  else if (d.city?.trim()) line = byCity(d.city) ?? customerLine;
+  else line = customerLine;
+  return line || NO_LINE;
+}
+
+function subRouteOf(row, subRoutes) {
+  const d = row.owner_type === 'rental' ? row.device : null;
+  const id = d?.site ? d.site.sub_route_id : d?.customer?.sub_route_id;
+  return id ? subRoutes.get(id) ?? null : null;
 }
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -262,7 +290,7 @@ function Detail({ label, children }) {
 
 const GRID = 'md:grid md:grid-cols-[minmax(190px,1.5fr)_minmax(120px,1fr)_minmax(150px,1.1fr)_minmax(80px,0.7fr)_minmax(150px,1.1fr)_20px] md:items-center md:gap-5';
 
-function DeviceRow({ row, oil, modelName, open, onToggle, isAdmin, onClassify, onSchedule, nested }) {
+function DeviceRow({ row, oil, modelName, line, subRoute, open, onToggle, isAdmin, onClassify, onSchedule, nested }) {
   const owner = OWNER_TYPES[row.owner_type];
   // פס צבע בצד השורה — סורקים בעין מה דורש טיפול
   const accent = row.owner_type === 'test' ? 'border-s-slate-400/40'
@@ -326,6 +354,7 @@ function DeviceRow({ row, oil, modelName, open, onToggle, isAdmin, onClassify, o
             <Detail label="דגם">{modelName ?? '—'}{row.supplier_model ? ` · ${row.supplier_model}` : ''}</Detail>
             <Detail label="מספר סידורי">{row.device?.serial ?? '—'}</Detail>
             <Detail label="שם בענן">{row.aroma_name ?? '—'}</Detail>
+            <Detail label="קו">{line}{subRoute ? ` · ${subRoute}` : ''}</Detail>
             <Detail label="מצב">
               <StateBadge row={row} compact />
               <span className="ms-1.5 text-[12.5px] text-text-faint">
@@ -373,6 +402,8 @@ export default function SmartFleetScreen() {
   const [search, setSearch] = useState('');
   const [kpiFilter, setKpiFilter] = useState(''); // '' | online | offline | low | none
   const [typeFilter, setTypeFilter] = useState('');
+  const [lineFilter, setLineFilter] = useState('');
+  const [collapsed, setCollapsed] = useState(() => new Set());
   const [openId, setOpenId] = useState(null);
   const [linking, setLinking] = useState(null);
   const [scheduling, setScheduling] = useState(null);
@@ -392,6 +423,17 @@ export default function SmartFleetScreen() {
   const caps = useQuery(listModelCapacity, []);
   const capOf = useMemo(() => new Map((caps.data ?? []).map((m) => [m.name, Number(m.capacity_ml) || null])), [caps.data]);
 
+  // phase66: מפות הקווים — לקיבוץ לפי קו כמו במסך המסלולים
+  const routeMaps = useQuery(listFleetRouteMaps, []);
+  const cityRouteMap = useMemo(
+    () => new Map((routeMaps.data?.cityRoutes ?? []).filter((r) => r.city?.trim()).map((r) => [r.city.trim(), r.route_name])),
+    [routeMaps.data],
+  );
+  const subRouteMap = useMemo(
+    () => new Map((routeMaps.data?.subRoutes ?? []).map((r) => [r.id, r.name])),
+    [routeMaps.data],
+  );
+
   const modelNameOf = useMemo(() => {
     const map = new Map((modelMap.data ?? []).map((m) => [m.supplier_model, m.iconair_model]));
     return (row) => row.device?.model || map.get(row.supplier_model) || null;
@@ -406,8 +448,12 @@ export default function SmartFleetScreen() {
       lastRefillOf.get(row.device?.id),
       Number(row.device?.fill_ml) || capOf.get(modelName),
     );
-    return { row, oil, modelName, sev: severity(row, oil) };
-  }), [iot.data, modelMap.data, lastRefillOf, capOf, modelNameOf]);
+    return {
+      row, oil, modelName, sev: severity(row, oil),
+      line: lineOf(row, cityRouteMap),
+      subRoute: subRouteOf(row, subRouteMap),
+    };
+  }), [iot.data, modelMap.data, lastRefillOf, capOf, modelNameOf, cityRouteMap, subRouteMap]);
 
   // הספירות — בלי מכשירי ניסוי (הם לא אצל לקוחות)
   const field = enriched.filter((e) => e.row.owner_type !== 'test');
@@ -423,7 +469,8 @@ export default function SmartFleetScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return enriched.filter(({ row, oil }) => {
+    return enriched.filter(({ row, oil, line }) => {
+      if (lineFilter && line !== lineFilter) return false;
       // מכשירי ניסוי מוסתרים, אלא אם בוחרים "ניסוי" במסנן הסוג
       if (row.owner_type === 'test' && typeFilter !== 'test') return false;
       if (typeFilter === 'none' && row.owner_type) return false;
@@ -436,26 +483,56 @@ export default function SmartFleetScreen() {
       return [row.aroma_name, row.mac, row.owner_name, row.owner_phone, row.device?.serial, row.device?.location_note, row.device?.customer?.name, row.device?.customer?.city]
         .some((v) => String(v ?? '').toLowerCase().includes(q));
     });
-  }, [enriched, search, typeFilter, kpiFilter]);
+  }, [enriched, search, typeFilter, kpiFilter, lineFilter]);
 
-  // קיבוץ לפי לקוח: לקוח עם כמה מכשירים מוצג ככותרת + המכשירים שלו
-  const groups = useMemo(() => {
-    const map = new Map();
+  const lineOptions = useMemo(
+    () => [...new Set(enriched.filter((e) => e.row.owner_type !== 'test').map((e) => e.line))]
+      .sort((a, b) => (a === NO_LINE) - (b === NO_LINE) || a.localeCompare(b, 'he'))
+      .map((l) => ({ value: l, label: l })),
+    [enriched],
+  );
+
+  // קיבוץ: קו → לקוח → מכשירים. לקוח עם כמה מכשירים מוצג ככותרת + המכשירים שלו.
+  const lines = useMemo(() => {
+    const byLine = new Map();
     filtered.forEach((e) => {
+      if (!byLine.has(e.line)) byLine.set(e.line, new Map());
+      const groups = byLine.get(e.line);
       const cust = e.row.owner_type === 'rental' ? e.row.device?.customer : null;
       // השאילתה מחזירה את הלקוח בלי id — מקבצים לפי שם + עיר
       const key = cust?.name ? `c:${cust.name}|${cust.city ?? ''}` : `r:${e.row.id}`;
-      if (!map.has(key)) map.set(key, { key, name: displayName(e.row), city: cust?.city ?? null, items: [] });
-      map.get(key).items.push(e);
+      if (!groups.has(key)) groups.set(key, { key, name: displayName(e.row), city: cust?.city ?? null, items: [] });
+      groups.get(key).items.push(e);
     });
-    const list = [...map.values()];
-    list.forEach((g) => {
-      g.items.sort((a, b) => a.sev - b.sev || String(subLine(a.row)).localeCompare(String(subLine(b.row)), 'he'));
-      g.sev = Math.min(...g.items.map((i) => i.sev));
+    const list = [...byLine.entries()].map(([name, groupMap]) => {
+      const groups = [...groupMap.values()];
+      groups.forEach((g) => {
+        g.items.sort((a, b) => a.sev - b.sev || String(subLine(a.row)).localeCompare(String(subLine(b.row)), 'he'));
+        g.sev = Math.min(...g.items.map((it) => it.sev));
+        g.subRoutes = [...new Set(g.items.map((it) => it.subRoute).filter(Boolean))];
+      });
+      groups.sort((a, b) => a.sev - b.sev || a.name.localeCompare(b.name, 'he'));
+      const items = groups.flatMap((g) => g.items);
+      return {
+        name,
+        groups,
+        total: items.length,
+        online: items.filter((it) => it.row.online).length,
+        offline: items.filter((it) => !it.row.online && it.row.owner_type !== 'test').length,
+        low: items.filter((it) => it.oil.low).length,
+        sev: Math.min(...groups.map((g) => g.sev)),
+      };
     });
-    list.sort((a, b) => a.sev - b.sev || a.name.localeCompare(b.name, 'he'));
+    // קו עם בעיות קודם, אחר כך לפי שם; "ללא שיוך לקו" תמיד בסוף
+    list.sort((a, b) => (a.name === NO_LINE) - (b.name === NO_LINE) || a.sev - b.sev || a.name.localeCompare(b.name, 'he'));
     return list;
   }, [filtered]);
+
+  const toggleLine = (name) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
 
   const toggleKpi = (k) => setKpiFilter((cur) => (cur === k ? '' : k));
   const toggleOpen = (id) => setOpenId((cur) => (cur === id ? null : id));
@@ -464,6 +541,8 @@ export default function SmartFleetScreen() {
     row: e.row,
     oil: e.oil,
     modelName: e.modelName,
+    line: e.line,
+    subRoute: e.subRoute,
     open: openId === e.row.id,
     onToggle: () => toggleOpen(e.row.id),
     isAdmin,
@@ -513,6 +592,13 @@ export default function SmartFleetScreen() {
         countLabel="מכשירים"
         filters={[
           {
+            key: 'line',
+            value: lineFilter,
+            onChange: setLineFilter,
+            placeholder: 'כל הקווים',
+            options: lineOptions,
+          },
+          {
             key: 'type',
             value: typeFilter,
             onChange: setTypeFilter,
@@ -545,38 +631,79 @@ export default function SmartFleetScreen() {
             <span />
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            {groups.map((g) => (g.items.length === 1 ? (
-              <DeviceRow key={g.key} {...rowProps(g.items[0], false)} />
-            ) : (
-              <div key={g.key} className="rounded-2xl border border-slate-500/15 bg-slate-500/[0.04] p-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-2.5 pt-0.5">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-gold-500/[0.14] text-[15px] font-extrabold text-gold-600">
-                      {g.items.length}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="truncate text-[16px] font-bold">{g.name}</div>
-                      <div className="text-[12.5px] text-text-faint">{g.city ? `${g.city} · ` : ''}{g.items.length} מכשירים</div>
+          <div className="flex flex-col gap-5">
+            {lines.map((ln) => {
+              const isCollapsed = collapsed.has(ln.name);
+              const pct = ln.total ? Math.round((ln.online / ln.total) * 100) : 0;
+              return (
+                <section key={ln.name} className="flex flex-col gap-2.5">
+                  {/* כותרת קו — לחיצה מקפלת/פותחת */}
+                  <button
+                    type="button"
+                    onClick={() => toggleLine(ln.name)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-500/20 bg-teal-500/[0.06] px-4 py-3 text-start transition-colors hover:bg-teal-500/[0.1]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-teal-500/10 text-teal-500">
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate text-[17px] font-extrabold">{ln.name}</div>
+                        <div className="text-[12.5px] text-text-faint">{ln.total} מכשירים · {ln.groups.length} לקוחות</div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {g.items.some((i) => i.row.online) && (
-                      <StatusChip tone="ok">{g.items.filter((i) => i.row.online).length} פעילים</StatusChip>
-                    )}
-                    {g.items.some((i) => !i.row.online) && (
-                      <StatusChip tone="crit">{g.items.filter((i) => !i.row.online).length} מנותקים</StatusChip>
-                    )}
-                    {g.items.some((i) => i.oil.low) && (
-                      <StatusChip tone="warn">{g.items.filter((i) => i.oil.low).length} מיכל נמוך</StatusChip>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {g.items.map((e) => <DeviceRow key={e.row.id} {...rowProps(e, true)} />)}
-                </div>
-              </div>
-            )))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {ln.offline > 0 && <StatusChip tone="crit">{ln.offline} מנותקים</StatusChip>}
+                      {ln.low > 0 && <StatusChip tone="warn">{ln.low} מיכל נמוך</StatusChip>}
+                      <span className="hidden items-center gap-2 sm:inline-flex">
+                        <span className="relative h-2 w-20 overflow-hidden rounded-full bg-slate-500/15">
+                          <span className="absolute inset-y-0 start-0 rounded-full bg-ok" style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="tabular text-[13px] font-bold" dir="ltr">{pct}%</span>
+                      </span>
+                      <Chevron open={!isCollapsed} />
+                    </div>
+                  </button>
+
+                  {!isCollapsed && ln.groups.map((g) => (g.items.length === 1 ? (
+                    <DeviceRow key={g.key} {...rowProps(g.items[0], false)} />
+                  ) : (
+                    <div key={g.key} className="rounded-2xl border border-slate-500/15 bg-slate-500/[0.04] p-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-2.5 pt-0.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-gold-500/[0.14] text-[15px] font-extrabold text-gold-600">
+                            {g.items.length}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate text-[16px] font-bold">{g.name}</div>
+                            <div className="text-[12.5px] text-text-faint">
+                              {g.city ? `${g.city} · ` : ''}{g.items.length} מכשירים{g.subRoutes.length ? ` · ${g.subRoutes.join(', ')}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.items.some((it) => it.row.online) && (
+                            <StatusChip tone="ok">{g.items.filter((it) => it.row.online).length} פעילים</StatusChip>
+                          )}
+                          {g.items.some((it) => !it.row.online) && (
+                            <StatusChip tone="crit">{g.items.filter((it) => !it.row.online).length} מנותקים</StatusChip>
+                          )}
+                          {g.items.some((it) => it.oil.low) && (
+                            <StatusChip tone="warn">{g.items.filter((it) => it.oil.low).length} מיכל נמוך</StatusChip>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {g.items.map((e) => <DeviceRow key={e.row.id} {...rowProps(e, true)} />)}
+                      </div>
+                    </div>
+                  )))}
+                </section>
+              );
+            })}
           </div>
         </Async>
       </GlassCard>
