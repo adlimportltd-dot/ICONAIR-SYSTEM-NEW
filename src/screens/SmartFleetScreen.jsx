@@ -7,6 +7,7 @@ import { Field, Select, TextInput, PrimaryButton, SecondaryButton } from '../com
 import { Async, EmptyState } from '../components/ui/States';
 import { DeviceIcon } from '../components/ui/Icons';
 import FleetMap from '../components/FleetMap';
+import DeviceHistory from '../components/DeviceHistory';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -375,6 +376,9 @@ function DeviceRow({ row, oil, modelName, line, subRoute, open, onToggle, isAdmi
             <Detail label="קושחה"><span className="font-mono text-[12.5px]">{row.firmware ?? '—'}</span></Detail>
             <Detail label="MAC"><span className="font-mono text-[12.5px]" dir="ltr">{row.mac ?? '—'}</span></Detail>
             {row.owner_type === 'private' && <Detail label="טלפון">{row.owner_phone ?? '—'}</Detail>}
+          </div>
+          <div className="mt-4 border-t border-slate-500/15 pt-4">
+            <DeviceHistory row={row} />
           </div>
           {isAdmin && (
             <div className="mt-4 flex flex-wrap gap-2">
