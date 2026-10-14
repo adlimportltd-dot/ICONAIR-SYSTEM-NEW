@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import GlassCard, { CardHead } from '../components/ui/GlassCard';
-import DataTable, { StatusChip } from '../components/ui/DataTable';
+import { StatusChip } from '../components/ui/DataTable';
 import ScreenToolbar from '../components/ui/ScreenToolbar';
 import Modal from '../components/ui/Modal';
 import { Field, Select, TextInput, PrimaryButton, SecondaryButton } from '../components/ui/Field';
@@ -19,20 +19,26 @@ import {
   sendWorkTime,
   listLastRefills,
   listModelCapacity,
+  listFleetRouteMaps,
 } from '../lib/smartFleetQueries';
 
 /**
  * צי חכם — מצב חי של המכשירים שמחוברים לענן Aroma Link.
- * שלב פיילוט: קריאה בלבד. הנתונים מגיעים מ-/api/aroma-sync כל 5 דקות.
+ * הנתונים מגיעים מ-/api/aroma-sync כל 5 דקות.
  * פעולות מנהל: סיווג מכשיר (שכירות / פרטי / ניסוי) ודגם, ועריכת שעון ועוצמה
- * (phase57) — רק במכשירים ש-control_enabled שלהם פעיל (בהתחלה: ניסוי בלבד).
+ * (phase57) — רק במכשירים ש-control_enabled שלהם פעיל.
+ *
+ * phase66 (עיצוב מחדש): שורה נקייה + פירוט בלחיצה, בעיות קודם, קיבוץ לפי לקוח,
+ * כרטיסי סיכום שמסננים בלחיצה, מכשירי ניסוי מוסתרים כברירת מחדל,
+ * ובטלפון כרטיס קצר שנפתח בנגיעה. המכשירים מחולקים לפי קו (כמו מסך המסלולים),
+ * ובתוך כל קו לפי לקוח.
  */
 
 /** סוג המכשיר — iot_devices.owner_type (phase56) */
 const OWNER_TYPES = {
-  rental:  { label: 'לקוח שכירות', tone: 'gold' },
-  private: { label: 'לקוח פרטי',   tone: 'teal' },
-  test:    { label: 'ניסוי',        tone: 'slate' },
+  rental: { label: 'לקוח שכירות', tone: 'gold' },
+  private: { label: 'לקוח פרטי', tone: 'teal' },
+  test: { label: 'ניסוי', tone: 'slate' },
 };
 const OWNER_OPTIONS = Object.entries(OWNER_TYPES).map(([value, t]) => ({ value, label: t.label }));
 
@@ -45,10 +51,36 @@ function displayName(row) {
 
 function subLine(row) {
   if (row.owner_type === 'rental' && row.device) {
-    return row.device.location_note || row.device.customer?.city || row.device.serial;
+    const parts = [row.device.site?.label, row.device.location_note].filter(Boolean);
+    return parts.length ? parts.join(' · ') : (row.device.customer?.city || row.device.serial);
   }
   if (row.owner_type === 'private' && row.owner_phone) return `${row.owner_phone} · בענן: ${row.aroma_name ?? ''}`;
   return `בענן: ${row.aroma_name ?? ''}`;
+}
+
+const NO_LINE = 'ללא שיוך לקו';
+
+/**
+ * הקו של מכשיר — אותו כלל בדיוק כמו effectiveDeviceRoute במסך המסלולים (queries.js):
+ * אתר (לקוח ריבוי-כתובות) → לפי עיר האתר בלבד; מכשיר עם עיר משלו → לפי העיר,
+ * ואם לא ממופה → הקו של הלקוח; אחרת → הקו של הלקוח.
+ */
+function lineOf(row, cityRoutes) {
+  const d = row.owner_type === 'rental' ? row.device : null;
+  if (!d) return NO_LINE;
+  const byCity = (c) => (c?.trim() ? cityRoutes.get(c.trim()) ?? null : null);
+  const customerLine = d.customer?.route_name?.trim() || null;
+  let line;
+  if (d.site) line = byCity(d.site.city);
+  else if (d.city?.trim()) line = byCity(d.city) ?? customerLine;
+  else line = customerLine;
+  return line || NO_LINE;
+}
+
+function subRouteOf(row, subRoutes) {
+  const d = row.owner_type === 'rental' ? row.device : null;
+  const id = d?.site ? d.site.sub_route_id : d?.customer?.sub_route_id;
+  return id ? subRoutes.get(id) ?? null : null;
 }
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -100,40 +132,267 @@ function dailyUsage(row, models) {
   return { ml: (secs / row.schedule.length) * Number(m.ml_per_sec), tank: Number(m.tank_ml) || null };
 }
 
-function UsageCell({ row, models }) {
+/**
+ * מצב השמן של מכשיר — חישוב אחד שמשמש את השורה, הפירוט, המיון והכרטיס "מיכל נמוך".
+ * עם מד מיכל: לפי האחוז. בלי מד: לפי המילוי האחרון במערכת (phase62),
+ * ואם אין מילוי — כמה ימים מחזיק מיכל מלא (phase63: לפי כמות המילוי של הדגם/המכשיר).
+ */
+function oilInfo(row, models, refill, fillMl) {
+  const pct = row.has_oil_gauge && row.remain_oil != null
+    ? Math.max(0, Math.min(100, Math.round(Number(row.remain_oil))))
+    : null;
   const u = dailyUsage(row, models);
-  if (!u) return <span className="text-[13px] text-text-faint">—</span>;
-  return <span className="tabular text-[13.5px]">{u.ml.toFixed(1)} מ״ל</span>;
+  const usage = u && u.ml > 0 ? u.ml : null;
+  let days = null;
+  let kind = null;
+  let refillDate = null;
+  if (usage && u.tank) {
+    if (pct != null) {
+      days = Math.floor(((pct / 100) * u.tank) / usage);
+      kind = 'gauge';
+    } else if (refill && refill.level_after_pct != null) {
+      const passed = (Date.now() - new Date(refill.recorded_at).getTime()) / 86400000;
+      days = Math.max(0, Math.floor(((Number(refill.level_after_pct) / 100) * (fillMl || u.tank) - usage * passed) / usage));
+      kind = 'refill';
+      refillDate = new Date(refill.recorded_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+    } else {
+      days = Math.floor((fillMl || u.tank) / usage);
+      kind = 'full';
+    }
+  }
+  const low = (pct != null && pct < 15) || (kind !== 'full' && days != null && days <= 7);
+  const empty = (pct != null && pct <= 0) || (kind !== 'full' && days != null && days <= 0);
+  return { pct, usage, days, kind, refillDate, low, empty };
 }
 
-/** ימים עד ריק: עם מד מיכל — לפי האחוז; בלי מד — כמה ימים מחזיק מיכל מלא */
-function DaysCell({ row, models, refill, fillMl }) {
-  const u = dailyUsage(row, models);
-  if (!u || !u.tank || u.ml <= 0) return <span className="text-[13px] text-text-faint">—</span>;
-  if (row.has_oil_gauge && row.remain_oil != null) {
-    const d = Math.floor(((Number(row.remain_oil) / 100) * u.tank) / u.ml);
-    const tone = d <= 3 ? 'crit' : d <= 7 ? 'warn' : 'ok';
-    return <StatusChip tone={tone}>{d} ימים</StatusChip>;
-  }
-  if (refill && refill.level_after_pct != null) {
-    const days = (Date.now() - new Date(refill.recorded_at).getTime()) / 86400000;
-    const left = Math.max(0, Math.floor(((Number(refill.level_after_pct) / 100) * (fillMl || u.tank) - u.ml * days) / u.ml));
-    const tone = left <= 3 ? 'crit' : left <= 7 ? 'warn' : 'ok';
-    return (
-      <div className="leading-tight">
-        <StatusChip tone={tone}>{left} ימים</StatusChip>
-        <div className="mt-0.5 text-[11.5px] text-text-faint">לפי מילוי {new Date(refill.recorded_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</div>
-      </div>
-    );
-  }
-  return <span className="tabular text-[12.5px] text-text-faint">מלא: {Math.floor((fillMl || u.tank) / u.ml)} ימים</span>;
+const daysTone = (d) => (d <= 3 ? 'crit' : d <= 7 ? 'warn' : 'ok');
+
+/** דירוג לחומרה — קטן = דחוף יותר. מכשירי ניסוי תמיד בסוף. */
+function severity(row, oil) {
+  if (row.owner_type === 'test') return 9;
+  if (!row.online) return 0;
+  if (oil.empty) return 1;
+  if (oil.low) return 2;
+  if (row.is_locked) return 3;
+  if (!row.owner_type) return 4;
+  return 5;
 }
 
-function TankCell({ row }) { if (!row.has_oil_gauge || row.remain_oil == null) return <span className="text-[13px] text-text-faint">—</span>; const pct = Math.max(0, Math.min(100, Math.round(Number(row.remain_oil)))); const tone = pct <= 0 ? 'crit' : pct < 15 ? 'warn' : 'ok'; return <StatusChip tone={tone}>{pct <= 0 ? 'ריק' : pct + '%'}</StatusChip>; } function Kpi({ label, value, tone = 'text-text' }) {
+const DOT = { ok: 'bg-ok', warn: 'bg-warn', crit: 'bg-crit', slate: 'bg-slate-400', gold: 'bg-gold-500', teal: 'bg-teal-500' };
+
+const PILL = {
+  ok: 'text-ok border-ok/25 bg-ok/10',
+  warn: 'text-warn border-warn/30 bg-warn/[0.09]',
+  crit: 'text-crit-soft border-crit/30 bg-crit/10',
+  slate: 'text-slate-500 border-slate-500/25 bg-slate-500/10',
+};
+
+function StateBadge({ row, compact = false }) {
+  const s = liveState(row);
   return (
-    <div className="inner-row flex flex-col gap-1 px-4 py-3">
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[13px] font-bold ${PILL[s.tone] ?? PILL.slate}`}>
+        <span className="relative flex h-2 w-2 flex-none">
+          {s.tone === 'ok' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />}
+          {s.tone === 'crit' && <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-crit opacity-50" />}
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${DOT[s.tone] ?? 'bg-slate-400'}`} />
+        </span>
+        {s.label}
+      </span>
+      {!row.online && !compact && (
+        <span className="ps-1 text-[12px] font-medium text-text-faint">מנותק {relativeTime(row.last_online_at)}</span>
+      )}
+    </span>
+  );
+}
+
+/** תא השמן: מיכל באחוזים (אם יש מד) + ימים עד ריק */
+function OilCell({ oil }) {
+  if (oil.pct == null && oil.days == null) {
+    return <span className="text-[12.5px] text-text-faint">ממתין לנתונים</span>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 leading-tight">
+      {oil.pct != null && (
+        <span className="inline-flex items-center gap-1.5" title={`מיכל ${oil.pct}%`}>
+          <span className="relative h-2 w-12 overflow-hidden rounded-full bg-slate-500/20">
+            <span
+              className={`absolute inset-y-0 start-0 rounded-full ${oil.pct < 15 ? 'bg-warn' : 'bg-ok'} ${oil.pct <= 0 ? '!bg-crit' : ''}`}
+              style={{ width: `${Math.max(oil.pct, 4)}%` }}
+            />
+          </span>
+          <span className={`tabular text-[13px] font-bold ${oil.pct <= 0 ? 'text-crit-soft' : oil.pct < 15 ? 'text-warn' : 'text-ok'}`}>
+            {oil.pct <= 0 ? 'ריק' : `${oil.pct}%`}
+          </span>
+        </span>
+      )}
+      {oil.days != null && oil.kind !== 'full' && <StatusChip tone={daysTone(oil.days)}>{oil.days} ימים</StatusChip>}
+      {oil.days != null && oil.kind === 'full' && (
+        <span className="tabular text-[12.5px] text-text-faint">מלא: {oil.days} ימים</span>
+      )}
+    </div>
+  );
+}
+
+function TodayCell({ row, full = false }) {
+  const today = todayPrograms(row.schedule);
+  if (!today) return <span className="text-[12.5px] text-text-faint" title="השעון נקרא מהענן פעם ביום לכל מכשיר">ממתין לקריאת שעון</span>;
+  if (!today.programs.length) return <span className="text-[13px] text-text-faint">לא פועל היום</span>;
+  const list = full ? today.programs : today.programs.slice(0, 1);
+  return (
+    <div className="tabular flex flex-col gap-0.5 leading-tight">
+      {list.map((p, i) => (
+        <div key={i}>
+          <div className="text-[14px] font-semibold" dir="ltr" style={{ textAlign: 'right' }}>{p.start} – {p.end}</div>
+          <div className="text-[12px] text-text-faint">ריסוס {p.work_sec} שנ׳ · הפסקה {p.pause_sec} שנ׳</div>
+        </div>
+      ))}
+      {!full && today.programs.length > 1 && (
+        <span className="text-[12px] text-text-faint">+{today.programs.length - 1} תוכניות</span>
+      )}
+    </div>
+  );
+}
+
+function Chevron({ open }) {
+  return (
+    <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-text-faint transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Kpi({ label, value, tone = 'text-text', active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inner-row flex flex-col items-start gap-1 px-4 py-3 text-start transition-colors hover:border-gold-300/30 ${
+        active ? '!border-gold-500/50 !bg-gold-500/[0.12]' : ''
+      }`}
+    >
       <span className="text-[13px] font-medium text-text-faint">{label}</span>
       <span className={`tabular font-display text-[24px] font-extrabold ${tone}`}>{value}</span>
+    </button>
+  );
+}
+
+/** שורת פירוט: תווית + ערך */
+function Detail({ label, children }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-slate-500/15 py-1.5 text-[14px] last:border-0 md:block md:border-0 md:py-0">
+      <div className="flex-none text-[12.5px] font-medium text-text-faint">{label}</div>
+      <div className="min-w-0 text-end md:mt-0.5 md:text-start">{children}</div>
+    </div>
+  );
+}
+
+const GRID = 'md:grid md:grid-cols-[minmax(190px,1.5fr)_minmax(120px,1fr)_minmax(150px,1.1fr)_minmax(80px,0.7fr)_minmax(150px,1.1fr)_20px] md:items-center md:gap-5';
+
+function DeviceRow({ row, oil, modelName, line, subRoute, open, onToggle, isAdmin, onClassify, onSchedule, nested }) {
+  const owner = OWNER_TYPES[row.owner_type];
+  // פס צבע בצד השורה — סורקים בעין מה דורש טיפול
+  const accent = row.owner_type === 'test' ? 'border-s-slate-400/40'
+    : !row.online || oil.empty ? 'border-s-crit'
+    : oil.low ? 'border-s-warn'
+    : !owner ? 'border-s-gold-500'
+    : 'border-s-ok/60';
+  return (
+    <div className={`inner-row overflow-hidden border-s-4 transition-colors hover:border-gold-300/40 ${accent} ${nested ? '!rounded-xl' : ''} ${open ? '!bg-gold-500/[0.06]' : ''}`}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="block w-full cursor-pointer px-4 py-3 text-start">
+        {/* --- מחשב: שורה אחת --- */}
+        <div className={`hidden ${GRID}`}>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[15px] font-semibold">{nested ? subLine(row) : displayName(row)}</span>
+              {!owner && <StatusChip tone="warn">לא מסווג</StatusChip>}
+              {row.owner_type === 'test' && <StatusChip tone="slate">ניסוי</StatusChip>}
+            </div>
+            <div className="truncate text-[13px] text-text-faint">
+              {nested ? (modelName ?? '—') : `${subLine(row)}${modelName ? ` · ${modelName}` : ''}`}
+            </div>
+          </div>
+          <StateBadge row={row} />
+          <OilCell oil={oil} />
+          <span className="tabular text-[14px] font-semibold">{oil.usage != null ? `${oil.usage.toFixed(1)} מ״ל` : <span className="text-[12.5px] font-normal text-text-faint">—</span>}</span>
+          <TodayCell row={row} />
+          <Chevron open={open} />
+        </div>
+
+        {/* --- טלפון: כרטיס קצר --- */}
+        <div className="flex flex-col gap-2 md:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-[15.5px] font-semibold">{nested ? subLine(row) : displayName(row)}</div>
+              <div className="truncate text-[13px] text-text-faint">
+                {nested ? (modelName ?? '—') : `${subLine(row)}${modelName ? ` · ${modelName}` : ''}`}
+              </div>
+            </div>
+            <div className="flex flex-none items-center gap-2">
+              <StateBadge row={row} compact />
+              <Chevron open={open} />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <OilCell oil={oil} />
+            <TodayCell row={row} />
+          </div>
+          {(!owner || row.owner_type === 'test') && (
+            <div className="flex gap-1.5">
+              {!owner && <StatusChip tone="warn">לא מסווג</StatusChip>}
+              {row.owner_type === 'test' && <StatusChip tone="slate">ניסוי</StatusChip>}
+            </div>
+          )}
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-500/15 px-4 pb-4 pt-3">
+          <div className="grid grid-cols-1 gap-x-6 md:grid-cols-4 md:gap-y-3">
+            <Detail label="סוג">{owner ? <StatusChip tone={owner.tone}>{owner.label}</StatusChip> : 'לא מסווג'}</Detail>
+            <Detail label="דגם">{modelName ?? '—'}{row.supplier_model ? ` · ${row.supplier_model}` : ''}</Detail>
+            <Detail label="מספר סידורי">{row.device?.serial ?? '—'}</Detail>
+            <Detail label="שם בענן">{row.aroma_name ?? '—'}</Detail>
+            <Detail label="קו">{line}{subRoute ? ` · ${subRoute}` : ''}</Detail>
+            <Detail label="מצב">
+              <StateBadge row={row} compact />
+              <span className="ms-1.5 text-[12.5px] text-text-faint">
+                {row.online ? `עודכן ${relativeTime(row.last_sync_at)}` : `נראה ${relativeTime(row.last_online_at)}`}
+              </span>
+            </Detail>
+            <Detail label="מיכל">
+              {oil.pct != null ? `${oil.pct}%` : 'אין מד'}
+              {oil.kind === 'refill' && <span className="ms-1.5 text-[12.5px] text-text-faint">לפי מילוי {oil.refillDate}</span>}
+            </Detail>
+            <Detail label="צריכה ביום">{oil.usage != null ? `${oil.usage.toFixed(1)} מ״ל` : '—'}</Detail>
+            <Detail label="ימים עד ריק">
+              {oil.days == null ? '—' : oil.kind === 'full' ? `מיכל מלא מחזיק ${oil.days} ימים` : `${oil.days} ימים`}
+            </Detail>
+            <Detail label="שעון היום"><TodayCell row={row} full /></Detail>
+            <Detail label="קושחה"><span className="font-mono text-[12.5px]">{row.firmware ?? '—'}</span></Detail>
+            <Detail label="MAC"><span className="font-mono text-[12.5px]" dir="ltr">{row.mac ?? '—'}</span></Detail>
+            {row.owner_type === 'private' && <Detail label="טלפון">{row.owner_phone ?? '—'}</Detail>}
+          </div>
+          {isAdmin && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <SecondaryButton className="!px-4 !py-2 !text-[14px]" onClick={(e) => { e.stopPropagation(); onClassify(row); }}>
+                סיווג
+              </SecondaryButton>
+              {row.control_enabled && (
+                <SecondaryButton
+                  className="!px-4 !py-2 !text-[14px]"
+                  disabled={!row.online}
+                  title={row.online ? '' : 'המכשיר מנותק'}
+                  onClick={(e) => { e.stopPropagation(); onSchedule(row); }}
+                >
+                  שעון ועוצמה
+                </SecondaryButton>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -141,8 +400,11 @@ function TankCell({ row }) { if (!row.has_oil_gauge || row.remain_oil == null) r
 export default function SmartFleetScreen() {
   const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [kpiFilter, setKpiFilter] = useState(''); // '' | online | offline | low | none
   const [typeFilter, setTypeFilter] = useState('');
+  const [lineFilter, setLineFilter] = useState('');
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const [openId, setOpenId] = useState(null);
   const [linking, setLinking] = useState(null);
   const [scheduling, setScheduling] = useState(null);
 
@@ -161,108 +423,133 @@ export default function SmartFleetScreen() {
   const caps = useQuery(listModelCapacity, []);
   const capOf = useMemo(() => new Map((caps.data ?? []).map((m) => [m.name, Number(m.capacity_ml) || null])), [caps.data]);
 
+  // phase66: מפות הקווים — לקיבוץ לפי קו כמו במסך המסלולים
+  const routeMaps = useQuery(listFleetRouteMaps, []);
+  const cityRouteMap = useMemo(
+    () => new Map((routeMaps.data?.cityRoutes ?? []).filter((r) => r.city?.trim()).map((r) => [r.city.trim(), r.route_name])),
+    [routeMaps.data],
+  );
+  const subRouteMap = useMemo(
+    () => new Map((routeMaps.data?.subRoutes ?? []).map((r) => [r.id, r.name])),
+    [routeMaps.data],
+  );
+
   const modelNameOf = useMemo(() => {
     const map = new Map((modelMap.data ?? []).map((m) => [m.supplier_model, m.iconair_model]));
     return (row) => row.device?.model || map.get(row.supplier_model) || null;
   }, [modelMap.data]);
 
-  const rows = useMemo(() => {
+  // מצב השמן והחומרה לכל מכשיר — מחושב פעם אחת
+  const enriched = useMemo(() => (iot.data ?? []).map((row) => {
+    const modelName = modelNameOf(row);
+    const oil = oilInfo(
+      row,
+      modelMap.data,
+      lastRefillOf.get(row.device?.id),
+      Number(row.device?.fill_ml) || capOf.get(modelName),
+    );
+    return {
+      row, oil, modelName, sev: severity(row, oil),
+      line: lineOf(row, cityRouteMap),
+      subRoute: subRouteOf(row, subRouteMap),
+    };
+  }), [iot.data, modelMap.data, lastRefillOf, capOf, modelNameOf, cityRouteMap, subRouteMap]);
+
+  // הספירות — בלי מכשירי ניסוי (הם לא אצל לקוחות)
+  const field = enriched.filter((e) => e.row.owner_type !== 'test');
+  const counts = {
+    all: field.length,
+    online: field.filter((e) => e.row.online).length,
+    offline: field.filter((e) => !e.row.online).length,
+    low: field.filter((e) => e.oil.low).length,
+    none: field.filter((e) => !e.row.owner_type).length,
+  };
+  const testCount = enriched.length - field.length;
+  const lastSync = enriched.reduce((max, e) => (e.row.last_sync_at > max ? e.row.last_sync_at : max), '');
+
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (iot.data ?? []).filter((row) => {
-      if (statusFilter === 'online' && !row.online) return false;
-      if (statusFilter === 'offline' && row.online) return false;
+    return enriched.filter(({ row, oil, line }) => {
+      if (lineFilter && line !== lineFilter) return false;
+      // מכשירי ניסוי מוסתרים, אלא אם בוחרים "ניסוי" במסנן הסוג
+      if (row.owner_type === 'test' && typeFilter !== 'test') return false;
       if (typeFilter === 'none' && row.owner_type) return false;
       if (typeFilter && typeFilter !== 'none' && row.owner_type !== typeFilter) return false;
+      if (kpiFilter === 'online' && !row.online) return false;
+      if (kpiFilter === 'offline' && row.online) return false;
+      if (kpiFilter === 'low' && !oil.low) return false;
+      if (kpiFilter === 'none' && row.owner_type) return false;
       if (!q) return true;
-      return [row.aroma_name, row.mac, row.owner_name, row.owner_phone, row.device?.serial, row.device?.customer?.name, row.device?.customer?.city]
+      return [row.aroma_name, row.mac, row.owner_name, row.owner_phone, row.device?.serial, row.device?.location_note, row.device?.customer?.name, row.device?.customer?.city]
         .some((v) => String(v ?? '').toLowerCase().includes(q));
     });
-  }, [iot.data, search, statusFilter, typeFilter]);
+  }, [enriched, search, typeFilter, kpiFilter, lineFilter]);
 
-  const all = iot.data ?? [];
-  const onlineCount = all.filter((r) => r.online).length;
-  // מכשירי ניסוי לא נספרים כ"מנותקים" — הם לא אצל לקוחות
-  const offlineCount = all.filter((r) => !r.online && r.owner_type !== 'test').length;
-  const unclassified = all.filter((r) => !r.owner_type).length;
-  const lastSync = all.reduce((max, r) => (r.last_sync_at > max ? r.last_sync_at : max), '');
+  const lineOptions = useMemo(
+    () => [...new Set(enriched.filter((e) => e.row.owner_type !== 'test').map((e) => e.line))]
+      .sort((a, b) => (a === NO_LINE) - (b === NO_LINE) || a.localeCompare(b, 'he'))
+      .map((l) => ({ value: l, label: l })),
+    [enriched],
+  );
 
-  const columns = [
-    {
-      key: 'name',
-      label: 'מכשיר',
-      width: 'minmax(0,1.4fr)',
-      render: (row) => (
-        <div className="min-w-0">
-          <div className="truncate font-semibold">{displayName(row)}</div>
-          <div className="truncate text-[13px] text-text-faint">{subLine(row)}</div>
-        </div>
-      ),
-    },
-    {
-      key: 'owner',
-      label: 'סוג',
-      width: '116px',
-      render: (row) => {
-        const t = OWNER_TYPES[row.owner_type];
-        return t ? <StatusChip tone={t.tone}>{t.label}</StatusChip> : <span className="text-[13px] text-text-faint">לא מסווג</span>;
-      },
-    },
-    {
-      key: 'model',
-      label: 'דגם',
-      width: '120px',
-      render: (row) => (
-        <div className="leading-tight">
-          <div className="font-semibold">{modelNameOf(row) ?? '—'}</div>
-          {row.supplier_model && <div className="text-[12.5px] text-text-faint">{row.supplier_model}</div>}
-        </div>
-      ),
-    },
-    {
-      key: 'state',
-      label: 'מצב',
-      width: '116px',
-      render: (row) => {
-        const s = liveState(row);
-        return <StatusChip tone={s.tone}>{s.label}</StatusChip>;
-      },
-    },
-    {
-      key: 'tank', label: 'מיכל', width: '84px', render: (row) => <TankCell row={row} /> }, { key: 'usage', label: 'צריכה ביום', width: '92px', render: (row) => <UsageCell row={row} models={modelMap.data} /> }, { key: 'days', label: 'ימים עד ריק', width: '104px', render: (row) => <DaysCell row={row} models={modelMap.data} refill={lastRefillOf.get(row.device?.id)} fillMl={Number(row.device?.fill_ml) || capOf.get(modelNameOf(row))} /> }, { key: 'today',
-      label: 'שעון היום',
-      width: '150px',
-      render: (row) => {
-        const today = todayPrograms(row.schedule);
-        if (!today) return <span className="text-[13px] text-text-faint">עוד לא נקרא</span>;
-        if (!today.programs.length) return <span className="text-[13px] text-text-faint">לא פועל היום</span>;
-        const p = today.programs[0];
-        return (
-          <div className="tabular leading-tight">
-            <div className="text-[14px] font-semibold">{p.start}–{p.end}</div>
-            <div className="text-[12.5px] text-text-faint">
-              {p.work_sec}ש׳ / {p.pause_sec}ש׳{today.programs.length > 1 ? ` · +${today.programs.length - 1}` : ''}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      key: 'seen',
-      label: 'נראה לאחרונה',
-      width: '112px',
-      render: (row) => (
-        <span className="tabular text-[13.5px] text-text-faint">
-          {row.online ? relativeTime(row.last_sync_at) : relativeTime(row.last_online_at)}
-        </span>
-      ),
-    },
-    {
-      key: 'fw',
-      label: 'קושחה',
-      width: '128px',
-      render: (row) => <span className="font-mono text-[12.5px] text-text-faint">{row.firmware ?? '—'}</span>,
-    },
-  ];
+  // קיבוץ: קו → לקוח → מכשירים. לקוח עם כמה מכשירים מוצג ככותרת + המכשירים שלו.
+  const lines = useMemo(() => {
+    const byLine = new Map();
+    filtered.forEach((e) => {
+      if (!byLine.has(e.line)) byLine.set(e.line, new Map());
+      const groups = byLine.get(e.line);
+      const cust = e.row.owner_type === 'rental' ? e.row.device?.customer : null;
+      // השאילתה מחזירה את הלקוח בלי id — מקבצים לפי שם + עיר
+      const key = cust?.name ? `c:${cust.name}|${cust.city ?? ''}` : `r:${e.row.id}`;
+      if (!groups.has(key)) groups.set(key, { key, name: displayName(e.row), city: cust?.city ?? null, items: [] });
+      groups.get(key).items.push(e);
+    });
+    const list = [...byLine.entries()].map(([name, groupMap]) => {
+      const groups = [...groupMap.values()];
+      groups.forEach((g) => {
+        g.items.sort((a, b) => a.sev - b.sev || String(subLine(a.row)).localeCompare(String(subLine(b.row)), 'he'));
+        g.sev = Math.min(...g.items.map((it) => it.sev));
+        g.subRoutes = [...new Set(g.items.map((it) => it.subRoute).filter(Boolean))];
+      });
+      groups.sort((a, b) => a.sev - b.sev || a.name.localeCompare(b.name, 'he'));
+      const items = groups.flatMap((g) => g.items);
+      return {
+        name,
+        groups,
+        total: items.length,
+        online: items.filter((it) => it.row.online).length,
+        offline: items.filter((it) => !it.row.online && it.row.owner_type !== 'test').length,
+        low: items.filter((it) => it.oil.low).length,
+        sev: Math.min(...groups.map((g) => g.sev)),
+      };
+    });
+    // קו עם בעיות קודם, אחר כך לפי שם; "ללא שיוך לקו" תמיד בסוף
+    list.sort((a, b) => (a.name === NO_LINE) - (b.name === NO_LINE) || a.sev - b.sev || a.name.localeCompare(b.name, 'he'));
+    return list;
+  }, [filtered]);
+
+  const toggleLine = (name) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+
+  const toggleKpi = (k) => setKpiFilter((cur) => (cur === k ? '' : k));
+  const toggleOpen = (id) => setOpenId((cur) => (cur === id ? null : id));
+
+  const rowProps = (e, nested) => ({
+    row: e.row,
+    oil: e.oil,
+    modelName: e.modelName,
+    line: e.line,
+    subRoute: e.subRoute,
+    open: openId === e.row.id,
+    onToggle: () => toggleOpen(e.row.id),
+    isAdmin,
+    onClassify: setLinking,
+    onSchedule: setScheduling,
+    nested,
+  });
 
   return (
     <>
@@ -273,37 +560,50 @@ export default function SmartFleetScreen() {
           title="צי חכם"
           subtitle={`פיילוט · נתונים מ-Aroma Link · סנכרון אחרון ${lastSync ? relativeTime(lastSync) : '—'}`}
         />
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <Kpi label="מחוברים לענן" value={all.length} />
-          <Kpi label="מקוונים" value={onlineCount} tone="text-ok" />
-          <Kpi label="מנותקים" value={offlineCount} tone={offlineCount ? 'text-crit' : 'text-text'} />
-          <Kpi label="לא מסווגים" value={unclassified} tone={unclassified ? 'text-gold-600' : 'text-text'} />
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          <Kpi label="מחוברים לענן" value={counts.all} active={kpiFilter === ''} onClick={() => setKpiFilter('')} />
+          <Kpi label="מקוונים" value={counts.online} tone="text-ok" active={kpiFilter === 'online'} onClick={() => toggleKpi('online')} />
+          <Kpi label="מנותקים" value={counts.offline} tone={counts.offline ? 'text-crit' : 'text-text'} active={kpiFilter === 'offline'} onClick={() => toggleKpi('offline')} />
+          <Kpi label="מיכל נמוך (עד 7 ימים)" value={counts.low} tone={counts.low ? 'text-warn' : 'text-text'} active={kpiFilter === 'low'} onClick={() => toggleKpi('low')} />
+          <Kpi label="לא מסווגים" value={counts.none} tone={counts.none ? 'text-gold-600' : 'text-text'} active={kpiFilter === 'none'} onClick={() => toggleKpi('none')} />
         </div>
+        {counts.all > 0 && (
+          <div className="mt-3.5">
+            <div className="mb-1.5 flex items-baseline justify-between text-[13px]">
+              <span className="font-semibold text-text-faint">זמינות הצי עכשיו</span>
+              <span className="tabular flex items-baseline gap-2">
+                <span className="font-medium text-text-faint">{counts.online} מתוך {counts.all} מקוונים</span>
+                <span className="text-[15px] font-extrabold" dir="ltr">{Math.round((counts.online / counts.all) * 100)}%</span>
+              </span>
+            </div>
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-500/15">
+              <span className="h-full bg-ok transition-all" style={{ width: `${(counts.online / counts.all) * 100}%` }} />
+              <span className="h-full bg-crit/70 transition-all" style={{ width: `${(counts.offline / counts.all) * 100}%` }} />
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       <ScreenToolbar
         search={search}
         onSearch={setSearch}
-        searchPlaceholder="חיפוש לפי לקוח, טלפון, עיר או MAC…"
-        count={rows.length}
+        searchPlaceholder="חיפוש לפי לקוח, מיקום, טלפון, עיר או MAC…"
+        count={filtered.length}
         countLabel="מכשירים"
         filters={[
           {
-            key: 'status',
-            value: statusFilter,
-            onChange: setStatusFilter,
-            placeholder: 'כל המכשירים',
-            options: [
-              { value: 'online', label: 'מקוונים' },
-              { value: 'offline', label: 'מנותקים' },
-            ],
+            key: 'line',
+            value: lineFilter,
+            onChange: setLineFilter,
+            placeholder: 'כל הקווים',
+            options: lineOptions,
           },
           {
             key: 'type',
             value: typeFilter,
             onChange: setTypeFilter,
-            placeholder: 'כל הסוגים',
-            options: [...OWNER_OPTIONS, { value: 'none', label: 'לא מסווג' }],
+            placeholder: 'כל הסוגים (בלי ניסוי)',
+            options: [...OWNER_OPTIONS.map((o) => (o.value === 'test' ? { ...o, label: `ניסוי (${testCount})` } : o)), { value: 'none', label: 'לא מסווג' }],
           },
         ]}
       />
@@ -313,36 +613,98 @@ export default function SmartFleetScreen() {
           loading={iot.loading}
           error={iot.error}
           onRetry={iot.refetch}
-          isEmpty={rows.length === 0}
+          isEmpty={filtered.length === 0}
           empty={
             <EmptyState
-              title={all.length ? 'אין מכשיר שתואם את הסינון' : 'עוד אין מכשירים מהענן'}
-              hint={all.length ? 'נקה את החיפוש או המסנן.' : 'המכשירים יופיעו כאן אחרי הסנכרון הראשון מ-Aroma Link.'}
+              title={enriched.length ? 'אין מכשיר שתואם את הסינון' : 'עוד אין מכשירים מהענן'}
+              hint={enriched.length ? 'נקה את החיפוש או לחץ על "מחוברים לענן".' : 'המכשירים יופיעו כאן אחרי הסנכרון הראשון מ-Aroma Link.'}
             />
           }
         >
-          <DataTable
-            columns={columns}
-            rows={rows}
-            rowKey={(row) => row.id}
-            actions={isAdmin ? (row) => (
-              <>
-                <SecondaryButton className="!px-3 !py-2 !text-[13.5px]" onClick={(e) => { e.stopPropagation(); setLinking(row); }}>
-                  סיווג
-                </SecondaryButton>
-                {row.control_enabled && (
-                  <SecondaryButton
-                    className="!px-3 !py-2 !text-[13.5px]"
-                    disabled={!row.online}
-                    title={row.online ? '' : 'המכשיר מנותק'}
-                    onClick={(e) => { e.stopPropagation(); setScheduling(row); }}
+          {/* כותרות עמודות — רק במחשב */}
+          <div className={`hidden px-4 pb-2 text-[13px] font-semibold text-text-faint ${GRID}`}>
+            <span>לקוח ומיקום</span>
+            <span>מצב</span>
+            <span>שמן</span>
+            <span>צריכה ביום</span>
+            <span>שעון היום</span>
+            <span />
+          </div>
+
+          <div className="flex flex-col gap-5">
+            {lines.map((ln) => {
+              const isCollapsed = collapsed.has(ln.name);
+              const pct = ln.total ? Math.round((ln.online / ln.total) * 100) : 0;
+              return (
+                <section key={ln.name} className="flex flex-col gap-2.5">
+                  {/* כותרת קו — לחיצה מקפלת/פותחת */}
+                  <button
+                    type="button"
+                    onClick={() => toggleLine(ln.name)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-500/20 bg-teal-500/[0.06] px-4 py-3 text-start transition-colors hover:bg-teal-500/[0.1]"
                   >
-                    שעון
-                  </SecondaryButton>
-                )}
-              </>
-            ) : undefined}
-          />
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-teal-500/10 text-teal-500">
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate text-[17px] font-extrabold">{ln.name}</div>
+                        <div className="text-[12.5px] text-text-faint">{ln.total} מכשירים · {ln.groups.length} לקוחות</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {ln.offline > 0 && <StatusChip tone="crit">{ln.offline} מנותקים</StatusChip>}
+                      {ln.low > 0 && <StatusChip tone="warn">{ln.low} מיכל נמוך</StatusChip>}
+                      <span className="hidden items-center gap-2 sm:inline-flex">
+                        <span className="relative h-2 w-20 overflow-hidden rounded-full bg-slate-500/15">
+                          <span className="absolute inset-y-0 start-0 rounded-full bg-ok" style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="tabular text-[13px] font-bold" dir="ltr">{pct}%</span>
+                      </span>
+                      <Chevron open={!isCollapsed} />
+                    </div>
+                  </button>
+
+                  {!isCollapsed && ln.groups.map((g) => (g.items.length === 1 ? (
+                    <DeviceRow key={g.key} {...rowProps(g.items[0], false)} />
+                  ) : (
+                    <div key={g.key} className="rounded-2xl border border-slate-500/15 bg-slate-500/[0.04] p-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-2.5 pt-0.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-gold-500/[0.14] text-[15px] font-extrabold text-gold-600">
+                            {g.items.length}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate text-[16px] font-bold">{g.name}</div>
+                            <div className="text-[12.5px] text-text-faint">
+                              {g.city ? `${g.city} · ` : ''}{g.items.length} מכשירים{g.subRoutes.length ? ` · ${g.subRoutes.join(', ')}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.items.some((it) => it.row.online) && (
+                            <StatusChip tone="ok">{g.items.filter((it) => it.row.online).length} פעילים</StatusChip>
+                          )}
+                          {g.items.some((it) => !it.row.online) && (
+                            <StatusChip tone="crit">{g.items.filter((it) => !it.row.online).length} מנותקים</StatusChip>
+                          )}
+                          {g.items.some((it) => it.oil.low) && (
+                            <StatusChip tone="warn">{g.items.filter((it) => it.oil.low).length} מיכל נמוך</StatusChip>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {g.items.map((e) => <DeviceRow key={e.row.id} {...rowProps(e, true)} />)}
+                      </div>
+                    </div>
+                  )))}
+                </section>
+              );
+            })}
+          </div>
         </Async>
       </GlassCard>
 

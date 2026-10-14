@@ -5,6 +5,9 @@ import { supabase } from './supabase';
  * בקובץ נפרד כדי לא לגעת ב-queries.js הקיים בשלב הפיילוט.
  * phase56: owner_type (rental/private/test), owner_name, owner_phone.
  * phase57: control_enabled, iot_command_log, /api/aroma-command (עריכת שעון).
+ * phase66: קיבוץ לפי קו ותת-קו — המכשיר מביא גם עיר, אתר (customer_sites)
+ * ו-route_name/sub_route_id של הלקוח, ו-listFleetRouteMaps מביא את
+ * city_routes ו-sub_routes, כדי לחשב את הקו באותו כלל בדיוק כמו מסך המסלולים.
  */
 
 function unwrap({ data, error }) {
@@ -20,11 +23,26 @@ export const listIotDevices = () =>
       online, online_error, is_locked, power_on, work_status, work_remain_sec, pause_remain_sec,
       device_time, schedule, last_online_at, last_offline_at, last_sync_at,
       owner_type, owner_name, owner_phone, control_enabled, remain_oil, has_oil_gauge,
-      device:devices(id, serial, model, fill_ml, location_note, customer:customers(name, city))
+      device:devices(id, serial, model, fill_ml, location_note, city,
+        site:customer_sites(label, city, sub_route_id),
+        customer:customers(name, city, route_name, sub_route_id))
     `)
     .order('online', { ascending: true })
     .order('aroma_name', { ascending: true })
     .then(unwrap);
+
+/**
+ * מפות הקווים (phase66): עיר → קו (city_routes) ותתי-קווים (sub_routes).
+ * אם אחת מהן לא נטענת (הרשאה/טבלה) — מחזירים רשימה ריקה, והמסך פשוט
+ * נופל ל-route_name של הלקוח. לא מפילים את הטאב בגלל קיבוץ.
+ */
+export async function listFleetRouteMaps() {
+  const [cityRoutes, subRoutes] = await Promise.all([
+    supabase.from('city_routes').select('city, route_name').then(unwrap).catch(() => []),
+    supabase.from('sub_routes').select('id, name, sort_order').then(unwrap).catch(() => []),
+  ]);
+  return { cityRoutes, subRoutes };
+}
 
 export const listIotModelMap = () =>
   supabase.from('iot_model_map').select('supplier_model, iconair_model, factory_model, ml_per_sec, tank_ml').order('supplier_model').then(unwrap);
@@ -33,13 +51,13 @@ export const listIotModelMap = () =>
 export const listLastRefills = (deviceIds) =>
   deviceIds.length
     ? supabase
-        .from('oil_tracking')
-        .select('device_id, event_type, level_after_pct, recorded_at')
-        .in('device_id', deviceIds)
-        .in('event_type', ['refill', 'replacement'])
-        .order('recorded_at', { ascending: false })
-        .limit(1000)
-        .then(unwrap)
+      .from('oil_tracking')
+      .select('device_id, event_type, level_after_pct, recorded_at')
+      .in('device_id', deviceIds)
+      .in('event_type', ['refill', 'replacement'])
+      .order('recorded_at', { ascending: false })
+      .limit(1000)
+      .then(unwrap)
     : Promise.resolve([]);
 
 /** כמות המילוי שמוגדרת לכל דגם במערכת (device_models.capacity_ml) — בסיס לימים עד ריק אחרי מילוי (phase63) */
