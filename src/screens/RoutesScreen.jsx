@@ -30,6 +30,7 @@ import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
 import { optimizeStopOrder } from '../lib/googleMaps';
+import RefillPlanCard from '../components/RefillPlanCard';
 
 /**
  * מסלולים — עצירות לפי קו הפצה, עם ניווט חד-לחיצה לכל תחנה.
@@ -59,6 +60,8 @@ export default function RoutesScreen() {
   return (
     <>
       <PendingChangeRequestsCard />
+      {/* phase70: תכנון מילוי חכם — "לבקר השבוע" */}
+      <RefillPlanCard />
       <PendingTheftReportsCard />
 
       <GlassCard className="mb-3.5">
