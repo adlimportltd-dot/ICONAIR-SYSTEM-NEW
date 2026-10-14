@@ -108,14 +108,26 @@ export async function loadAlerts() {
     });
   }
 
-  for (const n of notes) {
+  // הערות שטח: רק מ-3 הימים האחרונים בנפרד. הערות ישנות שעוד פתוחות (backlog)
+  // מוצגות כשורה אחת שמובילה לכרטיס הערות השטח בדשבורד, כדי שלא יציפו את הפעמון.
+  const NOTE_DAYS = 3;
+  const fresh = notes.filter((n) => now - new Date(n.recordedAt).getTime() <= NOTE_DAYS * 86400000);
+  const older = notes.length - fresh.length;
+  for (const n of fresh) {
     list.push({
       key: `note:${n.id}`, noteId: n.id, level: 'info', group: 'notes',
-      title: n.customerName, text: `הערת שטח (${n.recorderName}): ${n.notes}`, at: n.recordedAt, target: 'routes',
+      title: n.customerName, text: `הערת שטח (${n.recorderName}): ${n.notes}`, at: n.recordedAt, target: 'dashboard',
+    });
+  }
+  if (older > 0) {
+    list.push({
+      key: 'notes-backlog', level: 'info', group: 'notes', fixed: true,
+      title: `${older} הערות שטח ישנות עדיין פתוחות`,
+      text: 'מעל 3 ימים. אפשר לעבור עליהן ולסמן "טופל" בכרטיס הערות השטח בדשבורד.', target: 'dashboard',
     });
   }
 
-  const visible = list.filter((a) => a.fixed || a.group === 'notes' || !isAcked(a.key, a.sig));
+  const visible = list.filter((a) => a.fixed || a.noteId || !isAcked(a.key, a.sig));
   const rank = { crit: 0, warn: 1, info: 2 };
   visible.sort((a, b) => rank[a.level] - rank[b.level] || String(b.at ?? '').localeCompare(String(a.at ?? '')));
   return visible;
