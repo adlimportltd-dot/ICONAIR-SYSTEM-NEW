@@ -78,7 +78,9 @@ export default function DeviceHistory({ row }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-[14px] font-bold">היסטוריה · 30 ימים אחרונים</span>
         {stats.knownDays > 0 && stats.knownDays < 30 && (
-          <span className="text-[12px] text-text-faint">יש נתונים מ-{stats.knownDays} הימים האחרונים</span>
+          <span className="text-[12px] text-text-faint">
+            {stats.knownDays === 1 ? 'יש נתונים מהיום האחרון בלבד' : `יש נתונים מ-${stats.knownDays} הימים האחרונים`}
+          </span>
         )}
       </div>
 
@@ -135,7 +137,7 @@ export default function DeviceHistory({ row }) {
                   <div key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-slate-500/10 py-1 text-[13px] last:border-0">
                     <span className="tabular font-semibold">{fmtDate(r.recorded_at)}</span>
                     <span className={ml ? '' : 'text-text-faint'}>
-                      {ml ? `${ml} מ״ל` : r.event_type === 'reading' ? 'קריאה בלבד' : 'לא מולא'}
+                      {ml ? `${ml} מ״ל` : 'ביקור בלי מילוי'}
                     </span>
                     <span className="text-text-faint">{r.recorder?.full_name ?? ''}</span>
                     {r.notes && <span className="w-full text-[12px] text-text-faint">{r.notes}</span>}
