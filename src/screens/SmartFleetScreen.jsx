@@ -492,9 +492,9 @@ export default function SmartFleetScreen() {
           <div className="mt-3.5">
             <div className="mb-1.5 flex items-baseline justify-between text-[13px]">
               <span className="font-semibold text-text-faint">זמינות הצי עכשיו</span>
-              <span className="tabular font-bold">
-                {Math.round((counts.online / counts.all) * 100)}%
-                <span className="ms-1.5 font-medium text-text-faint">{counts.online} מתוך {counts.all} מקוונים</span>
+              <span className="tabular flex items-baseline gap-2">
+                <span className="font-medium text-text-faint">{counts.online} מתוך {counts.all} מקוונים</span>
+                <span className="text-[15px] font-extrabold" dir="ltr">{Math.round((counts.online / counts.all) * 100)}%</span>
               </span>
             </div>
             <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-500/15">
