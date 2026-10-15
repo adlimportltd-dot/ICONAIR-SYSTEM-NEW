@@ -1642,6 +1642,27 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
  */
 function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
+  // phase78: לקוח שממלא לבד — הטכנאי משאיר בקבוק במקום למלא
+  const { isAdmin } = useAuth();
+  const [selfFill, setSelfFill] = useState(!!device.self_fill);
+  const [selfFillBusy, setSelfFillBusy] = useState(false);
+  const [selfFillError, setSelfFillError] = useState(null);
+  const [bottleOpen, setBottleOpen] = useState(false);
+  const [bottleGiven, setBottleGiven] = useState(null);
+  useEffect(() => { setSelfFill(!!device.self_fill); }, [device.id, device.self_fill]);
+  async function toggleSelfFill(next) {
+    setSelfFillBusy(true);
+    setSelfFillError(null);
+    try {
+      const { error } = await supabase.from('devices').update({ self_fill: next }).eq('id', device.id);
+      if (error) throw error;
+      setSelfFill(next);
+    } catch (e) {
+      setSelfFillError(describeError(e));
+    } finally {
+      setSelfFillBusy(false);
+    }
+  }
   // phase73: המכשיר כבר נשמר בביקור הזה — "סיום ביקור" עם טופס ריק לא ירשום כפילות של 0
   const [savedThisVisit, setSavedThisVisit] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
@@ -1709,15 +1730,63 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setOilModalOpen(true)}
-        className="mt-3 w-full rounded-[10px] border border-gold-500/30 bg-gold-500/[0.1]
-                   px-3 py-2.5 text-[14px] font-bold text-gold-600 transition-colors
-                   hover:border-gold-500/50 hover:bg-gold-500/[0.16]"
-      >
-        עדכון שמן
-      </button>
+      {selfFill && (
+        <div className="mt-3 rounded-[10px] border border-teal-500/30 bg-teal-500/[0.07] px-3 py-2 text-[13.5px] text-text-dim">
+          <b className="text-teal-500">ממלא לבד</b> · משאירים בקבוק, לא ממלאים את המכשיר
+          {bottleGiven != null && (
+            <div className="mt-1 font-semibold text-ok">✓ נמסר בקבוק של {bottleGiven} מ״ל</div>
+          )}
+        </div>
+      )}
+
+      {selfFill ? (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setBottleOpen(true)}
+            className="flex-1 rounded-[10px] border border-teal-500/40 bg-teal-500/[0.12] px-3 py-2.5 text-[14px] font-bold text-teal-500 transition-colors hover:bg-teal-500/[0.18]"
+          >
+            מסירת בקבוק
+          </button>
+          <button
+            type="button"
+            onClick={() => setOilModalOpen(true)}
+            className="rounded-[10px] border border-gold-500/30 bg-gold-500/[0.06] px-3 py-2.5 text-[13px] font-semibold text-gold-600"
+          >
+            עדכון שמן
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOilModalOpen(true)}
+          className="mt-3 w-full rounded-[10px] border border-gold-500/30 bg-gold-500/[0.1]
+                     px-3 py-2.5 text-[14px] font-bold text-gold-600 transition-colors
+                     hover:border-gold-500/50 hover:bg-gold-500/[0.16]"
+        >
+          עדכון שמן
+        </button>
+      )}
+
+      {isAdmin && (
+        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[13px] text-text-faint">
+          <input
+            type="checkbox"
+            checked={selfFill}
+            disabled={selfFillBusy}
+            onChange={(e) => toggleSelfFill(e.target.checked)}
+          />
+          ממלא לבד (מקבל בקבוק) — מנהל בלבד
+          {selfFillError && <span className="text-crit">· {selfFillError}</span>}
+        </label>
+      )}
+
+      <BottleModal
+        open={bottleOpen}
+        device={device}
+        onClose={() => setBottleOpen(false)}
+        onSaved={(ml) => { setBottleGiven(ml); setBottleOpen(false); onVisitCompleted?.(); }}
+      />
 
       {/* 2026-10-07 (בקשת ליאור): הטכנאי מגיע לכתובת ולא מוצא את המכשיר —
           מדווח מכאן. הדיווח רק ממתין לאישור מנהל; שום חיוב לא נוצר מהשטח. */}
@@ -1759,6 +1828,93 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         onSaved={(didRecord) => { if (didRecord !== false) setSavedThisVisit(true); setOilModalOpen(false); onVisitCompleted?.(); }}
       />
     </div>
+  );
+}
+
+/**
+ * phase78 — "מסירת בקבוק": לקוח שממלא לבד (devices.self_fill). נרשם ב-oil_tracking
+ * כ-event_type='bottle' דרך אותו complete_visit (מנכה מהמלאי הנייד של הטכנאי לפי ניחוח).
+ * לא משנה את אחוז השמן במכשיר ולא נבדק מול קיבולת המכל (ר' SQL phase78).
+ */
+const BOTTLE_PRESETS = [250, 500, 1000];
+function BottleModal({ open, device, onClose, onSaved }) {
+  const [ml, setMl] = useState(500);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [noStock, setNoStock] = useState(false);
+  useEffect(() => { if (open) { setMl(500); setError(null); setNoStock(false); } }, [open, device?.id]);
+
+  async function save(skipStock = false) {
+    const amount = Number(ml);
+    if (!(amount > 0)) { setError('צריך לבחור כמות'); return; }
+    setBusy(true);
+    setError(null);
+    const payload = {
+      device_id: device.id,
+      event_type: 'bottle',
+      scent_name: device.scent_name || null,
+      liters_added: amount / 1000,
+      level_before_pct: device.oil_level_pct ?? null,
+      level_after_pct: device.oil_level_pct ?? null,
+      notes: `מסירת בקבוק ${amount} מ״ל`,
+      batteries_replaced: null,
+    };
+    try {
+      if (skipStock) {
+        await createOilEntry(payload);
+      } else {
+        try {
+          await completeVisit(payload);
+        } catch (e) {
+          if (String(e?.message ?? '').includes('אין מלאי נייד')) { setNoStock(true); return; }
+          throw e;
+        }
+      }
+      onSaved(amount);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!device) return null;
+  return (
+    <Modal open={open} title="מסירת בקבוק" subtitle={`${device.model ?? 'מכשיר'} · ${device.scent_name || 'ללא ניחוח'}`} onClose={onClose}>
+      <div className="flex flex-col gap-3.5">
+        <div className="text-[14px] text-text-dim">כמה נתת ללקוח?</div>
+        <div className="flex flex-wrap gap-2">
+          {BOTTLE_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setMl(p)}
+              className={`rounded-full border px-4 py-2 text-[14px] font-bold ${Number(ml) === p ? 'border-teal-500 bg-teal-500/15 text-teal-500' : 'border-black/10 text-text-dim'}`}
+            >
+              {p} מ״ל
+            </button>
+          ))}
+        </div>
+        <Field label="כמות אחרת (מ״ל)">
+          <TextInput type="number" inputMode="numeric" min="0" step="10" value={ml} onChange={(e) => setMl(e.target.value)} />
+        </Field>
+        {noStock && (
+          <div className="rounded-[10px] border border-warn/30 bg-warn/[0.08] px-3 py-2 text-[13.5px] text-warn">
+            אין לך מספיק מלאי נייד של {device.scent_name || 'הניחוח'} במערכת. אפשר לשמור בכל זאת, בלי לנכות מהמלאי.
+            <button type="button" disabled={busy} onClick={() => save(true)} className="mt-2 block w-full rounded-[8px] border border-warn/40 px-3 py-1.5 font-bold">
+              שמור בלי ניכוי מלאי
+            </button>
+          </div>
+        )}
+        {error && <div className="text-[13.5px] font-semibold text-crit">{error}</div>}
+        <div className="flex gap-2">
+          <PrimaryButton className="flex-1" disabled={busy} onClick={() => save(false)}>
+            {busy ? 'שומר…' : `שמור · ${Number(ml) || 0} מ״ל`}
+          </PrimaryButton>
+          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1900,7 +2056,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, batter
             <Select
               value={form.event_type}
               onChange={set('event_type')}
-              options={Object.entries(OIL_EVENT_LABEL).map(([value, label]) => ({ value, label }))}
+              options={Object.entries(OIL_EVENT_LABEL).filter(([value]) => value !== 'bottle').map(([value, label]) => ({ value, label }))}
             />
           </Field>
           <Field label="ניחוח" hint="אם תואם למלאי הנייד שלך — ינוכה ממנו אוטומטית">

@@ -18,7 +18,7 @@ import { OIL_EVENT_LABEL, formatDate, formatDateTime, formatNumber, mapOilByScen
 import { useAuth } from '../context/AuthContext';
 import { generateReportSafely } from '../lib/serviceReport';
 
-const EVENT_TONE = { refill: 'teal', replacement: 'gold', reading: 'slate' };
+const EVENT_TONE = { refill: 'teal', replacement: 'gold', reading: 'slate', bottle: 'gold' };
 
 const STOCK_FILL = {
   teal: 'linear-gradient(90deg,#0F766E,#5EA39B)',
@@ -379,7 +379,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, deviceMo
             <Select
               value={form.event_type}
               onChange={set('event_type')}
-              options={Object.entries(OIL_EVENT_LABEL).map(([value, label]) => ({ value, label }))}
+              options={Object.entries(OIL_EVENT_LABEL).filter(([value]) => value !== 'bottle').map(([value, label]) => ({ value, label }))}
             />
           </Field>
           <Field label="ניחוח" hint="אם תואם למלאי הנייד שלך — ינוכה ממנו אוטומטית; אם לא, הביקור עדיין יירשם">
