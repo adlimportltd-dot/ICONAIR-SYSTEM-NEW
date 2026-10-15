@@ -79,6 +79,15 @@ async function loadIntegrityAlerts() {
   const capacity = new Map(models.map((m) => [m.name, Number(m.capacity_ml) || null]));
 
   // 1–3: מילויים
+  // מילוי 0 שיש לידו (±12 שעות) מילוי אמיתי לאותו מכשיר = שארית של "סיום ביקור" כפול — לא חשוד
+  const realRefillTimes = new Map();
+  for (const r of oil) {
+    if (r.event_type !== 'refill' || !(Number(r.liters_added) > 0)) continue;
+    if (!realRefillTimes.has(r.device_id)) realRefillTimes.set(r.device_id, []);
+    realRefillTimes.get(r.device_id).push(new Date(r.recorded_at).getTime());
+  }
+  const hasRealNear = (r) => (realRefillTimes.get(r.device_id) ?? [])
+    .some((t) => Math.abs(t - new Date(r.recorded_at).getTime()) <= 12 * 3600000);
   const lastRefill = new Map();
   for (const r of oil) {
     if (r.event_type !== 'refill') continue;
@@ -99,7 +108,7 @@ async function loadIntegrityAlerts() {
     }
     lastRefill.set(r.device_id, r);
 
-    if (liters === 0 && !String(r.notes ?? '').trim()) {
+    if (liters === 0 && !String(r.notes ?? '').trim() && !hasRealNear(r)) {
       list.push({
         key: `int-zero:${r.id}`, sig: '0', level: 'warn', group: 'integrity', title,
         text: `מילוי של 0 מ"ל בלי הערה · ${model} (${dayLabel(r.recorded_at)}) — לבדוק עם הטכנאי כמה מילא`,
