@@ -31,6 +31,7 @@ import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
 import { optimizeStopOrder } from '../lib/googleMaps';
 import RefillPlanCard from '../components/RefillPlanCard';
+import DisconnectionsCard from '../components/DisconnectionsCard';
 
 /**
  * מסלולים — עצירות לפי קו הפצה, עם ניווט חד-לחיצה לכל תחנה.
@@ -61,6 +62,8 @@ export default function RoutesScreen() {
     <>
       <PendingChangeRequestsCard />
       {/* phase70: תכנון מילוי חכם — "לבקר השבוע" */}
+      {/* phase75: ניתוקי לקוחות ב-7 הימים הקרובים */}
+      <DisconnectionsCard />
       <RefillPlanCard />
       <PendingTheftReportsCard />
 

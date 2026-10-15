@@ -14,6 +14,7 @@ import {
   createInstallation, completeInstallation, listScents, listDeviceModels, listRouteCycles, listCityRoutes,
 } from '../lib/queries';
 import { describeError } from '../lib/supabase';
+import { createDisconnection, completeDisconnection, listDevicesToCollect, daysUntil, fmtDay } from '../lib/disconnections';
 import {
   CALL_SEVERITY_LABEL, CALL_STATUS_LABEL, modelTone, relativeTime, formatDateTime,
 } from '../lib/mappers';
@@ -62,6 +63,9 @@ export default function ServiceCallsScreen({ openFormSignal }) {
   // התקנות חדשות (phase50) — נפתחות כמשימה ונסגרות ב"הותקן"
   const [installOpen, setInstallOpen] = useState(false);
   const [installing, setInstalling] = useState(null);
+  // ניתוק לקוח (phase75)
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(null);
 
   const calls = useQuery(() => listServiceCalls({ status, search }), [status, search]);
   const customers = useQuery(listCustomerOptions, []);
@@ -145,7 +149,14 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       key: 'device',
       label: 'מכשיר',
       width: '130px',
-      render: (row) => (row.call_type === 'installation' && !row.device
+      render: (row) => (row.call_type === 'disconnection'
+        ? (() => {
+          const d = daysUntil(row.scheduled_at);
+          const open = row.status === 'open' || row.status === 'in_progress';
+          const tone = !open ? 'slate' : d != null && d <= 0 ? 'crit' : d != null && d <= 7 ? 'warn' : 'slate';
+          return <StatusChip tone={tone}>ניתוק · {fmtDay(row.scheduled_at)}</StatusChip>;
+        })()
+        : row.call_type === 'installation' && !row.device
         ? <StatusChip tone="gold">{row.install_model} · התקנה</StatusChip>
         : row.device
         ? (
@@ -210,11 +221,12 @@ export default function ServiceCallsScreen({ openFormSignal }) {
             onClick={(event) => {
               event.stopPropagation();
               if (row.call_type === 'installation') setInstalling(row);
+              else if (row.call_type === 'disconnection') setDisconnecting(row);
               else setResolving(row);
             }}
             className="ghost-btn disabled:opacity-50"
           >
-            {row.call_type === 'installation' ? 'הותקן' : 'סגור'}
+            {row.call_type === 'installation' ? 'הותקן' : row.call_type === 'disconnection' ? 'בוצע ניתוק' : 'סגור'}
           </button>
         </>
       )}
@@ -250,7 +262,8 @@ export default function ServiceCallsScreen({ openFormSignal }) {
         }]}
       />
 
-      <div className="mb-3.5 flex justify-end">
+      <div className="mb-3.5 flex flex-wrap justify-end gap-2.5">
+        <SecondaryButton onClick={() => setDisconnectOpen(true)}>+ ניתוק לקוח</SecondaryButton>
         <PrimaryButton type="button" onClick={() => setInstallOpen(true)}>+ התקנה חדשה</PrimaryButton>
       </div>
 
@@ -307,6 +320,26 @@ export default function ServiceCallsScreen({ openFormSignal }) {
         onClose={() => setInstalling(null)}
         onDone={() => {
           setInstalling(null);
+          calls.refetch();
+        }}
+      />
+
+      <NewDisconnectionModal
+        open={disconnectOpen}
+        customerOptions={customerOptions}
+        technicianOptions={technicianOptions}
+        onClose={() => setDisconnectOpen(false)}
+        onCreated={() => {
+          setDisconnectOpen(false);
+          calls.refetch();
+        }}
+      />
+
+      <CompleteDisconnectionModal
+        call={disconnecting}
+        onClose={() => setDisconnecting(null)}
+        onDone={() => {
+          setDisconnecting(null);
           calls.refetch();
         }}
       />
@@ -913,6 +946,170 @@ function EditCallModal({ call, technicianOptions, onClose, onSaved }) {
           </div>
         </form>
       )}
+    </Modal>
+  );
+}
+
+/* =====================================================================
+   ניתוק לקוח (phase75)
+   ===================================================================== */
+
+const todayIso = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })).toISOString().slice(0, 10);
+
+function NewDisconnectionModal({ open, customerOptions, technicianOptions, onClose, onCreated }) {
+  const [customerId, setCustomerId] = useState('');
+  const [date, setDate] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const devices = useQuery(() => listDevicesToCollect(customerId), [customerId], { enabled: open && Boolean(customerId) });
+
+  function close() {
+    setCustomerId(''); setDate(''); setAssignedTo(''); setNotes(''); setError(null);
+    onClose();
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    if (!customerId) { setError('יש לבחור לקוח מתוך רשימת ההצעות'); return; }
+    if (!date) { setError('יש לבחור תאריך ניתוק'); return; }
+    setBusy(true);
+    try {
+      await createDisconnection({ customerId, scheduledDate: date, assignedTo, notes });
+      setCustomerId(''); setDate(''); setAssignedTo(''); setNotes('');
+      onCreated();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const list = devices.data ?? [];
+
+  return (
+    <Modal open={open} title="ניתוק לקוח" subtitle="נפתח כמשימה · התראה שבוע לפני וביום הניתוק · מופיע גם בטאב מסלולים" onClose={close}>
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <Field label="לקוח" required>
+          <CustomerCombobox value={customerId} options={customerOptions} onChange={setCustomerId} />
+        </Field>
+
+        {customerId && (
+          <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px]">
+            {devices.loading ? 'טוען מכשירים…' : list.length === 0 ? (
+              <span className="text-text-faint">אין ללקוח מכשירים פעילים במערכת.</span>
+            ) : (
+              <>
+                <div className="mb-1.5 font-semibold">ייאספו {list.length} מכשירים:</div>
+                <div className="flex flex-col gap-0.5 text-[13.5px] text-text-dim">
+                  {list.map((d) => (
+                    <span key={d.id}>• {d.serial} · {d.model}{d.location_note ? ` · ${d.location_note}` : ''}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="תאריך ניתוק" required>
+            <TextInput type="date" min={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="טכנאי">
+            <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} options={technicianOptions} placeholder="לא שובץ" />
+          </Field>
+        </div>
+
+        <Field label="הערות" hint="למשל: סיבת העזיבה, תיאום עם איש קשר">
+          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        </Field>
+
+        <p className="text-[13px] text-text-faint">
+          החיוב ממשיך עד יום הניתוק בפועל. ב"בוצע ניתוק" המכשירים מסומנים "הוסר" וחוזרים למלאי הנייד של הטכנאי,
+          והלקוח עובר ל"עזב" — יוצא מהמסלול ומהחיובים.
+        </p>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">{error}</div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <PrimaryButton type="submit" loading={busy}>פתח משימת ניתוק</PrimaryButton>
+          <SecondaryButton onClick={close}>ביטול</SecondaryButton>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function CompleteDisconnectionModal({ call, onClose, onDone }) {
+  const customerId = call?.customer?.id ?? call?.customer_id ?? null;
+  const devices = useQuery(() => listDevicesToCollect(customerId), [customerId], { enabled: Boolean(call && customerId) });
+  const [notes, setNotes] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setNotes(''); setConfirm(false); setError(null); }, [call?.id]);
+
+  const list = devices.data ?? [];
+
+  async function submit(event) {
+    event.preventDefault();
+    setError(null);
+    if (!confirm) { setError('יש לסמן שכל המכשירים נאספו'); return; }
+    setBusy(true);
+    try {
+      await completeDisconnection(call.id, notes);
+      onDone();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={Boolean(call)} title={`בוצע ניתוק · ${call?.code ?? ''}`}
+      subtitle={call ? `${call.customer?.name ?? ''} · מתוכנן ל-${fmtDay(call.scheduled_at)}` : ''}
+      onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <div className="rounded-row border border-black/[0.075] bg-black/[0.022] px-3.5 py-3 text-[14px]">
+          {devices.loading ? 'טוען מכשירים…' : list.length === 0 ? (
+            <span className="text-text-faint">אין ללקוח מכשירים פעילים — רק הלקוח יסומן "עזב".</span>
+          ) : (
+            <>
+              <div className="mb-1.5 font-semibold">{list.length} מכשירים יסומנו "הוסר" ויחזרו למלאי הנייד:</div>
+              <div className="flex flex-col gap-0.5 text-[13.5px] text-text-dim">
+                {list.map((d) => (
+                  <span key={d.id}>• {d.serial} · {d.model}{d.location_note ? ` · ${d.location_note}` : ''}</span>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <label className="flex items-center gap-2 text-[14.5px] font-semibold">
+          <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
+          כל המכשירים נאספו מהלקוח
+        </label>
+
+        <Field label="הערות">
+          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="נאסף עם השנאים, הלקוח חתם" />
+        </Field>
+
+        {error && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.07] px-3.5 py-2.5 text-[14px] text-crit-soft">{error}</div>
+        )}
+
+        <div className="mt-1 flex gap-2.5">
+          <PrimaryButton type="submit" loading={busy}>בוצע ניתוק</PrimaryButton>
+          <SecondaryButton onClick={onClose}>ביטול</SecondaryButton>
+        </div>
+      </form>
     </Modal>
   );
 }

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getOpenServiceCalls, listFieldNotes, resolveFieldNote } from './queries';
+import { listOpenDisconnections, daysUntil, fmtDay } from './disconnections';
 
 /**
  * מרכז התראות (phase69) — כל מה שדורש טיפול, ממקום אחד, בפעמון למעלה (מנהלים בלבד).
@@ -33,7 +34,7 @@ function iotName(d) {
 }
 
 export async function loadAlerts() {
-  const [iot, acks, thefts, calls, notes, queues] = await Promise.all([
+  const [iot, acks, thefts, calls, notes, queues, disconnections] = await Promise.all([
     supabase
       .from('iot_devices')
       .select(`id, aroma_name, owner_type, owner_name, online, is_locked, last_online_at, last_offline_at,
@@ -57,6 +58,8 @@ export async function loadAlerts() {
       .or('pending.gt.0,failed.gt.0')
       .then(unwrap)
       .catch(() => []),
+    // phase75: ניתוקי לקוחות מתוכננים
+    listOpenDisconnections().catch(() => []),
   ]);
 
   const acked = new Map(acks.map((a) => [a.alert_key, a.signature]));
@@ -126,7 +129,24 @@ export async function loadAlerts() {
     });
   }
 
+  // phase75: ניתוק לקוח — התראה מ-7 ימים לפני; ביום עצמו או באיחור = אדום. לא מופיע שוב כקריאה רגילה.
+  const disconnectionIds = new Set(disconnections.map((d) => d.id));
+  for (const d of disconnections) {
+    const days = daysUntil(d.scheduled_at);
+    if (days == null || days > 7) continue;
+    const who = d.assignee?.full_name ? ` · ${d.assignee.full_name}` : ' · לא שובץ טכנאי';
+    list.push({
+      key: `disconnect:${d.id}`, level: days <= 0 ? 'crit' : 'warn', group: 'disconnect', fixed: true,
+      title: d.customer?.name ?? 'לקוח',
+      text: days < 0
+        ? `ניתוק באיחור — היה מתוכנן ל-${fmtDay(d.scheduled_at)}${who}`
+        : days === 0 ? `ניתוק היום${who}` : `ניתוק בעוד ${days} ימים (${fmtDay(d.scheduled_at)})${who}`,
+      at: d.scheduled_at, target: 'service',
+    });
+  }
+
   for (const c of calls) {
+    if (disconnectionIds.has(c.id)) continue;
     list.push({
       key: `call:${c.id}`, level: c.severity === 'crit' ? 'crit' : 'warn', group: 'calls', fixed: true,
       title: c.customer?.name ?? 'קריאת שירות',
