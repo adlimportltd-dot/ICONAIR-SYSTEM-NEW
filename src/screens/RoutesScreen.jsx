@@ -275,9 +275,14 @@ function RouteStops({ routeName }) {
   // המערכת), רק בודקים פה אילו מהתחנות *של הקו הזה* מופיעות בו.
   const openNotes = useQuery(() => listFieldNotes({ onlyOpen: true }), []);
   useRealtime(['oil_tracking', 'field_note_flags'], openNotes.refetch);
+  // phase76: אדום רק להערות מ-30 הימים האחרונים — הערות ישנות נשארות בהיסטוריה ולא "צועקות" בכל תחנה
+  const recentNotes = useMemo(() => {
+    const since = Date.now() - 30 * 86400000;
+    return (openNotes.data ?? []).filter((n) => new Date(n.recordedAt).getTime() >= since);
+  }, [openNotes.data]);
   const openNoteStopIds = useMemo(
-    () => new Set((openNotes.data ?? []).map((n) => n.siteId ?? n.customerId)),
-    [openNotes.data]
+    () => new Set(recentNotes.map((n) => n.siteId ?? n.customerId)),
+    [recentNotes]
   );
 
   // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
@@ -801,7 +806,7 @@ function RouteStops({ routeName }) {
                       done={statusById[customer.id] === 'done'}
                       closed={statusById[customer.id] === 'skipped'}
                       hasOpenNote={openNoteStopIds.has(customer.site_id ?? customer.customer_id)}
-                      openNotes={(openNotes.data ?? []).filter((n) => (n.siteId ?? n.customerId) === (customer.site_id ?? customer.customer_id))}
+                      openNotes={recentNotes.filter((n) => (n.siteId ?? n.customerId) === (customer.site_id ?? customer.customer_id))}
                       onToggleDone={() => toggleStatus(customer.id)}
                       onMarkDone={() => markDone(customer.id)}
                       onCloseVisit={(reason) => closeStop(customer.id, reason)}
