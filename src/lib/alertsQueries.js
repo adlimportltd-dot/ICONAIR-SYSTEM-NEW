@@ -51,6 +51,9 @@ async function loadIntegrityAlerts() {
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const nextMonthStart = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}-01`;
   const monthStartTs = new Date(`${monthStart}T00:00:00+03:00`).toISOString();
+  // phase79: קו שהמחזור שלו מתחיל בחודש הקודם (routes.early_start_day, מינימום 15) — שמן נשלף מה-15 בחודש הקודם
+  const prevMid = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  const oilFromTs = new Date(`${prevMid.getFullYear()}-${pad(prevMid.getMonth() + 1)}-15T00:00:00+03:00`).toISOString();
 
   const [oil, models, monthOil, assignments, stopDevices] = await Promise.all([
     supabase
@@ -63,13 +66,13 @@ async function loadIntegrityAlerts() {
     supabase.from('device_models').select('name, capacity_ml').then(unwrap),
     supabase
       .from('oil_tracking')
-      .select('notes, device:devices(customer_id, site_id)')
-      .gte('recorded_at', monthStartTs)
+      .select('notes, recorded_at, device:devices(customer_id, site_id)')
+      .gte('recorded_at', oilFromTs)
       .limit(10000)
       .then(unwrap),
     supabase
       .from('route_assignments')
-      .select('id, customer_id, site_id, status, visit_date, route:routes(name, cycle_end_day), customer:customers(name, status), site:customer_sites(label)')
+      .select('id, customer_id, site_id, status, visit_date, route:routes(name, cycle_end_day, early_start_day), customer:customers(name, status), site:customer_sites(label)')
       .gte('visit_date', monthStart)
       .lt('visit_date', nextMonthStart)
       .then(unwrap),
@@ -151,12 +154,20 @@ async function loadIntegrityAlerts() {
   }
 
   // 4–5: תחנות החודש
-  const withOil = new Set();
+  const lastOilAt = new Map(); // phase79: זמן רישום השמן האחרון בכל תחנה
   for (const r of monthOil) {
     if (String(r.notes ?? '').startsWith(RESET_NOTE)) continue;
     const k = r.device?.site_id ?? r.device?.customer_id;
-    if (k) withOil.add(k);
+    if (k) { const ts = new Date(r.recorded_at).getTime(); if (ts > (lastOilAt.get(k) ?? 0)) lastOilAt.set(k, ts); }
   }
+
+  // phase79: תחילת המחזור של התחנה — ה-1 לחודש, או early_start_day בחודש הקודם (קו צפון מה-25)
+  const cycleStartMs = (route) => {
+    const early = Number(route?.early_start_day) || null;
+    if (!early) return new Date(monthStartTs).getTime();
+    const s = new Date(now.getFullYear(), now.getMonth() - 1, early);
+    return new Date(`${s.getFullYear()}-${pad(s.getMonth() + 1)}-${pad(early)}T00:00:00+03:00`).getTime();
+  };
 
   const RANK = { done: 2, skipped: 1, pending: 0 };
   const stops = new Map();
@@ -171,7 +182,7 @@ async function loadIntegrityAlerts() {
   const lateByRoute = new Map();
   for (const [k, a] of stops) {
     const name = a.site?.label ? `${a.customer?.name ?? 'לקוח'} — ${a.site.label}` : (a.customer?.name ?? 'לקוח');
-    if (a.status === 'done' && !withOil.has(k)) {
+    if (a.status === 'done' && !((lastOilAt.get(k) ?? 0) >= cycleStartMs(a.route))) {
       list.push({
         key: `int-doneempty:${a.id}`, sig: monthStart, level: 'warn', group: 'integrity', title: name,
         text: 'סומן "בוצע" החודש אבל אין אף רישום שמן בכתובת — ייתכן שהביקור לא נקלט',

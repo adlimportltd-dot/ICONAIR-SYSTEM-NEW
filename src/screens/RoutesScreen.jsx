@@ -17,7 +17,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
-  listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, monthStartISO,
+  listRoutes, listRouteAssignments, saveRouteOrder, setStopStatus, monthStartISO, listRouteCycles,
   getRouteLoadPlan, listTechnicianOptions, allocateStockToTechnician,
   listAllDeviceModels, listAllScents,
   requestDeviceChange, listPendingDeviceChangeRequests, reviewDeviceChangeRequest,
@@ -27,7 +27,7 @@ import {
   resolveFieldNote,
 } from '../lib/queries';
 import { supabase, describeError } from '../lib/supabase';
-import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
+import { OIL_EVENT_LABEL, formatDateTime, relativeTime, cycleMonthKey } from '../lib/mappers';
 import { wazeLink, googleMapsLink, googleMapsRouteLink } from '../lib/navLinks';
 import { generateReportSafely } from '../lib/serviceReport';
 import { optimizeStopOrder } from '../lib/googleMaps';
@@ -265,8 +265,13 @@ const normSearch = (v) => String(v ?? '').toLowerCase().replace(/["'״׳\-.,]/g,
 function RouteStops({ routeName }) {
   const { isAdmin } = useAuth();
   // בורר "חודש" (לא "תאריך") — ר' ההערה למעלה: מחזור שירות חודשי, לא יומי.
-  const currentMonthKey = monthStartISO().slice(0, 7);
+  // phase79: קו שהמחזור שלו מתחיל בסוף החודש הקודם (קו צפון מה-25) נפתח כבר על החודש הבא —
+  // ככה טכנאי שעובד ב-30.9 מסמן את התחנות של אוקטובר. שאר הקווים — החודש הנוכחי, כמו קודם.
+  const routeCycles = useQuery(listRouteCycles, []);
+  const cycleRow = (routeCycles.data ?? []).find((r) => r.name === routeName);
+  const currentMonthKey = cycleRow ? cycleMonthKey(cycleRow) : monthStartISO().slice(0, 7);
   const [monthKey, setMonthKey] = useState(currentMonthKey);
+  useEffect(() => { setMonthKey(currentMonthKey); }, [routeName, currentMonthKey]);
   const monthStart = `${monthKey}-01`;
   const stops = useQuery(() => listRouteAssignments(routeName, monthStart), [routeName, monthStart]);
 
