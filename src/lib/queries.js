@@ -328,7 +328,7 @@ export async function listRoutes() {
  * את ברירת המחדל 1–12 בצד הלקוח, לא נכשל.
  */
 export const listRouteCycles = () =>
-  supabase.from('routes').select('name, cycle_start_day, cycle_end_day').eq('active', true).then(unwrap);
+  supabase.from('routes').select('name, cycle_start_day, cycle_end_day, early_start_day').eq('active', true).then(unwrap);
 
 /**
  * עדכון יום-הסיום של מחזור קו — מנהל בלבד (RLS). יום ההתחלה קבוע ב-1.
