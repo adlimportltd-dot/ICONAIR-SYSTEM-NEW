@@ -59,7 +59,7 @@ async function loadPlan() {
     supabase.from('iot_model_map').select('supplier_model, iconair_model, ml_per_sec, tank_ml').then(unwrap),
     supabase.from('device_models').select('name, capacity_ml').then(unwrap),
     supabase.from('city_routes').select('city, route_name').then(unwrap).catch(() => []),
-    supabase.from('routes').select('name, cycle_end_day').then(unwrap).catch(() => []),
+    supabase.from('routes').select('name, cycle_end_day, early_start_day').then(unwrap).catch(() => []),
   ]);
   const ids = iot.map((r) => r.device?.id).filter(Boolean);
   const refills = ids.length
@@ -86,6 +86,7 @@ export default function RefillPlanCard() {
     const capOf = new Map(caps.map((c) => [c.name, Number(c.capacity_ml) || null]));
     const cityMap = new Map(cityRoutes.filter((r) => r.city?.trim()).map((r) => [r.city.trim(), r.route_name]));
     const endDayOf = new Map(cycles.map((c) => [c.name, Number(c.cycle_end_day) || 12]));
+    const earlyOf = new Map(cycles.map((c) => [c.name, Number(c.early_start_day) || null]));
     const lastRefill = new Map();
     refills.forEach((r) => { if (!lastRefill.has(r.device_id)) lastRefill.set(r.device_id, r); });
 
@@ -120,11 +121,16 @@ export default function RefillPlanCard() {
       const byCity = (c) => (c?.trim() ? cityMap.get(c.trim()) ?? null : null);
       const line = (d.site ? byCity(d.site.city) : (d.city?.trim() ? byCity(d.city) : null)) || d.customer?.route_name?.trim() || 'ללא שיוך לקו';
       const endDay = endDayOf.get(line) ?? 12;
-      const refilledThisMonth = refill && new Date(refill.recorded_at).getMonth() === now.getMonth()
-        && new Date(refill.recorded_at).getFullYear() === now.getFullYear();
+      // phase79: קו שהמחזור שלו מתחיל בסוף החודש הקודם (קו צפון מה-25) — מה-25 העבודה כבר שייכת למחזור הבא
+      const early = earlyOf.get(line) ?? null;
+      const shift = early && now.getDate() >= early ? 1 : 0;
+      const cycleStart = early
+        ? new Date(now.getFullYear(), now.getMonth() + shift - 1, early)
+        : new Date(now.getFullYear(), now.getMonth(), 1);
+      const refilledThisMonth = refill && new Date(refill.recorded_at) >= cycleStart;
       let visitBy = refilledThisMonth
-        ? new Date(now.getFullYear(), now.getMonth() + 1, endDay)
-        : new Date(now.getFullYear(), now.getMonth(), endDay);
+        ? new Date(now.getFullYear(), now.getMonth() + shift + 1, endDay)
+        : new Date(now.getFullYear(), now.getMonth() + shift, endDay);
       const overdue = visitBy < today;
       if (overdue) visitBy = today;
       const daysToVisit = Math.max(0, Math.round((visitBy - today) / DAY));
