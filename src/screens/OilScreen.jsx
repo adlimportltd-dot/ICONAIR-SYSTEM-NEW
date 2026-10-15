@@ -107,6 +107,9 @@ export default function OilScreen() {
           <div className="truncate font-mono text-[13px] text-text-faint">
             {row.device?.serial} · {row.device?.model}
           </div>
+          {row.device?.location_note ? (
+            <div className="truncate text-[13px] font-semibold text-primary">📍 {row.device.location_note}</div>
+          ) : null}
         </div>
       ),
     },

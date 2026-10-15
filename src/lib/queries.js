@@ -1160,6 +1160,8 @@ export async function listFieldNotes({ onlyOpen = false, limit = 200 } = {}) {
       `)
       .not('notes', 'is', null)
       .neq('notes', '')
+      // phase76: הערת-מערכת של איפוס מחזור חודשי היא לא הערת שטח — לא להציג כ"הערה" אדומה
+      .not('notes', 'like', 'איפוס תחילת מחזור%')
       .order('recorded_at', { ascending: false })
       .limit(limit)
       .then(unwrap),
@@ -1286,7 +1288,7 @@ export const listOilEntries = ({ limit = 60, date = null, technicianId = null } 
     .from('oil_tracking')
     .select(`
       *,
-      device:devices(id, serial, model, customer:customers(id, name)),
+      device:devices(id, serial, model, location_note, customer:customers(id, name)),
       recorder:profiles(id, full_name)
     `)
     .order('recorded_at', { ascending: false });

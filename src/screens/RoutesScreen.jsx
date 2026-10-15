@@ -24,6 +24,7 @@ import {
   completeVisit, createOilEntry, listOilHistoryForDevices,
   listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute, closeVisit,
   listFieldNotes,
+  resolveFieldNote,
 } from '../lib/queries';
 import { supabase, describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
@@ -227,6 +228,40 @@ function smartSortStops(stops) {
   });
 }
 
+/**
+ * phase76 — סדר מכשירים לפי קומה (עולה) בתוך כתובת: מינוס קודם, אחר כך לובי/0,
+ * ואז 1, 2, 3… "קומה 1-" / "קומה מינוס 1" / "-2" = קומות מינוס. מיקום בלי קומה
+ * (חדר אשפה, חדר כושר) בסוף, לפי שם. בתוך אותה קומה — לפי מספר דירה ואז מספר סידורי.
+ */
+function floorOf(note) {
+  const s = String(note ?? '').trim();
+  if (!s) return null;
+  const neg = (txt, n) => (/מינוס/.test(txt) || /-\s*\d|\d\s*-/.test(txt) ? -Math.abs(n) : n);
+  const m = s.match(/קומה\s*(מינוס\s*)?(-?\s*\d+)\s*(-)?/);
+  if (m) return neg(m[0], Number(m[2].replace(/[\s-]/g, '')));
+  const only = s.match(/^\s*(-?)\s*(\d+)\s*(-?)\s*$/);
+  if (only) return only[1] || only[3] ? -Number(only[2]) : Number(only[2]);
+  if (/לובי|כניסה|מבואה|קרקע/.test(s)) return 0;
+  return null;
+}
+function aptOf(note) {
+  const m = String(note ?? '').match(/דירה\s*(\d+)/);
+  return m ? Number(m[1]) : 0;
+}
+export function sortDevicesByFloor(devices) {
+  return [...(devices ?? [])].sort((a, b) => {
+    const fa = floorOf(a.location_note);
+    const fb = floorOf(b.location_note);
+    if (fa === null && fb !== null) return 1;
+    if (fb === null && fa !== null) return -1;
+    if (fa !== fb) return fa === null ? String(a.location_note ?? '').localeCompare(String(b.location_note ?? ''), 'he') : fa - fb;
+    return aptOf(a.location_note) - aptOf(b.location_note) || String(a.serial ?? '').localeCompare(String(b.serial ?? ''));
+  });
+}
+
+/** phase76 — חיפוש תחנה לפי שם לקוח או כתובת (בלי גלילה) */
+const normSearch = (v) => String(v ?? '').toLowerCase().replace(/["'״׳\-.,]/g, ' ').replace(/\s+/g, ' ').trim();
+
 function RouteStops({ routeName }) {
   const { isAdmin } = useAuth();
   // בורר "חודש" (לא "תאריך") — ר' ההערה למעלה: מחזור שירות חודשי, לא יומי.
@@ -240,9 +275,14 @@ function RouteStops({ routeName }) {
   // המערכת), רק בודקים פה אילו מהתחנות *של הקו הזה* מופיעות בו.
   const openNotes = useQuery(() => listFieldNotes({ onlyOpen: true }), []);
   useRealtime(['oil_tracking', 'field_note_flags'], openNotes.refetch);
+  // phase76: אדום רק להערות מ-30 הימים האחרונים — הערות ישנות נשארות בהיסטוריה ולא "צועקות" בכל תחנה
+  const recentNotes = useMemo(() => {
+    const since = Date.now() - 30 * 86400000;
+    return (openNotes.data ?? []).filter((n) => new Date(n.recordedAt).getTime() >= since);
+  }, [openNotes.data]);
   const openNoteStopIds = useMemo(
-    () => new Set((openNotes.data ?? []).map((n) => n.siteId ?? n.customerId)),
-    [openNotes.data]
+    () => new Set(recentNotes.map((n) => n.siteId ?? n.customerId)),
+    [recentNotes]
   );
 
   // אם עוד מישהו (מנהל אחר, או אותו טכנאי ממכשיר שני) מסמן עצירה
@@ -271,6 +311,7 @@ function RouteStops({ routeName }) {
   // StopRow, כדי שסיום ביקור יוכל "לקפוץ" ולפתוח את הכרטיסייה של
   // התחנה הבאה בלי שהטכנאי יצטרך לסגור ולחפש אותה ברשימה בעצמו.
   const [openStopId, setOpenStopId] = useState(null);
+  const [stopSearch, setStopSearch] = useState(''); // phase76
 
   useEffect(() => {
     setOrder((stops.data ?? []).map((c) => c.id));
@@ -291,6 +332,11 @@ function RouteStops({ routeName }) {
     return s.sub_route_id === subRouteFilter;
   });
   const visibleIds = visibleOrdered.map((s) => s.id);
+  // phase76: חיפוש — מסנן רק את התצוגה; המספור והסדר נשארים של הקו המלא
+  const searchNeedle = normSearch(stopSearch);
+  const shownStops = searchNeedle
+    ? visibleOrdered.filter((s) => normSearch([s.name, s.address, s.city, ...(s.devices ?? []).map((d) => d.location_note)].join(' ')).includes(searchNeedle))
+    : visibleOrdered;
 
   // 2026-09-11 (בקשה מפורשת: "החצים הקטנים זה סיוט"): שלוש דרכים לסדר
   // מחדש — גרירה-ושחרור, קפיצה למספר-סדר מוקלד, ומיון גאוגרפי אוטומטי —
@@ -689,6 +735,35 @@ function RouteStops({ routeName }) {
           פסי-הבחירה למובייל כבר מוסתרים שם (xl:hidden) — אף תצוגה לא
           נשארה גלויה. גרירה/מיון/Google-optimize מעולם לא היו תלויים
           ב-isAdmin, אז לא נגעו כאן. */}
+      {/* phase76: חיפוש לפי שם לקוח או כתובת */}
+      <div className="sticky top-2 z-10 mb-3.5">
+        <div className="relative">
+          <input
+            type="search"
+            value={stopSearch}
+            onChange={(e) => setStopSearch(e.target.value)}
+            placeholder="חיפוש לקוח או כתובת בקו…"
+            className="w-full rounded-pill border border-black/[0.09] bg-white px-4 py-3 text-[15px] text-text shadow-sm
+                       focus:border-gold-500/45 focus:outline-none"
+            aria-label="חיפוש לקוח או כתובת בקו"
+          />
+          {stopSearch && (
+            <button
+              type="button"
+              onClick={() => setStopSearch('')}
+              className="absolute end-3 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-[13px] font-semibold text-text-faint hover:text-text"
+            >
+              נקה
+            </button>
+          )}
+        </div>
+        {searchNeedle && (
+          <div className="mt-1.5 text-[13px] text-text-faint">
+            {shownStops.length === 0 ? 'לא נמצאה תחנה שמתאימה לחיפוש' : `${shownStops.length} תחנות מתאימות`}
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <div className="hidden xl:block xl:w-[248px] xl:flex-none">
           <SubRouteSidebar
@@ -717,9 +792,11 @@ function RouteStops({ routeName }) {
             empty={<EmptyState title={subRouteFilter === '__all__' ? 'אין לקוחות פעילים על הקו הזה' : 'אין תחנות בהיקף הזה'} />}
           >
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
+              <SortableContext items={searchNeedle ? shownStops.map((s) => s.id) : visibleIds} strategy={verticalListSortingStrategy}>
                 <div className="flex flex-col gap-[9px]">
-                  {visibleOrdered.map((customer, index) => (
+                  {shownStops.map((customer) => {
+                    const index = visibleIds.indexOf(customer.id);
+                    return (
                     <StopRow
                       key={customer.id}
                       id={customer.id}
@@ -729,6 +806,7 @@ function RouteStops({ routeName }) {
                       done={statusById[customer.id] === 'done'}
                       closed={statusById[customer.id] === 'skipped'}
                       hasOpenNote={openNoteStopIds.has(customer.site_id ?? customer.customer_id)}
+                      openNotes={recentNotes.filter((n) => (n.siteId ?? n.customerId) === (customer.site_id ?? customer.customer_id))}
                       onToggleDone={() => toggleStatus(customer.id)}
                       onMarkDone={() => markDone(customer.id)}
                       onCloseVisit={(reason) => closeStop(customer.id, reason)}
@@ -751,7 +829,8 @@ function RouteStops({ routeName }) {
                       onGoToNext={() => goToNextStop(customer.id)}
                       hasNext={visibleIds.slice(index + 1).some((id) => statusById[id] === 'pending')}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               </SortableContext>
             </DndContext>
@@ -1042,7 +1121,7 @@ function PillButton({ active, onClick, children }) {
  * עם לחיצה על שם הלקוח/כפתורי הפעולה.
  */
 function StopRow({
-  id, index, total, customer, done, closed, hasOpenNote, onToggleDone, onMarkDone, onCloseVisit, onJump, deviceModels, scents, onVisitCompleted,
+  id, index, total, customer, done, closed, hasOpenNote, openNotes, onToggleDone, onMarkDone, onCloseVisit, onJump, deviceModels, scents, onVisitCompleted,
   isAdmin, subRoutes, onAssignSubRoute, selected, onToggleSelect,
   cardOpen, onOpenCard, onCloseCard, onGoToNext, hasNext,
 }) {
@@ -1198,6 +1277,7 @@ function StopRow({
         onAssignSubRoute={onAssignSubRoute}
         onGoToNext={onGoToNext}
         hasNext={hasNext}
+        openNotes={openNotes}
       />
     </div>
   );
@@ -1266,12 +1346,31 @@ function OrderBadge({ index, total, onJump }) {
  * היסטוריית השמן האחרונה שלהם — כדי שהטכנאי לא יצטרך לנחש מה קרה
  * בביקורים הקודמים. אין כאן שום נתון כספי בכוונה (ר' דרישת המשתמש).
  */
-function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHref, mapsHref, onMarkDone, onCloseVisit, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, onGoToNext, hasNext }) {
-  const devices = stop.devices ?? [];
+function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHref, mapsHref, onMarkDone, onCloseVisit, deviceModels, scents, onVisitCompleted, isAdmin, subRoutes, onAssignSubRoute, onGoToNext, hasNext, openNotes = [] }) {
+  // phase76: מכשירים לפי סדר קומות עולה
+  const devices = useMemo(() => sortDevicesByFloor(stop.devices), [stop.devices]);
   const deviceIds = useMemo(() => devices.map((d) => d.id), [devices]);
   const history = useQuery(() => listOilHistoryForDevices(deviceIds, 20), [deviceIds.join(',')], { enabled: open });
 
   const deviceById = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+
+  // phase76: הטכנאי רואה את ההערה ויכול לסגור אותה ("טופל") — נעלמת מיד, והתג האדום יורד בריענון החי
+  const [closedNoteIds, setClosedNoteIds] = useState(() => new Set());
+  const [resolvingNote, setResolvingNote] = useState(null);
+  const [noteError, setNoteError] = useState(null);
+  const visibleNotes = openNotes.filter((n) => !closedNoteIds.has(n.id));
+  async function resolveNotes(ids, which = 'all') {
+    setResolvingNote(which);
+    setNoteError(null);
+    try {
+      for (const id of ids) await resolveFieldNote(id);
+      setClosedNoteIds((prev) => new Set([...prev, ...ids]));
+    } catch (e) {
+      setNoteError(`הסגירה נכשלה: ${describeError(e)}`);
+    } finally {
+      setResolvingNote(null);
+    }
+  }
 
   // 2026-09-14 (בקשה מפורשת: "העסק סגור / לא נמצא, בלי לאלץ מילוי
   // שמן") — שורה-הזנה מהירה מוטבעת בכרטיסייה עצמה (לא מודל מקונן נוסף —
@@ -1300,6 +1399,51 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
         {done && (
           <div className="flex items-center gap-2">
             <StatusChip tone="ok">✓ הביקור הושלם</StatusChip>
+          </div>
+        )}
+
+        {/* phase76: ההערות הפתוחות עצמן (התג האדום "הערה" ליד שם הלקוח) — קודם לא הוצגו בשום מקום בכרטיסייה */}
+        {visibleNotes.length > 0 && (
+          <div className="rounded-row border border-crit/25 bg-crit/[0.05] px-3.5 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-[13.5px] font-bold text-crit-soft">הערות פתוחות מביקורים קודמים ({visibleNotes.length})</div>
+              {visibleNotes.length > 1 && (
+                <button
+                  type="button"
+                  disabled={resolvingNote !== null}
+                  onClick={() => resolveNotes(visibleNotes.map((n) => n.id))}
+                  className="shrink-0 rounded-full border border-ok/40 bg-ok/10 px-3 py-1 text-[12.5px] font-bold text-ok disabled:opacity-50"
+                >
+                  {resolvingNote === 'all' ? 'סוגר…' : '✓ סמן את כולן כטופלו'}
+                </button>
+              )}
+            </div>
+            {noteError && <div className="mb-2 text-[12.5px] font-semibold text-crit">{noteError}</div>}
+            <div className="flex flex-col gap-2">
+              {visibleNotes.map((n) => {
+                const dev = (history.data ?? []).find((h) => h.id === n.id);
+                const loc = dev ? deviceById.get(dev.device_id) : null;
+                return (
+                  <div key={n.id} className="flex items-start justify-between gap-2 text-[14px]">
+                    <div className="min-w-0">
+                      <div className="whitespace-pre-wrap font-semibold text-text">{n.notes}</div>
+                      <div className="mt-0.5 text-[12.5px] text-text-faint">
+                        {n.recorderName} · {formatDateTime(n.recordedAt)}
+                        {loc ? ` · ${loc.model}${loc.location_note ? ` · ${loc.location_note}` : ''}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={resolvingNote !== null}
+                      onClick={() => resolveNotes([n.id], n.id)}
+                      className="shrink-0 rounded-full border border-ok/40 bg-ok/10 px-3 py-1 text-[12.5px] font-bold text-ok disabled:opacity-50"
+                    >
+                      {resolvingNote === n.id ? 'סוגר…' : '✓ טופל'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1445,6 +1589,15 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
                       {deviceById.get(entry.device_id)?.model ?? ''} · {entry.scent_name || 'ללא ניחוח'}
                     </span>
                   </div>
+                  {/* phase76: איפה בוצע — המיקום של המכשיר (קומה/דירה) והערת הטכנאי */}
+                  {deviceById.get(entry.device_id)?.location_note && (
+                    <div className="text-[13px] font-semibold text-text-dim">
+                      מיקום: {deviceById.get(entry.device_id).location_note}
+                    </div>
+                  )}
+                  {entry.notes?.trim() && (
+                    <div className="whitespace-pre-wrap text-[13px] text-text-faint">הערה: {entry.notes}</div>
+                  )}
                   {/* 2026-09-14 (בקשה מפורשת: "רוצים שיהיה רשום כמה מ״ל בוצע
                       בפועל, לא אחוזים") — liters_added כבר נשמר ונשלף
                       (ר' listOilHistoryForDevices), רק לא הוצג פה. הכמות
