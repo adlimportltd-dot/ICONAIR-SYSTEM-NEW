@@ -354,7 +354,7 @@ export async function listStopsByRoute(routeName) {
       .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note, self_fill)')
       .eq('status', 'active').then(unwrap),
     supabase.from('customer_sites')
-      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note, self_fill)')
+      .select('id, customer_id, label, city, building_code, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note, self_fill)')
       .then(unwrap),
     loadCityRoutesMap(),
   ]);
@@ -386,6 +386,7 @@ export async function listStopsByRoute(routeName) {
       customer_id: s.customer_id,
       site_id: s.id,
       name: `${s.customer?.name ?? ''} — ${s.label}`,
+      buildingCode: s.building_code?.trim() || null, // קוד כניסה לבניין — מוצג לטכנאי במסלול
       address: `${s.label}${s.city ? `, ${s.city}` : ''}`,
       city: s.city,
       phone: s.customer?.phone,
