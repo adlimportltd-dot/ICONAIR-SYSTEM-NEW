@@ -52,7 +52,7 @@ async function loadIntegrityAlerts() {
   const nextMonthStart = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}-01`;
   const monthStartTs = new Date(`${monthStart}T00:00:00+03:00`).toISOString();
 
-  const [oil, models, monthOil, assignments] = await Promise.all([
+  const [oil, models, monthOil, assignments, stopDevices] = await Promise.all([
     supabase
       .from('oil_tracking')
       .select('id, device_id, event_type, liters_added, notes, recorded_at, device:devices(model, location_note, customer:customers(name), site:customer_sites(label))')
@@ -73,7 +73,14 @@ async function loadIntegrityAlerts() {
       .gte('visit_date', monthStart)
       .lt('visit_date', nextMonthStart)
       .then(unwrap),
+    // phase78: תחנה שכל המכשירים בה "ממלא לבד" לא נחשבת תחנה שלא בוצעה
+    supabase.from('devices').select('customer_id, site_id, self_fill').neq('status', 'uninstalled').then(unwrap).catch(() => []),
   ]);
+  const selfFillOnly = new Map();
+  for (const d of stopDevices) {
+    const k = d.site_id ?? d.customer_id;
+    selfFillOnly.set(k, (selfFillOnly.get(k) ?? true) && !!d.self_fill);
+  }
 
   const list = [];
   const capacity = new Map(models.map((m) => [m.name, Number(m.capacity_ml) || null]));
@@ -172,7 +179,7 @@ async function loadIntegrityAlerts() {
       });
     }
     const end = a.route?.cycle_end_day;
-    if (a.status === 'pending' && end && today > end) {
+    if (a.status === 'pending' && end && today > end && !selfFillOnly.get(k)) {
       const r = a.route.name;
       if (!lateByRoute.has(r)) lateByRoute.set(r, { end, names: [] });
       lateByRoute.get(r).names.push(name);

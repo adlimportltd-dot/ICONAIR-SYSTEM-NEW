@@ -351,10 +351,10 @@ export async function updateRouteCycle(routeName, cycleEndDay) {
 export async function listStopsByRoute(routeName) {
   const [customers, sites, cityRoutes] = await Promise.all([
     supabase.from('customers')
-      .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note)')
+      .select('id, name, address, city, phone, email, notes, route_name, sub_route_id, route_position, devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note, self_fill)')
       .eq('status', 'active').then(unwrap),
     supabase.from('customer_sites')
-      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note)')
+      .select('id, customer_id, label, city, sub_route_id, route_position, customer:customers(name, phone, email, notes), devices(id, serial, model, scent_name, oil_level_pct, fill_ml, location_note, self_fill)')
       .then(unwrap),
     loadCityRoutesMap(),
   ]);
