@@ -1160,6 +1160,8 @@ export async function listFieldNotes({ onlyOpen = false, limit = 200 } = {}) {
       `)
       .not('notes', 'is', null)
       .neq('notes', '')
+      // phase76: הערת-מערכת של איפוס מחזור חודשי היא לא הערת שטח — לא להציג כ"הערה" אדומה
+      .not('notes', 'like', 'איפוס תחילת מחזור%')
       .order('recorded_at', { ascending: false })
       .limit(limit)
       .then(unwrap),
