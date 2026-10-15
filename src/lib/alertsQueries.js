@@ -33,7 +33,7 @@ function iotName(d) {
 }
 
 export async function loadAlerts() {
-  const [iot, acks, thefts, calls, notes] = await Promise.all([
+  const [iot, acks, thefts, calls, notes, queues] = await Promise.all([
     supabase
       .from('iot_devices')
       .select(`id, aroma_name, owner_type, owner_name, online, is_locked, last_online_at, last_offline_at,
@@ -50,6 +50,13 @@ export async function loadAlerts() {
       .catch(() => []),
     getOpenServiceCalls(30).catch(() => []),
     listFieldNotes({ onlyOpen: true, limit: 200 }).catch(() => []),
+    // phase74: ביקורים שתקועים בטלפון של טכנאי ולא נקלטו בשרת
+    supabase
+      .from('offline_queue_status')
+      .select('user_id, pending, failed, oldest_pending_at, updated_at, user:profiles(full_name)')
+      .or('pending.gt.0,failed.gt.0')
+      .then(unwrap)
+      .catch(() => []),
   ]);
 
   const acked = new Map(acks.map((a) => [a.alert_key, a.signature]));
@@ -88,6 +95,25 @@ export async function loadAlerts() {
     }
     if (!d.owner_type) {
       list.push({ key: `iot-unclassified:${d.id}`, sig: 'x', level: 'info', group: 'fleet', title: name, text: 'מכשיר חדש בענן — צריך סיווג', target: 'smart_fleet' });
+    }
+  }
+
+  // phase74: טלפון של טכנאי עם ביקורים שלא נקלטו. ההתראה נעלמת לבד כשהתור מתרוקן.
+  const hhmm = (iso) => new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  for (const q of queues) {
+    const who = q.user?.full_name || 'טכנאי';
+    if (q.failed > 0) {
+      list.push({
+        key: `queue-failed:${q.user_id}`, level: 'crit', group: 'queue', fixed: true, title: who,
+        text: `${q.failed} ביקורים נכשלו בשליחה מהטלפון ולא נקלטו במערכת — צריך לבדוק איתו`, at: q.updated_at,
+      });
+    }
+    const oldMin = q.oldest_pending_at ? (now - new Date(q.oldest_pending_at).getTime()) / 60000 : 0;
+    if (q.pending > 0 && oldMin >= 30) {
+      list.push({
+        key: `queue-pending:${q.user_id}`, level: 'warn', group: 'queue', fixed: true, title: who,
+        text: `${q.pending} ביקורים ממתינים בטלפון ועוד לא נקלטו (הוותיק מ-${hhmm(q.oldest_pending_at)}). ייקלטו לבד כשתהיה קליטה`, at: q.oldest_pending_at,
+      });
     }
   }
 
