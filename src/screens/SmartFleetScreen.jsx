@@ -30,7 +30,7 @@ import {
  * צי חכם — מצב חי של המכשירים שמחוברים לענן Aroma Link.
  * הנתונים מגיעים מ-/api/aroma-sync כל 5 דקות.
  * פעולות מנהל: סיווג מכשיר (שכירות / פרטי / ניסוי) ודגם, ועריכת שעון ועוצמה
- * (phase57) — רק במכשירים ש-control_enabled שלהם פעיל.
+ * (phase57) — רק במכשירים ש-control_enabled שלהם פעיל (phase72: מתג בחלון הסיווג).
  *
  * phase66 (עיצוב מחדש): שורה נקייה + פירוט בלחיצה, בעיות קודם, קיבוץ לפי לקוח,
  * כרטיסי סיכום שמסננים בלחיצה, מכשירי ניסוי מוסתרים כברירת מחדל,
@@ -826,6 +826,7 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
   const [ownerName, setOwnerName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
   const [supplierModel, setSupplierModel] = useState('');
+  const [controlEnabled, setControlEnabled] = useState(false); // phase72
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -838,6 +839,7 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
     setOwnerName(row?.owner_name ?? '');
     setOwnerPhone(row?.owner_phone ?? '');
     setSupplierModel(row?.supplier_model ?? '');
+    setControlEnabled(!!row?.control_enabled);
     setError('');
   }, [rowId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -864,6 +866,7 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
         owner_name: ownerType === 'private' ? ownerName.trim() : null,
         owner_phone: ownerType === 'private' ? (ownerPhone.trim() || null) : null,
         supplier_model: supplierModel || null,
+        control_enabled: controlEnabled,
       });
       onSaved();
     } catch (e) {
@@ -911,6 +914,28 @@ function LinkModal({ row, modelOptions, onClose, onSaved }) {
         <Field label="דגם אצל היצרן">
           <Select value={supplierModel} onChange={(e) => setSupplierModel(e.target.value)} options={modelOptions} placeholder="לא ידוע" />
         </Field>
+
+        {/* phase72: שליטה מרחוק — מדליקים רק אחרי שהשעון של המכשיר נקרא מהענן; לכבות אפשר תמיד */}
+        {(() => {
+          const clockRead = Array.isArray(row?.schedule) && row.schedule.length > 0;
+          const locked = !clockRead && !controlEnabled;
+          return (
+            <div className={`inner-row flex flex-col gap-1.5 px-3 py-3 ${locked ? 'opacity-60' : ''}`}>
+              <label className={`flex items-center justify-between gap-3 text-[15px] font-bold ${locked ? '' : 'cursor-pointer'}`}>
+                <span>שליטה מרחוק (שעון ועוצמה מהמערכת)</span>
+                <span className="flex items-center gap-2">
+                  <span className={`text-[13px] font-semibold ${controlEnabled ? 'text-ok' : 'text-text-faint'}`}>{controlEnabled ? 'פעיל' : 'כבוי'}</span>
+                  <input type="checkbox" disabled={locked} checked={controlEnabled} onChange={(e) => setControlEnabled(e.target.checked)} />
+                </span>
+              </label>
+              <span className="text-[12.5px] text-text-faint">
+                {locked
+                  ? 'אפשר להפעיל אחרי שהשעון של המכשיר נקרא מהענן (פעם ביום).'
+                  : 'מאפשר לשנות שעון ועוצמה למכשיר הזה מצי חכם, גם בשליטה קבוצתית. ההפעלה עצמה לא שולחת שום דבר למכשיר.'}
+              </span>
+            </div>
+          );
+        })()}
         {error && <p className="text-[14px] font-semibold text-crit-soft">{error}</p>}
       </div>
     </Modal>
