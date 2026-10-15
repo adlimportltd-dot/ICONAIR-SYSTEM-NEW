@@ -24,6 +24,7 @@ import {
   completeVisit, createOilEntry, listOilHistoryForDevices,
   listSubRoutesForRoute, createSubRoute, assignStopToSubRoute, deleteSubRoute, closeVisit,
   listFieldNotes,
+  resolveFieldNote,
 } from '../lib/queries';
 import { supabase, describeError } from '../lib/supabase';
 import { OIL_EVENT_LABEL, formatDateTime, relativeTime } from '../lib/mappers';
@@ -1348,6 +1349,24 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
 
   const deviceById = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
 
+  // phase76: הטכנאי רואה את ההערה ויכול לסגור אותה ("טופל") — נעלמת מיד, והתג האדום יורד בריענון החי
+  const [closedNoteIds, setClosedNoteIds] = useState(() => new Set());
+  const [resolvingNote, setResolvingNote] = useState(null);
+  const [noteError, setNoteError] = useState(null);
+  const visibleNotes = openNotes.filter((n) => !closedNoteIds.has(n.id));
+  async function resolveNotes(ids, which = 'all') {
+    setResolvingNote(which);
+    setNoteError(null);
+    try {
+      for (const id of ids) await resolveFieldNote(id);
+      setClosedNoteIds((prev) => new Set([...prev, ...ids]));
+    } catch (e) {
+      setNoteError(`הסגירה נכשלה: ${describeError(e)}`);
+    } finally {
+      setResolvingNote(null);
+    }
+  }
+
   // 2026-09-14 (בקשה מפורשת: "העסק סגור / לא נמצא, בלי לאלץ מילוי
   // שמן") — שורה-הזנה מהירה מוטבעת בכרטיסייה עצמה (לא מודל מקונן נוסף —
   // המשתמש ביקש במפורש "או שורה להזנה מהירה" כאלטרנטיבה פשוטה יותר).
@@ -1379,20 +1398,43 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
         )}
 
         {/* phase76: ההערות הפתוחות עצמן (התג האדום "הערה" ליד שם הלקוח) — קודם לא הוצגו בשום מקום בכרטיסייה */}
-        {openNotes.length > 0 && (
+        {visibleNotes.length > 0 && (
           <div className="rounded-row border border-crit/25 bg-crit/[0.05] px-3.5 py-3">
-            <div className="mb-2 text-[13.5px] font-bold text-crit-soft">הערות פתוחות מביקורים קודמים ({openNotes.length})</div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-[13.5px] font-bold text-crit-soft">הערות פתוחות מביקורים קודמים ({visibleNotes.length})</div>
+              {visibleNotes.length > 1 && (
+                <button
+                  type="button"
+                  disabled={resolvingNote !== null}
+                  onClick={() => resolveNotes(visibleNotes.map((n) => n.id))}
+                  className="shrink-0 rounded-full border border-ok/40 bg-ok/10 px-3 py-1 text-[12.5px] font-bold text-ok disabled:opacity-50"
+                >
+                  {resolvingNote === 'all' ? 'סוגר…' : '✓ סמן את כולן כטופלו'}
+                </button>
+              )}
+            </div>
+            {noteError && <div className="mb-2 text-[12.5px] font-semibold text-crit">{noteError}</div>}
             <div className="flex flex-col gap-2">
-              {openNotes.map((n) => {
+              {visibleNotes.map((n) => {
                 const dev = (history.data ?? []).find((h) => h.id === n.id);
                 const loc = dev ? deviceById.get(dev.device_id) : null;
                 return (
-                  <div key={n.id} className="text-[14px]">
-                    <div className="whitespace-pre-wrap font-semibold text-text">{n.notes}</div>
-                    <div className="mt-0.5 text-[12.5px] text-text-faint">
-                      {n.recorderName} · {formatDateTime(n.recordedAt)}
-                      {loc ? ` · ${loc.model}${loc.location_note ? ` · ${loc.location_note}` : ''}` : ''}
+                  <div key={n.id} className="flex items-start justify-between gap-2 text-[14px]">
+                    <div className="min-w-0">
+                      <div className="whitespace-pre-wrap font-semibold text-text">{n.notes}</div>
+                      <div className="mt-0.5 text-[12.5px] text-text-faint">
+                        {n.recorderName} · {formatDateTime(n.recordedAt)}
+                        {loc ? ` · ${loc.model}${loc.location_note ? ` · ${loc.location_note}` : ''}` : ''}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      disabled={resolvingNote !== null}
+                      onClick={() => resolveNotes([n.id], n.id)}
+                      className="shrink-0 rounded-full border border-ok/40 bg-ok/10 px-3 py-1 text-[12.5px] font-bold text-ok disabled:opacity-50"
+                    >
+                      {resolvingNote === n.id ? 'סוגר…' : '✓ טופל'}
+                    </button>
                   </div>
                 );
               })}
