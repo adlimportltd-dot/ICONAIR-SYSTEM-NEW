@@ -21,6 +21,175 @@ function unwrap({ data, error }) {
   return data;
 }
 
+/* =====================================================================
+   phase77 — בדיקת תקינות (קריאה בלבד, לא משנה שום נתון).
+   תופסת מוקדם את סוגי הטעויות שמצאנו ב-15.10:
+     1. מילוי כפול — אותו מכשיר, שני מילויים בהפרש של פחות משעה.
+     2. מילוי 0 מ"ל בלי הערה.
+     3. מילוי חריג — יותר מנפח המכל של הדגם.
+     4. תחנה שסומנה "בוצע" החודש בלי אף רישום שמן באותה כתובת.
+     5. אחרי סוף מחזור הקו — תחנות שעוד לא בוצעו (שורה אחת לכל קו).
+   כל התראה ניתנת לסימון "טופל" (alert_acks), וחוזרת רק אם הנתון משתנה.
+   ===================================================================== */
+const INTEGRITY_DAYS = 14;
+const DUP_MINUTES = 60;
+const RESET_NOTE = 'איפוס תחילת מחזור';
+
+function stopLabel(dev) {
+  const name = dev?.customer?.name ?? 'לקוח';
+  const where = [dev?.site?.label, dev?.location_note].filter(Boolean).join(' · ');
+  return where ? `${name} — ${where}` : name;
+}
+const ml = (liters) => `${Math.round(Number(liters || 0) * 1000)} מ"ל`;
+const dayLabel = (iso) => new Date(iso).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', timeZone: 'Asia/Jerusalem' });
+
+async function loadIntegrityAlerts() {
+  const now = new Date();
+  const since = new Date(now.getTime() - INTEGRITY_DAYS * 86400000).toISOString();
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthStart = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}-01`;
+  const monthStartTs = new Date(`${monthStart}T00:00:00+03:00`).toISOString();
+
+  const [oil, models, monthOil, assignments] = await Promise.all([
+    supabase
+      .from('oil_tracking')
+      .select('id, device_id, event_type, liters_added, notes, recorded_at, device:devices(model, location_note, customer:customers(name), site:customer_sites(label))')
+      .gte('recorded_at', since)
+      .order('recorded_at', { ascending: true })
+      .limit(5000)
+      .then(unwrap),
+    supabase.from('device_models').select('name, capacity_ml').then(unwrap),
+    supabase
+      .from('oil_tracking')
+      .select('notes, device:devices(customer_id, site_id)')
+      .gte('recorded_at', monthStartTs)
+      .limit(10000)
+      .then(unwrap),
+    supabase
+      .from('route_assignments')
+      .select('id, customer_id, site_id, status, visit_date, route:routes(name, cycle_end_day), customer:customers(name, status), site:customer_sites(label)')
+      .gte('visit_date', monthStart)
+      .lt('visit_date', nextMonthStart)
+      .then(unwrap),
+  ]);
+
+  const list = [];
+  const capacity = new Map(models.map((m) => [m.name, Number(m.capacity_ml) || null]));
+
+  // 1–3: מילויים
+  // מילוי 0 שיש לידו (±12 שעות) מילוי אמיתי לאותו מכשיר = שארית של "סיום ביקור" כפול — לא חשוד
+  const realRefillTimes = new Map();
+  for (const r of oil) {
+    if (r.event_type !== 'refill' || !(Number(r.liters_added) > 0)) continue;
+    if (!realRefillTimes.has(r.device_id)) realRefillTimes.set(r.device_id, []);
+    realRefillTimes.get(r.device_id).push(new Date(r.recorded_at).getTime());
+  }
+  const hasRealNear = (r) => (realRefillTimes.get(r.device_id) ?? [])
+    .some((t) => Math.abs(t - new Date(r.recorded_at).getTime()) <= 12 * 3600000);
+  const lastRefill = new Map();
+  const dupGroups = new Map();
+  const zeroGroups = new Map();
+  for (const r of oil) {
+    if (r.event_type !== 'refill') continue;
+    const liters = Number(r.liters_added || 0);
+    const title = stopLabel(r.device);
+    const model = r.device?.model ?? '';
+
+    const prev = lastRefill.get(r.device_id);
+    if (prev && liters > 0 && Number(prev.liters_added || 0) > 0) {
+      const gap = (new Date(r.recorded_at) - new Date(prev.recorded_at)) / 60000;
+      if (gap < DUP_MINUTES) {
+        const k = `${r.device_id}|${dayLabel(r.recorded_at)}`;
+        const g = dupGroups.get(k) ?? { first: prev, title, model, items: [ml(prev.liters_added)], last: r };
+        g.items.push(ml(liters));
+        g.last = r;
+        dupGroups.set(k, g);
+      }
+    }
+    lastRefill.set(r.device_id, r);
+
+    if (liters === 0 && !String(r.notes ?? '').trim() && !hasRealNear(r)) {
+      const k = `${r.device_id}|${dayLabel(r.recorded_at)}`;
+      const g = zeroGroups.get(k) ?? { first: r, title, model, count: 0 };
+      g.count += 1;
+      zeroGroups.set(k, g);
+    }
+
+    const cap = capacity.get(model);
+    if (cap && liters * 1000 > cap) {
+      list.push({
+        key: `int-over:${r.id}`, sig: String(liters), level: 'warn', group: 'integrity', title,
+        text: `מילוי חריג: ${ml(liters)} ב-${model} שהמכל שלו ${cap} מ"ל (${dayLabel(r.recorded_at)})`,
+        at: r.recorded_at, target: 'oils',
+      });
+    }
+  }
+
+  // מקובץ: התראה אחת לכל מכשיר ביום
+  for (const g of dupGroups.values()) {
+    list.push({
+      key: `int-dup:${g.first.id}`, sig: String(g.items.length), level: 'crit', group: 'integrity', title: g.title,
+      text: `מילוי כפול? ${g.model} נרשם ${g.items.length} פעמים בתוך שעה (${dayLabel(g.last.recorded_at)}): ${g.items.join(', ')}`,
+      at: g.last.recorded_at, target: 'oils',
+    });
+  }
+  for (const g of zeroGroups.values()) {
+    list.push({
+      key: `int-zero:${g.first.id}`, sig: String(g.count), level: 'warn', group: 'integrity', title: g.title,
+      text: `מילוי של 0 מ"ל בלי הערה${g.count > 1 ? ` (${g.count} פעמים)` : ''} · ${g.model} (${dayLabel(g.first.recorded_at)}) — לבדוק עם הטכנאי כמה מילא`,
+      at: g.first.recorded_at, target: 'oils',
+    });
+  }
+
+  // 4–5: תחנות החודש
+  const withOil = new Set();
+  for (const r of monthOil) {
+    if (String(r.notes ?? '').startsWith(RESET_NOTE)) continue;
+    const k = r.device?.site_id ?? r.device?.customer_id;
+    if (k) withOil.add(k);
+  }
+
+  const RANK = { done: 2, skipped: 1, pending: 0 };
+  const stops = new Map();
+  for (const a of assignments) {
+    if (a.customer && a.customer.status !== 'active') continue;
+    const k = a.site_id ?? a.customer_id;
+    const prev = stops.get(k);
+    if (!prev || (RANK[a.status] ?? 0) > (RANK[prev.status] ?? 0)) stops.set(k, a);
+  }
+
+  const today = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', day: 'numeric' }));
+  const lateByRoute = new Map();
+  for (const [k, a] of stops) {
+    const name = a.site?.label ? `${a.customer?.name ?? 'לקוח'} — ${a.site.label}` : (a.customer?.name ?? 'לקוח');
+    if (a.status === 'done' && !withOil.has(k)) {
+      list.push({
+        key: `int-doneempty:${a.id}`, sig: monthStart, level: 'warn', group: 'integrity', title: name,
+        text: 'סומן "בוצע" החודש אבל אין אף רישום שמן בכתובת — ייתכן שהביקור לא נקלט',
+        target: 'routes',
+      });
+    }
+    const end = a.route?.cycle_end_day;
+    if (a.status === 'pending' && end && today > end) {
+      const r = a.route.name;
+      if (!lateByRoute.has(r)) lateByRoute.set(r, { end, names: [] });
+      lateByRoute.get(r).names.push(name);
+    }
+  }
+  for (const [route, { end, names }] of lateByRoute) {
+    list.push({
+      key: `int-late:${route}:${monthStart}`, sig: String(names.length), level: 'warn', group: 'integrity',
+      title: `${route}: ${names.length} תחנות לא בוצעו במחזור`,
+      text: `המחזור נגמר ב-${end} לחודש. ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` ועוד ${names.length - 4}` : ''}`,
+      target: 'routes',
+    });
+  }
+
+  return list;
+}
+
 const OFFLINE_MIN = 30;
 const DRIFT_MIN = 10;
 
@@ -34,7 +203,7 @@ function iotName(d) {
 }
 
 export async function loadAlerts() {
-  const [iot, acks, thefts, calls, notes, queues, disconnections] = await Promise.all([
+  const [iot, acks, thefts, calls, notes, queues, disconnections, integrity] = await Promise.all([
     supabase
       .from('iot_devices')
       .select(`id, aroma_name, owner_type, owner_name, online, is_locked, last_online_at, last_offline_at,
@@ -60,6 +229,8 @@ export async function loadAlerts() {
       .catch(() => []),
     // phase75: ניתוקי לקוחות מתוכננים
     listOpenDisconnections().catch(() => []),
+    // phase77: בדיקת תקינות
+    loadIntegrityAlerts().catch((e) => { console.warn('integrity check failed', e); return []; }),
   ]);
 
   const acked = new Map(acks.map((a) => [a.alert_key, a.signature]));
@@ -172,6 +343,9 @@ export async function loadAlerts() {
       text: 'מעל 3 ימים. אפשר לעבור עליהן ולסמן "טופל" בכרטיס הערות השטח בדשבורד.', target: 'dashboard',
     });
   }
+
+  // phase77: בדיקת תקינות — ניתנות לסימון "טופל" (alert_acks)
+  list.push(...integrity);
 
   const visible = list.filter((a) => a.fixed || a.noteId || !isAcked(a.key, a.sig));
   const rank = { crit: 0, warn: 1, info: 2 };
