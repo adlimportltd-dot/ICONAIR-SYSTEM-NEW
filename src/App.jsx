@@ -9,6 +9,7 @@ import { useRealtime } from './hooks/useRealtime';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { startAutoSync } from './lib/offlineSync';
 import { listQueue } from './lib/offlineQueue';
+import { reportQueueStatus } from './lib/queueReport';
 import { allNavItems, screenMeta } from './config/navigation';
 
 import Sidebar from './components/Sidebar';
@@ -283,7 +284,10 @@ function Shell() {
   const [syncToast, setSyncToast] = useState(null);
 
   const refreshPendingCount = useCallback(() => {
-    listQueue().then((items) => setPendingCount(items.filter((i) => i.status === 'pending').length));
+    listQueue().then((items) => {
+      setPendingCount(items.filter((i) => i.status === 'pending').length);
+      reportQueueStatus(items); // phase74: דיווח למנהל על ביקורים תקועים בטלפון
+    });
   }, []);
 
   useEffect(() => {

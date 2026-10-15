@@ -35,7 +35,7 @@ export function useAlertCenter(enabled) {
 }
 
 const DOT = { crit: 'bg-crit', warn: 'bg-warn', info: 'bg-slate-400' };
-const GROUP_LABEL = { fleet: 'צי חכם', theft: 'מכשיר חסר', calls: 'קריאת שירות', notes: 'הערת שטח' };
+const GROUP_LABEL = { fleet: 'צי חכם', theft: 'מכשיר חסר', calls: 'קריאת שירות', notes: 'הערת שטח', queue: 'ביקורים שלא נקלטו' };
 const TARGET_LABEL = { smart_fleet: 'לצי חכם', routes: 'למסלולים', service: 'לקריאות', dashboard: 'לדשבורד' };
 
 export default function AlertCenter({ ac, onNavigate, onClose }) {
