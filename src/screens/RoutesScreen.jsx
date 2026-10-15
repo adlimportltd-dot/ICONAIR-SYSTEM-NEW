@@ -1215,6 +1215,9 @@ function StopRow({
               {hasOpenNote && <StatusChip tone="crit">הערה</StatusChip>}
             </div>
             <div className="truncate text-[13px] text-text-faint">{customer.address || '—'}</div>
+            {customer.buildingCode && (
+              <div className="truncate text-[13px] font-semibold text-gold-600">🔑 קוד כניסה: <span dir="ltr" className="font-mono">{customer.buildingCode}</span></div>
+            )}
           </button>
         </div>
 
@@ -1401,6 +1404,13 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
       subtitle={stop.address || undefined}
     >
       <div className="flex flex-col gap-4">
+        {/* קוד כניסה לבניין (customer_sites.building_code) — בראש הכרטיס, כדי שהטכנאי יראה אותו כשהוא מגיע */}
+        {stop.buildingCode && (
+          <div className="rounded-row border border-gold-500/30 bg-gold-500/[0.08] px-3.5 py-2.5 text-[15px] font-semibold">
+            🔑 קוד כניסה: <span dir="ltr" className="font-mono">{stop.buildingCode}</span>
+          </div>
+        )}
+
         {done && (
           <div className="flex items-center gap-2">
             <StatusChip tone="ok">✓ הביקור הושלם</StatusChip>
