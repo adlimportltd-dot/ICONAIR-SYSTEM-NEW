@@ -89,6 +89,8 @@ async function loadIntegrityAlerts() {
   const hasRealNear = (r) => (realRefillTimes.get(r.device_id) ?? [])
     .some((t) => Math.abs(t - new Date(r.recorded_at).getTime()) <= 12 * 3600000);
   const lastRefill = new Map();
+  const dupGroups = new Map();
+  const zeroGroups = new Map();
   for (const r of oil) {
     if (r.event_type !== 'refill') continue;
     const liters = Number(r.liters_added || 0);
@@ -99,21 +101,20 @@ async function loadIntegrityAlerts() {
     if (prev && liters > 0 && Number(prev.liters_added || 0) > 0) {
       const gap = (new Date(r.recorded_at) - new Date(prev.recorded_at)) / 60000;
       if (gap < DUP_MINUTES) {
-        list.push({
-          key: `int-dup:${r.id}`, sig: `${prev.id}`, level: 'crit', group: 'integrity', title,
-          text: `מילוי כפול? ${model} · ${ml(prev.liters_added)} ואז ${ml(liters)} בהפרש ${Math.max(1, Math.round(gap))} דק' (${dayLabel(r.recorded_at)})`,
-          at: r.recorded_at, target: 'oils',
-        });
+        const k = `${r.device_id}|${dayLabel(r.recorded_at)}`;
+        const g = dupGroups.get(k) ?? { first: prev, title, model, items: [ml(prev.liters_added)], last: r };
+        g.items.push(ml(liters));
+        g.last = r;
+        dupGroups.set(k, g);
       }
     }
     lastRefill.set(r.device_id, r);
 
     if (liters === 0 && !String(r.notes ?? '').trim() && !hasRealNear(r)) {
-      list.push({
-        key: `int-zero:${r.id}`, sig: '0', level: 'warn', group: 'integrity', title,
-        text: `מילוי של 0 מ"ל בלי הערה · ${model} (${dayLabel(r.recorded_at)}) — לבדוק עם הטכנאי כמה מילא`,
-        at: r.recorded_at, target: 'oils',
-      });
+      const k = `${r.device_id}|${dayLabel(r.recorded_at)}`;
+      const g = zeroGroups.get(k) ?? { first: r, title, model, count: 0 };
+      g.count += 1;
+      zeroGroups.set(k, g);
     }
 
     const cap = capacity.get(model);
@@ -124,6 +125,22 @@ async function loadIntegrityAlerts() {
         at: r.recorded_at, target: 'oils',
       });
     }
+  }
+
+  // מקובץ: התראה אחת לכל מכשיר ביום
+  for (const g of dupGroups.values()) {
+    list.push({
+      key: `int-dup:${g.first.id}`, sig: String(g.items.length), level: 'crit', group: 'integrity', title: g.title,
+      text: `מילוי כפול? ${g.model} נרשם ${g.items.length} פעמים בתוך שעה (${dayLabel(g.last.recorded_at)}): ${g.items.join(', ')}`,
+      at: g.last.recorded_at, target: 'oils',
+    });
+  }
+  for (const g of zeroGroups.values()) {
+    list.push({
+      key: `int-zero:${g.first.id}`, sig: String(g.count), level: 'warn', group: 'integrity', title: g.title,
+      text: `מילוי של 0 מ"ל בלי הערה${g.count > 1 ? ` (${g.count} פעמים)` : ''} · ${g.model} (${dayLabel(g.first.recorded_at)}) — לבדוק עם הטכנאי כמה מילא`,
+      at: g.first.recorded_at, target: 'oils',
+    });
   }
 
   // 4–5: תחנות החודש
