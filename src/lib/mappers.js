@@ -214,6 +214,19 @@ export function getCycleInfo(route, today = new Date()) {
   };
 }
 
+/**
+ * phase79 — קו שהמחזור שלו מתחיל בסוף החודש הקודם (routes.early_start_day,
+ * קו צפון = 25): מהיום הזה בחודש, העבודה בשטח כבר שייכת למחזור של החודש הבא
+ * (למשל ביקור ב-30.9 = מחזור אוקטובר). מחזיר 'YYYY-MM' של חודש המחזור שהיום
+ * שייך אליו. קו בלי early_start_day — החודש הנוכחי, בדיוק כמו קודם.
+ */
+export function cycleMonthKey(route, today = new Date()) {
+  const early = Number(route?.early_start_day) || null;
+  const shift = early && today.getDate() >= early ? 1 : 0;
+  const d = new Date(today.getFullYear(), today.getMonth() + shift, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function formatDateTime(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString('he-IL', {
