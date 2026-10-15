@@ -1486,6 +1486,8 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
  */
 function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
+  // phase73: המכשיר כבר נשמר בביקור הזה — "סיום ביקור" עם טופס ריק לא ירשום כפילות של 0
+  const [savedThisVisit, setSavedThisVisit] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingSent, setMissingSent] = useState(false);
   const model = deviceModels.find((m) => m.name === device.model);
@@ -1595,9 +1597,10 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
         scents={scents}
         capacityMl={capMl}
         batteryCount={model?.battery_count ?? null}
+        alreadySaved={savedThisVisit}
         onClose={() => setOilModalOpen(false)}
         onMarkDone={onMarkDone}
-        onSaved={() => { setOilModalOpen(false); onVisitCompleted?.(); }}
+        onSaved={(didRecord) => { if (didRecord !== false) setSavedThisVisit(true); setOilModalOpen(false); onVisitCompleted?.(); }}
       />
     </div>
   );
@@ -1636,7 +1639,7 @@ const ML_STEP = 10;
  * לשורת הלקוח ולסמן שם בנפרד. submit מקבל markVisitDone כדי שאותה
  * לוגיקת שמירה (completeVisit/createOilEntry fallback) תשרת את שניהם.
  */
-function CompleteVisitModal({ open, device, customer, scents, capacityMl, batteryCount, onClose, onMarkDone, onSaved }) {
+function CompleteVisitModal({ open, device, customer, scents, capacityMl, batteryCount, alreadySaved = false, onClose, onMarkDone, onSaved }) {
   const { session, profile } = useAuth();
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
@@ -1661,15 +1664,29 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, batter
       setNoStockNotice(false);
       setPendingMarkDone(false);
     }
-  }, [open, device]);
+    // phase73: רק בפתיחה או במכשיר אחר. קודם היה [open, device] — כל רענון חי של המסלול
+    // (למשל אחרי שמכשיר אחר נשמר) יצר אובייקט device חדש ואיפס את הכמות ל-0 באמצע עבודה.
+  }, [open, device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open || !form) return null;
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const after = Number(form.level_after_pct || 0);
 
+  // phase73: המכשיר כבר עודכן בביקור הזה והטופס לא שונה — "סיום ביקור" רק מסמן את העצירה, בלי רישום 0 נוסף
+  const untouched = form
+    && form.event_type === 'refill'
+    && Number(form.liters_added || 0) === 0
+    && !String(form.notes || '').trim()
+    && Number(form.batteries_replaced || 0) === 0;
+
   async function submit(markVisitDone) {
     setError(null);
+    if (markVisitDone && alreadySaved && untouched) {
+      onMarkDone?.();
+      onSaved(false);
+      return;
+    }
     setBusy(markVisitDone ? 'complete' : 'save');
 
     const payload = {
@@ -1797,6 +1814,12 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, batter
         {noStockNotice && (
           <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
             הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה מלאי רשום שתואם. עדכן "מלאי נייד" כשתוכל.
+          </div>
+        )}
+
+        {alreadySaved && untouched && !noStockNotice && (
+          <div className="rounded-row border border-ok/25 bg-ok/[0.07] px-3.5 py-2.5 text-[13.5px] text-ok">
+            המכשיר הזה כבר עודכן בביקור הזה. "סיום ביקור" יסגור את הביקור בלי לרשום מילוי נוסף.
           </div>
         )}
 

@@ -1,5 +1,34 @@
 import { listQueue, removeFromQueue, markQueueItemError, isNetworkError } from './offlineQueue';
 import { OFFLINE_EXECUTORS } from './queries';
+import { supabase } from './supabase';
+
+/**
+ * phase73 — הגנה מכפילויות (נמצאו 70 רישומי מילוי כפולים, רובם אצל אוורסט):
+ * 1. רק סנכרון אחד רץ בכל רגע — גם בתוך הלשונית (inFlight) וגם בין לשוניות
+ *    (Web Locks). קודם האירוע online, הבדיקה כל 20 שניות והריצה הראשונה יכלו
+ *    לרוץ במקביל ולשלוח את אותו פריט 2–3 פעמים.
+ * 2. לפני שליחת מילוי מהתור — בודקים אם רישום זהה (אותו מכשיר, סוג וכמות)
+ *    כבר נקלט ב-30 הדקות האחרונות. זה המקרה שבו השרת כן קיבל את הבקשה אבל
+ *    התשובה לא חזרה בגלל קליטה חלשה, והפריט נשאר בתור ונשלח שוב.
+ */
+let inFlight = null;
+
+async function alreadyRecorded(item) {
+  if (item.type !== 'completeVisit' && item.type !== 'createOilEntry') return false;
+  const p = item.payload || {};
+  if (!p.device_id) return false;
+  const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('oil_tracking')
+    .select('id')
+    .eq('device_id', p.device_id)
+    .eq('event_type', p.event_type ?? 'refill')
+    .eq('liters_added', Number(p.liters_added ?? 0))
+    .gte('recorded_at', since)
+    .limit(1);
+  if (error) return false; // לא חוסמים סנכרון בגלל בדיקה שנכשלה
+  return (data ?? []).length > 0;
+}
 
 /**
  * מריץ את התור בסדר שבו הפעולות נוצרו (FIFO) — חשוב במיוחד לאותו
@@ -12,7 +41,17 @@ import { OFFLINE_EXECUTORS } from './queries';
  * בזמן הסנכרון) → מסמנים כ"נכשל" וממשיכים לפריט הבא, כדי שפריט אחד
  * בעייתי לא יתקע לצמיתות את כל מה שאחריו.
  */
-export async function syncQueue({ onProgress } = {}) {
+export function syncQueue(options = {}) {
+  if (inFlight) return inFlight;
+  const run = () => runSyncQueue(options);
+  inFlight = (typeof navigator !== 'undefined' && navigator.locks?.request
+    ? navigator.locks.request('iconair-offline-sync', { ifAvailable: true }, (lock) => (lock ? run() : { synced: 0, failed: 0 }))
+    : run()
+  ).finally(() => { inFlight = null; });
+  return inFlight;
+}
+
+async function runSyncQueue({ onProgress } = {}) {
   const queue = await listQueue();
   const pending = queue.filter((item) => item.status === 'pending');
 
@@ -28,6 +67,11 @@ export async function syncQueue({ onProgress } = {}) {
     }
 
     try {
+      if (await alreadyRecorded(item)) {
+        // כבר נקלט בשרת בשליחה קודמת — רק מוציאים מהתור, בלי רישום כפול
+        await removeFromQueue(item.id);
+        continue;
+      }
       await executor(item.payload);
       await removeFromQueue(item.id);
       synced += 1;
