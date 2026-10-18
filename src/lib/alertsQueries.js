@@ -6,7 +6,7 @@ import { listOpenDisconnections, daysUntil, fmtDay } from './disconnections';
  * מרכז התראות (phase69) — כל מה שדורש טיפול, ממקום אחד, בפעמון למעלה (מנהלים בלבד).
  *
  * מקורות:
- *   צי חכם (iot_devices) — מנותק 30+ דק', מיכל ריק/נמוך, שעון לא מדויק, נעול, לא מסווג.
+ *   צי חכם (iot_devices) — מנותק 60+ דק', מיכל ריק/נמוך, שעון לא מדויק, נעול, לא מסווג.
  *   דיווחי מכשיר חסר/נגנב (device_theft_reports, status=pending) — מאשרים בטאב מסלולים.
  *   קריאות שירות פתוחות (getOpenServiceCalls) — מטפלים בטאב קריאות שירות.
  *   הערות שטח פתוחות (listFieldNotes) — "טופל" מסמן אותן ב-field_note_flags (הקיים).
@@ -208,7 +208,7 @@ async function loadIntegrityAlerts() {
   return list;
 }
 
-const OFFLINE_MIN = 30;
+const OFFLINE_MIN = 60; // 18.10: שעה במקום 30 דקות — קפיצות Wi-Fi קצרות לא מקפיצות התראה (כמו הפוש ב-iot_check_offline_alerts)
 const DRIFT_MIN = 10;
 
 function iotName(d) {
