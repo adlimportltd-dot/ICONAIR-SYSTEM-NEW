@@ -46,9 +46,10 @@ const EMPTY_FORM = {
  * חלון העריכה.
  */
 function callAddress(call) {
-  return call?.device?.site
-    ? [call.device.site.label, call.device.site.city].filter(Boolean).join(', ')
-    : [call?.customer?.address, call?.customer?.city].filter(Boolean).join(', ');
+  if (call?.device?.site) return [call.device.site.label, call.device.site.city].filter(Boolean).join(', ');
+  // phase77: התקנה פתוחה על כתובת ספציפית (עוד אין מכשיר) — מציגים את הכתובת שלה
+  if (call?.install_site) return [call.install_site.label, call.install_site.city].filter(Boolean).join(', ');
+  return [call?.customer?.address, call?.customer?.city].filter(Boolean).join(', ');
 }
 
 export default function ServiceCallsScreen({ openFormSignal }) {
@@ -93,6 +94,30 @@ export default function ServiceCallsScreen({ openFormSignal }) {
       city: c.city ?? '',
       label: c.city ? `${c.name} · ${c.city}` : c.name,
     })),
+    [customers.data]
+  );
+  // phase77 (2026-10-20, בקשה מפורשת): בהתקנה חדשה ללקוח ריבוי-כתובות
+  // (כמו אוורסט) כל כתובת מופיעה כאפשרות נפרדת בחיפוש — הקלדת "דודו
+  // דותן" מוצאת את הבניין. value של כתובת = "customerId::siteId".
+  const installOptions = useMemo(
+    () => (customers.data ?? []).flatMap((c) => {
+      const base = {
+        value: c.id,
+        name: c.name,
+        address: [c.address, c.city].filter(Boolean).join(', '),
+        city: c.city ?? '',
+        label: c.city ? `${c.name} · ${c.city}` : c.name,
+      };
+      const sites = [...(c.sites ?? [])]
+        .sort((a, b) => (a.label ?? '').localeCompare(b.label ?? '', 'he', { numeric: true }));
+      return [base, ...sites.map((s) => ({
+        value: `${c.id}::${s.id}`,
+        name: `${c.name} · ${s.label}`,
+        address: [s.label, s.city].filter(Boolean).join(', '),
+        city: s.city ?? '',
+        label: `${c.name} · ${[s.label, s.city].filter(Boolean).join(', ')}`,
+      }))];
+    }),
     [customers.data]
   );
   const technicianOptions = useMemo(
@@ -306,7 +331,7 @@ export default function ServiceCallsScreen({ openFormSignal }) {
 
       <NewInstallationModal
         open={installOpen}
-        customerOptions={customerOptions}
+        customerOptions={installOptions}
         technicianOptions={technicianOptions}
         onClose={() => setInstallOpen(false)}
         onCreated={() => {
@@ -621,7 +646,8 @@ function NewInstallationModal({ open, customerOptions, technicianOptions, onClos
     setBusy(true);
     try {
       await createInstallation({
-        customerId: form.mode === 'existing' ? form.customer_id : null,
+        customerId: form.mode === 'existing' ? form.customer_id.split('::')[0] : null,
+        siteId: form.mode === 'existing' ? (form.customer_id.split('::')[1] || null) : null,
         newCustomer: form.mode === 'new'
           ? { name: form.name, phone: form.phone, address: form.address, city: form.city }
           : null,
@@ -756,7 +782,7 @@ function CompleteInstallationModal({ call, onClose, onDone }) {
 
   return (
     <Modal open={Boolean(call)} title={`הותקן · ${call?.code ?? ''}`}
-      subtitle={call ? `${call.customer?.name ?? ''} · ${call.install_model} · ${call.install_scent} · ${call.install_route ?? 'ללא קו'}` : ''}
+      subtitle={call ? `${call.customer?.name ?? ''}${call.install_site ? ` · ${call.install_site.label}` : ''} · ${call.install_model} · ${call.install_scent} · ${call.install_route ?? 'ללא קו'}` : ''}
       onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         <Field label="מילוי ראשון (ליטר)" hint="יורד מהמלאי הנייד של הטכנאי יחד עם המכשיר עצמו">
