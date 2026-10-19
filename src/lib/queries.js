@@ -255,7 +255,7 @@ export const listProfiles = () =>
   supabase.from('profiles').select('id, full_name, role').order('full_name').then(unwrap);
 
 export const listCustomerOptions = () =>
-  supabase.from('customers').select('id, name, city, address').order('name').then(unwrap);
+  supabase.from('customers').select('id, name, city, address, sites:customer_sites(id, label, city)').order('name').then(unwrap);
 
 export const listDeviceOptions = () =>
   supabase
@@ -1619,6 +1619,7 @@ export function listServiceCalls({ status = 'open_all', search = '' } = {}) {
       *,
       customer:customers(id, name, city, address),
       device:devices(id, serial, model, location_note, site:customer_sites(id, label, city)),
+      install_site:customer_sites(id, label, city),
       assignee:profiles(id, full_name)
     `)
     .order('opened_at', { ascending: false })
@@ -1669,12 +1670,13 @@ export const countOpenInstallations = () =>
 /** פתיחת משימת התקנה. customerId או newCustomer ({ name, phone, address, city }). */
 export const createInstallation = ({
   customerId = null, newCustomer = null, model, scent, route, assignedTo = null,
-  scheduledAt = null, locationNote = null, notes = null,
+  scheduledAt = null, locationNote = null, notes = null, siteId = null,
 }) =>
   supabase.rpc('create_installation', {
     p_customer_id: customerId, p_new_customer: newCustomer, p_model: model, p_scent: scent,
     p_route: route || null, p_assigned_to: assignedTo || null, p_scheduled_at: scheduledAt || null,
     p_location_note: locationNote || null, p_notes: notes || null,
+    p_site_id: siteId || null,
   }).then(unwrap);
 
 /** "הותקן": יוצר מכשיר, משייך לקו, מילוי ראשון, ומוריד מהמלאי הנייד — אטומי בשרת. */
