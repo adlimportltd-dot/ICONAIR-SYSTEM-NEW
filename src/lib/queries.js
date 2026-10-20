@@ -1618,7 +1618,7 @@ export function listServiceCalls({ status = 'open_all', search = '' } = {}) {
     .select(`
       *,
       customer:customers(id, name, city, address),
-      device:devices(id, serial, model, location_note, site:customer_sites(id, label, city)),
+      device:devices(id, serial, model, scent_name, location_note, site:customer_sites(id, label, city)),
       install_site:customer_sites(id, label, city),
       assignee:profiles(id, full_name)
     `)
@@ -1680,8 +1680,18 @@ export const createInstallation = ({
   }).then(unwrap);
 
 /** "הותקן": יוצר מכשיר, משייך לקו, מילוי ראשון, ומוריד מהמלאי הנייד — אטומי בשרת. */
-export const completeInstallation = (callId, liters, notes = null) =>
-  supabase.rpc('complete_installation', { p_call_id: callId, p_liters: liters, p_notes: notes || null }).then(unwrap);
+// phase80: model/scent/locationNote = מה שהותקן בפועל (ריק = מה שבמשימה)
+export const completeInstallation = (callId, liters, notes = null, { model = null, scent = null, locationNote = null } = {}) =>
+  supabase.rpc('complete_installation', {
+    p_call_id: callId, p_liters: liters, p_notes: notes || null,
+    p_model: model || null, p_scent: scent || null, p_location_note: locationNote || null,
+  }).then(unwrap);
+
+/** phase80: סגירת קריאה שבה הוחלף מכשיר — מעדכן דגם/ריח של המכשיר וסוגר, אטומי בשרת. */
+export const resolveCallWithReplacement = (callId, resolution, model, scent = null) =>
+  supabase.rpc('resolve_call_with_replacement', {
+    p_call_id: callId, p_resolution: resolution || null, p_model: model, p_scent: scent || null,
+  }).then(unwrap);
 
 /** סגירת קריאה. closed_at חייב להיות מלא — יש על זה CHECK בבסיס הנתונים. */
 export const resolveServiceCall = (id, resolution) =>
