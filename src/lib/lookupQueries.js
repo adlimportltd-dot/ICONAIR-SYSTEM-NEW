@@ -68,7 +68,7 @@ export async function getStopHistory({ customerId, siteId }) {
   const oil = ids.length
     ? await supabase
       .from('oil_tracking')
-      .select('device_id, event_type, liters_added, recorded_at, notes, recorder:profiles(full_name)')
+      .select('device_id, event_type, liters_added, scent_name, recorded_at, notes, recorder:profiles(full_name)')
       .in('device_id', ids)
       .neq('event_type', 'reading') // איפוסי תחילת מחזור הם לא ביקור
       .order('recorded_at', { ascending: false })
@@ -82,9 +82,15 @@ export async function getStopHistory({ customerId, siteId }) {
     if (row.notes?.startsWith('איפוס תחילת מחזור')) continue;
     const d = new Date(row.recorded_at);
     const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const v = byDay.get(day) ?? { day, at: row.recorded_at, liters: 0, devices: new Set(), who: new Set(), notes: [] };
+    const v = byDay.get(day) ?? { day, at: row.recorded_at, liters: 0, devices: new Set(), who: new Set(), notes: [], perDevice: new Map() };
     v.liters += Number(row.liters_added ?? 0);
     v.devices.add(row.device_id);
+    // פירוט לכל מכשיר בביקור (2026-10-20, בקשה מפורשת): כמה נכנס, באיזה ריח והערות
+    const pd = v.perDevice.get(row.device_id) ?? { liters: 0, scents: new Set(), notes: [] };
+    pd.liters += Number(row.liters_added ?? 0);
+    if (row.scent_name) pd.scents.add(row.scent_name);
+    if (row.notes?.trim()) pd.notes.push(row.notes.trim());
+    v.perDevice.set(row.device_id, pd);
     if (row.recorder?.full_name) v.who.add(row.recorder.full_name);
     if (row.notes?.trim()) v.notes.push(row.notes.trim());
     byDay.set(day, v);
@@ -98,6 +104,11 @@ export async function getStopHistory({ customerId, siteId }) {
       deviceCount: v.devices.size,
       who: [...v.who].join(', '),
       notes: v.notes,
+      perDevice: Object.fromEntries([...v.perDevice].map(([id, pd]) => [id, {
+        liters: Math.round(pd.liters * 100) / 100,
+        scent: [...pd.scents].join(', '),
+        notes: pd.notes,
+      }])),
     }));
 
   let monthQuery = supabase
