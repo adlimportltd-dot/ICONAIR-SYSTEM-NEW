@@ -61,9 +61,25 @@ function StopDetails({ stop }) {
             {last.who || 'טכנאי'} · {last.liters > 0 ? `${last.liters} ל׳` : 'ביקור ללא מילוי'}
             {last.deviceCount > 1 ? ` · ${last.deviceCount} מכשירים` : ''}
           </div>
-          {last.notes.length > 0 && (
-            <div className="mt-1 text-[13px] text-text-faint">📝 {last.notes.join(' · ')}</div>
-          )}
+          {/* פירוט לכל מכשיר בביקור האחרון (2026-10-20, בקשה מפורשת) */}
+          <div className="mt-2 flex flex-col gap-0.5 border-t border-emerald-500/20 pt-2">
+            {devices.map((d) => {
+              const pd = last.perDevice?.[d.id];
+              const addedAfter = d.created_at > last.at;
+              return (
+                <div key={d.id} className="text-[13.5px] text-text-dim">
+                  • {d.model}{d.location_note ? ` · ${d.location_note}` : ''}{' · '}
+                  {pd
+                    ? (pd.liters > 0 ? <b className="font-semibold text-text">{pd.liters} ל׳</b> : 'ביקור ללא מילוי')
+                    : addedAfter
+                      ? <span className="text-text-faint">נוסף אחרי הביקור</span>
+                      : <span className="font-semibold text-gold-600">לא מולא בביקור הזה</span>}
+                  {pd?.scent ? ` ${pd.scent}` : ''}
+                  {pd?.notes?.length ? <span className="text-text-faint"> · {pd.notes.join(' · ')}</span> : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="rounded-row border border-gold-500/30 bg-gold-500/[0.08] px-3.5 py-3">
