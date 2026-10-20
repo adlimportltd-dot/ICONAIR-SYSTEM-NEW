@@ -7,6 +7,7 @@ import { describeError } from '../lib/supabase';
 import { navItems, settingsNavItem } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
 import AlertCenter, { useAlertCenter } from './AlertCenter';
+import QuickLookup from './QuickLookup';
 
 /** שם עצירה קריא: שם הלקוח, ועם תווית הבניין אם זו עצירת-אתר (אוורסט וכו') */
 function stopLabel(visit) {
@@ -297,6 +298,8 @@ export default function TopBar({
   // phase69: מרכז התראות — רק למנהלים
   const alertCenter = useAlertCenter(isAdmin);
   const allOnline = total > 0 && online === total;
+  // 2026-10-20: חיפוש "מתי היינו?" — ביקור אחרון לכל כתובת (ר' QuickLookup.jsx)
+  const [lookupOpen, setLookupOpen] = useState(false);
 
   return (
     <header className="sticky top-2 z-[15] mb-[18px] flex items-center gap-3 rounded-panel
@@ -312,13 +315,24 @@ export default function TopBar({
 
       <button
         type="button"
-        onClick={onSearch}
+        onClick={() => setLookupOpen(true)}
         className="ms-auto hidden min-w-[230px] items-center gap-[9px] rounded-pill
                    border border-white/10 bg-white/[0.05] px-3.5 py-[9px]
                    text-[15px] font-medium text-slate-400 transition-colors hover:text-slate-200 md:flex"
       >
         <SearchIcon className="h-4 w-4" />
-        חיפוש לקוח, מכשיר או קריאה…
+        מתי היינו? חיפוש כתובת או לקוח…
+      </button>
+
+      <button
+        type="button"
+        aria-label="מתי היינו? חיפוש כתובת או לקוח"
+        onClick={() => setLookupOpen(true)}
+        className="ms-auto grid h-10 w-10 flex-none place-items-center rounded-pill
+          border border-white/10 bg-white/[0.05] text-slate-100
+          transition-colors hover:border-amber-400/40 hover:text-amber-300 md:hidden"
+      >
+        <SearchIcon className="h-[18px] w-[18px]" />
       </button>
 
       {/*
@@ -389,6 +403,8 @@ export default function TopBar({
       >
         <PlusIcon className="h-[18px] w-[18px]" />
       </button>
+
+      <QuickLookup open={lookupOpen} onClose={() => setLookupOpen(false)} />
     </header>
   );
 }
