@@ -1688,9 +1688,11 @@ export const completeInstallation = (callId, liters, notes = null, { model = nul
   }).then(unwrap);
 
 /** phase80: סגירת קריאה שבה הוחלף מכשיר — מעדכן דגם/ריח של המכשיר וסוגר, אטומי בשרת. */
-export const resolveCallWithReplacement = (callId, resolution, model, scent = null) =>
+// phase81: liters = מילוי ראשון למכשיר החדש (יורד מהמלאי הנייד ונרשם ביומן השמן)
+export const resolveCallWithReplacement = (callId, resolution, model, scent = null, liters = 0) =>
   supabase.rpc('resolve_call_with_replacement', {
     p_call_id: callId, p_resolution: resolution || null, p_model: model, p_scent: scent || null,
+    p_liters: Number(liters) || 0,
   }).then(unwrap);
 
 /** סגירת קריאה. closed_at חייב להיות מלא — יש על זה CHECK בבסיס הנתונים. */

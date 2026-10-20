@@ -846,7 +846,13 @@ function ResolveModal({ call, onClose, onResolved }) {
   const [replaced, setReplaced] = useState(false);
   const [newModel, setNewModel] = useState('');
   const [newScent, setNewScent] = useState('');
+  const [liters, setLiters] = useState('');
   const models = useQuery(listDeviceModels, [], { enabled: Boolean(call?.device) });
+  // phase81: מילוי ראשון למכשיר החדש — ברירת מחדל לפי קיבולת הדגם, כמו ב"הותקן"
+  const newCapacityMl = (models.data ?? []).find((m) => m.name === newModel)?.capacity_ml;
+  useEffect(() => {
+    setLiters(newCapacityMl ? String(Math.round(newCapacityMl / 10) / 100) : '');
+  }, [newModel, newCapacityMl]);
   const scents = useQuery(listScents, [], { enabled: Boolean(call?.device) });
 
   useEffect(() => {
@@ -864,7 +870,7 @@ function ResolveModal({ call, onClose, onResolved }) {
     try {
       if (replaced) {
         if (!newModel) throw new Error('יש לבחור את הדגם שהותקן');
-        await resolveCallWithReplacement(call.id, resolution || 'טופל בשטח.', newModel, newScent);
+        await resolveCallWithReplacement(call.id, resolution || 'טופל בשטח.', newModel, newScent, Number(liters) || 0);
       } else {
         await resolveServiceCall(call.id, resolution || 'טופל בשטח.');
       }
@@ -902,6 +908,12 @@ function ResolveModal({ call, onClose, onResolved }) {
                 options={(scents.data ?? []).map((sc) => ({ value: sc.name, label: sc.name }))} />
             </Field>
           </div>
+        )}
+        {replaced && (
+          <Field label="מילוי ראשון (ליטר)" hint="המכשיר החדש והשמן יורדים מהמלאי הנייד של הטכנאי, והמכשיר הישן חוזר לרכב">
+            <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={liters}
+              onChange={(e) => setLiters(e.target.value)} className="tabular" />
+          </Field>
         )}
         <Field label="מה בוצע" hint="נשמר בהיסטוריית הקריאה ומשמש לחישוב זמן הסגירה הממוצע">
           <TextArea value={resolution} onChange={(event) => setResolution(event.target.value)} rows={3}
