@@ -9,7 +9,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
-  listServiceCalls, createServiceCall, resolveServiceCall, startServiceCall, updateServiceCall,
+  listServiceCalls, createServiceCall, resolveServiceCall, resolveCallWithReplacement, startServiceCall, updateServiceCall,
   listCustomerOptions, listDeviceOptions, listProfiles,
   createInstallation, completeInstallation, listScents, listDeviceModels, listRouteCycles, listCityRoutes,
 } from '../lib/queries';
@@ -754,24 +754,38 @@ function NewInstallationModal({ open, customerOptions, technicianOptions, onClos
  */
 function CompleteInstallationModal({ call, onClose, onDone }) {
   const models = useQuery(listDeviceModels, [], { enabled: Boolean(call) });
-  const capacityMl = (models.data ?? []).find((m) => m.name === call?.install_model)?.capacity_ml;
+  const scents = useQuery(listScents, [], { enabled: Boolean(call) });
+  // phase80 (2026-10-20, בקשה מפורשת אחרי דודו דותן): מה שהותקן בפועל —
+  // ממולא מהמשימה, והטכנאי משנה אם בשטח הותקן דגם/ריח אחר.
+  const [model, setModel] = useState('');
+  const [scent, setScent] = useState('');
+  const [locationNote, setLocationNote] = useState('');
+  const capacityMl = (models.data ?? []).find((m) => m.name === (model || call?.install_model))?.capacity_ml;
   const [liters, setLiters] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setLiters(capacityMl ? String(Math.round(capacityMl / 10) / 100) : '');
+    setModel(call?.install_model ?? '');
+    setScent(call?.install_scent ?? '');
+    setLocationNote(call?.install_location_note ?? '');
     setError(null);
     setNotes('');
+  }, [call?.id]);
+
+  useEffect(() => {
+    setLiters(capacityMl ? String(Math.round(capacityMl / 10) / 100) : '');
   }, [call?.id, capacityMl]);
+
+  const changedFromPlan = Boolean(call) && (model !== call.install_model || scent !== call.install_scent);
 
   async function submit(event) {
     event.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await completeInstallation(call.id, Number(liters) || 0, notes);
+      await completeInstallation(call.id, Number(liters) || 0, notes, { model, scent, locationNote });
       onDone();
     } catch (caught) {
       setError(describeError(caught));
@@ -785,6 +799,24 @@ function CompleteInstallationModal({ call, onClose, onDone }) {
       subtitle={call ? `${call.customer?.name ?? ''}${call.install_site ? ` · ${call.install_site.label}` : ''} · ${call.install_model} · ${call.install_scent} · ${call.install_route ?? 'ללא קו'}` : ''}
       onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+          <Field label="דגם שהותקן בפועל" required>
+            <Select value={model} onChange={(e) => setModel(e.target.value)} placeholder="בחר דגם"
+              options={(models.data ?? []).map((m) => ({ value: m.name, label: m.name }))} />
+          </Field>
+          <Field label="ריח שהותקן בפועל" required>
+            <Select value={scent} onChange={(e) => setScent(e.target.value)} placeholder="בחר ריח"
+              options={(scents.data ?? []).map((sc) => ({ value: sc.name, label: sc.name }))} />
+          </Field>
+        </div>
+        {changedFromPlan && (
+          <div className="rounded-row border border-gold-500/30 bg-gold-500/[0.08] px-3.5 py-2.5 text-[13.5px]">
+            שונה ממה שתוכנן במשימה ({call.install_model} · {call.install_scent}) — המכשיר יירשם לפי מה שנבחר כאן.
+          </div>
+        )}
+        <Field label="מיקום המכשיר אצל הלקוח">
+          <TextInput value={locationNote} onChange={(e) => setLocationNote(e.target.value)} placeholder="קומה 6, ליד המעלית" />
+        </Field>
         <Field label="מילוי ראשון (ליטר)" hint="יורד מהמלאי הנייד של הטכנאי יחד עם המכשיר עצמו">
           <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={liters}
             onChange={(e) => setLiters(e.target.value)} className="tabular" />
@@ -810,6 +842,19 @@ function ResolveModal({ call, onClose, onResolved }) {
   const [resolution, setResolution] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // phase80: "הוחלף מכשיר" — מעדכן דגם/ריח של המכשיר עם סגירת הקריאה
+  const [replaced, setReplaced] = useState(false);
+  const [newModel, setNewModel] = useState('');
+  const [newScent, setNewScent] = useState('');
+  const models = useQuery(listDeviceModels, [], { enabled: Boolean(call?.device) });
+  const scents = useQuery(listScents, [], { enabled: Boolean(call?.device) });
+
+  useEffect(() => {
+    setReplaced(false);
+    setNewModel('');
+    setNewScent(call?.device?.scent_name ?? '');
+    setError(null);
+  }, [call?.id]);
 
   async function submit(event) {
     event.preventDefault();
@@ -817,7 +862,12 @@ function ResolveModal({ call, onClose, onResolved }) {
     setBusy(true);
 
     try {
-      await resolveServiceCall(call.id, resolution || 'טופל בשטח.');
+      if (replaced) {
+        if (!newModel) throw new Error('יש לבחור את הדגם שהותקן');
+        await resolveCallWithReplacement(call.id, resolution || 'טופל בשטח.', newModel, newScent);
+      } else {
+        await resolveServiceCall(call.id, resolution || 'טופל בשטח.');
+      }
       setResolution('');
       onResolved();
     } catch (caught) {
@@ -835,6 +885,24 @@ function ResolveModal({ call, onClose, onResolved }) {
       onClose={onClose}
     >
       <form onSubmit={submit} className="flex flex-col gap-3.5">
+        {call?.device && (
+          <label className="flex items-center gap-2 text-[14.5px] font-semibold">
+            <input type="checkbox" checked={replaced} onChange={(e) => setReplaced(e.target.checked)} />
+            הוחלף מכשיר (עכשיו: {call.device.model}{call.device.scent_name ? ` · ${call.device.scent_name}` : ''})
+          </label>
+        )}
+        {replaced && (
+          <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+            <Field label="דגם חדש" required>
+              <Select value={newModel} onChange={(e) => setNewModel(e.target.value)} placeholder="בחר דגם"
+                options={(models.data ?? []).map((m) => ({ value: m.name, label: m.name }))} />
+            </Field>
+            <Field label="ריח">
+              <Select value={newScent} onChange={(e) => setNewScent(e.target.value)} placeholder="בלי שינוי"
+                options={(scents.data ?? []).map((sc) => ({ value: sc.name, label: sc.name }))} />
+            </Field>
+          </div>
+        )}
         <Field label="מה בוצע" hint="נשמר בהיסטוריית הקריאה ומשמש לחישוב זמן הסגירה הממוצע">
           <TextArea value={resolution} onChange={(event) => setResolution(event.target.value)} rows={3}
                     placeholder="הוחלף ראש משאבה, נבדקה הזרמה תקינה." />
