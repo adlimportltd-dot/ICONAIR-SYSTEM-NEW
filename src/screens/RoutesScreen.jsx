@@ -13,6 +13,7 @@ import { PrimaryButton, SecondaryButton, Select, Field, TextInput, TextArea } fr
 import { RouteIcon, NavigationIcon, PhoneIcon, GripIcon, SortIcon, TrashIcon, PlusIcon } from '../components/ui/Icons';
 import Modal from '../components/ui/Modal';
 import MlSlider from '../components/ui/MlSlider';
+import ScentChangeModal from '../components/ScentChangeModal';
 import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
@@ -1657,6 +1658,8 @@ function CustomerCardModal({ open, onClose, stop, done, closed, callHref, wazeHr
  */
 function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, onVisitCompleted }) {
   const [oilModalOpen, setOilModalOpen] = useState(false);
+  // phase84: "🔄 שינוי ריח" במעמד המילוי — נכנס מיד, בלי בקשת שינוי למנהל
+  const [scentChangeOpen, setScentChangeOpen] = useState(false);
   // phase78: לקוח שממלא לבד — הטכנאי משאיר בקבוק במקום למלא
   const { isAdmin } = useAuth();
   const [selfFill, setSelfFill] = useState(!!device.self_fill);
@@ -1721,6 +1724,25 @@ function DeviceDetailRow({ device, customer, deviceModels, scents, onMarkDone, o
           device={device}
         />
       </div>
+
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={() => setScentChangeOpen(true)}
+          className="rounded-pill border border-gold-500/35 bg-gold-500/[0.08] px-3 py-1.5 text-[13.5px]
+                     font-semibold text-gold-600 transition-colors hover:bg-gold-500/[0.14]"
+        >
+          🔄 שינוי ריח
+        </button>
+      </div>
+      <ScentChangeModal
+        open={scentChangeOpen}
+        device={device}
+        scents={scents}
+        capacityMl={capMl}
+        onClose={() => setScentChangeOpen(false)}
+        onDone={() => { setScentChangeOpen(false); setSavedThisVisit(true); }}
+      />
 
       <div className="mt-3 flex items-center gap-2.5">
         <span className="flex-none text-[13.5px] text-text-faint">שמן</span>
