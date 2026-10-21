@@ -1696,9 +1696,11 @@ export const resolveCallWithReplacement = (callId, resolution, model, scent = nu
   }).then(unwrap);
 
 /** phase82: סגירת קריאה עם שינוי ריח בלי החלפת מכשיר — ריח המכשיר מתעדכן, המילוי יורד מהרכב ונרשם. */
-export const resolveCallWithScentChange = (callId, resolution, scent, liters = 0) =>
+// phase83: oldLiters/oldReturned = השמן הישן שהוצא (חזר לבקבוק ← מלאי נייד, או נשפך)
+export const resolveCallWithScentChange = (callId, resolution, scent, liters = 0, { oldLiters = 0, oldReturned = true } = {}) =>
   supabase.rpc('resolve_call_with_scent_change', {
     p_call_id: callId, p_resolution: resolution || null, p_scent: scent, p_liters: Number(liters) || 0,
+    p_old_liters: Number(oldLiters) || 0, p_old_returned: Boolean(oldReturned),
   }).then(unwrap);
 
 /** סגירת קריאה. closed_at חייב להיות מלא — יש על זה CHECK בבסיס הנתונים. */
