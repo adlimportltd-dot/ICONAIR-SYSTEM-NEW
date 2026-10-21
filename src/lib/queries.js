@@ -1703,6 +1703,13 @@ export const resolveCallWithScentChange = (callId, resolution, scent, liters = 0
     p_old_liters: Number(oldLiters) || 0, p_old_returned: Boolean(oldReturned),
   }).then(unwrap);
 
+/** phase84: "🔄 שינוי ריח" מתוך טאב מסלולים — בלי קריאת שירות, נכנס מיד (בלי בקשת שינוי למנהל). */
+export const changeDeviceScent = (deviceId, scent, liters = 0, { oldLiters = 0, oldReturned = true } = {}) =>
+  supabase.rpc('change_device_scent', {
+    p_device_id: deviceId, p_scent: scent, p_liters: Number(liters) || 0,
+    p_old_liters: Number(oldLiters) || 0, p_old_returned: Boolean(oldReturned),
+  }).then(unwrap);
+
 /** סגירת קריאה. closed_at חייב להיות מלא — יש על זה CHECK בבסיס הנתונים. */
 export const resolveServiceCall = (id, resolution) =>
   supabase
