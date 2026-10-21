@@ -9,7 +9,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../context/AuthContext';
 import {
-  listServiceCalls, createServiceCall, resolveServiceCall, resolveCallWithReplacement, startServiceCall, updateServiceCall,
+  listServiceCalls, createServiceCall, resolveServiceCall, resolveCallWithReplacement, resolveCallWithScentChange, startServiceCall, updateServiceCall,
   listCustomerOptions, listDeviceOptions, listProfiles,
   createInstallation, completeInstallation, listScents, listDeviceModels, listRouteCycles, listCityRoutes,
 } from '../lib/queries';
@@ -847,7 +847,15 @@ function ResolveModal({ call, onClose, onResolved }) {
   const [newModel, setNewModel] = useState('');
   const [newScent, setNewScent] = useState('');
   const [liters, setLiters] = useState('');
+  // phase82: "שונה ריח" — אותו מכשיר, ריח חדש (לא נוגע במלאי המכשירים)
+  const [scentChange, setScentChange] = useState(false);
+  const [changeScent, setChangeScent] = useState('');
+  const [changeLiters, setChangeLiters] = useState('');
   const models = useQuery(listDeviceModels, [], { enabled: Boolean(call?.device) });
+  const curCapacityMl = (models.data ?? []).find((m) => m.name === call?.device?.model)?.capacity_ml;
+  useEffect(() => {
+    setChangeLiters(curCapacityMl ? String(Math.round(curCapacityMl / 10) / 100) : '');
+  }, [call?.id, curCapacityMl]);
   // phase81: מילוי ראשון למכשיר החדש — ברירת מחדל לפי קיבולת הדגם, כמו ב"הותקן"
   const newCapacityMl = (models.data ?? []).find((m) => m.name === newModel)?.capacity_ml;
   useEffect(() => {
@@ -857,6 +865,8 @@ function ResolveModal({ call, onClose, onResolved }) {
 
   useEffect(() => {
     setReplaced(false);
+    setScentChange(false);
+    setChangeScent('');
     setNewModel('');
     setNewScent(call?.device?.scent_name ?? '');
     setError(null);
@@ -871,6 +881,9 @@ function ResolveModal({ call, onClose, onResolved }) {
       if (replaced) {
         if (!newModel) throw new Error('יש לבחור את הדגם שהותקן');
         await resolveCallWithReplacement(call.id, resolution || 'טופל בשטח.', newModel, newScent, Number(liters) || 0);
+      } else if (scentChange) {
+        if (!changeScent) throw new Error('יש לבחור את הריח החדש');
+        await resolveCallWithScentChange(call.id, resolution || 'טופל בשטח.', changeScent, Number(changeLiters) || 0);
       } else {
         await resolveServiceCall(call.id, resolution || 'טופל בשטח.');
       }
@@ -893,7 +906,7 @@ function ResolveModal({ call, onClose, onResolved }) {
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         {call?.device && (
           <label className="flex items-center gap-2 text-[14.5px] font-semibold">
-            <input type="checkbox" checked={replaced} onChange={(e) => setReplaced(e.target.checked)} />
+            <input type="checkbox" checked={replaced} onChange={(e) => { setReplaced(e.target.checked); if (e.target.checked) setScentChange(false); }} />
             הוחלף מכשיר (עכשיו: {call.device.model}{call.device.scent_name ? ` · ${call.device.scent_name}` : ''})
           </label>
         )}
@@ -914,6 +927,24 @@ function ResolveModal({ call, onClose, onResolved }) {
             <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={liters}
               onChange={(e) => setLiters(e.target.value)} className="tabular" />
           </Field>
+        )}
+        {call?.device && (
+          <label className="flex items-center gap-2 text-[14.5px] font-semibold">
+            <input type="checkbox" checked={scentChange} onChange={(e) => { setScentChange(e.target.checked); if (e.target.checked) setReplaced(false); }} />
+            שונה ריח (בלי החלפת מכשיר)
+          </label>
+        )}
+        {scentChange && (
+          <div className="grid grid-cols-1 gap-3.5 xs:grid-cols-2">
+            <Field label="ריח חדש" required>
+              <Select value={changeScent} onChange={(e) => setChangeScent(e.target.value)} placeholder="בחר ריח"
+                options={(scents.data ?? []).map((sc) => ({ value: sc.name, label: sc.name }))} />
+            </Field>
+            <Field label="מילוי (ליטר)" hint="יורד מהמלאי הנייד של הטכנאי ונרשם ביומן השמן">
+              <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={changeLiters}
+                onChange={(e) => setChangeLiters(e.target.value)} className="tabular" />
+            </Field>
+          </div>
         )}
         <Field label="מה בוצע" hint="נשמר בהיסטוריית הקריאה ומשמש לחישוב זמן הסגירה הממוצע">
           <TextArea value={resolution} onChange={(event) => setResolution(event.target.value)} rows={3}
