@@ -851,6 +851,9 @@ function ResolveModal({ call, onClose, onResolved }) {
   const [scentChange, setScentChange] = useState(false);
   const [changeScent, setChangeScent] = useState('');
   const [changeLiters, setChangeLiters] = useState('');
+  // phase83: השמן הישן שהוצא — כמות מכובדת חוזרת לבקבוק, שאריות נשפכות
+  const [oldLiters, setOldLiters] = useState('');
+  const [oldReturned, setOldReturned] = useState('returned');
   const models = useQuery(listDeviceModels, [], { enabled: Boolean(call?.device) });
   const curCapacityMl = (models.data ?? []).find((m) => m.name === call?.device?.model)?.capacity_ml;
   useEffect(() => {
@@ -867,6 +870,8 @@ function ResolveModal({ call, onClose, onResolved }) {
     setReplaced(false);
     setScentChange(false);
     setChangeScent('');
+    setOldLiters('');
+    setOldReturned('returned');
     setNewModel('');
     setNewScent(call?.device?.scent_name ?? '');
     setError(null);
@@ -883,7 +888,8 @@ function ResolveModal({ call, onClose, onResolved }) {
         await resolveCallWithReplacement(call.id, resolution || 'טופל בשטח.', newModel, newScent, Number(liters) || 0);
       } else if (scentChange) {
         if (!changeScent) throw new Error('יש לבחור את הריח החדש');
-        await resolveCallWithScentChange(call.id, resolution || 'טופל בשטח.', changeScent, Number(changeLiters) || 0);
+        await resolveCallWithScentChange(call.id, resolution || 'טופל בשטח.', changeScent, Number(changeLiters) || 0,
+          { oldLiters: Number(oldLiters) || 0, oldReturned: oldReturned === 'returned' });
       } else {
         await resolveServiceCall(call.id, resolution || 'טופל בשטח.');
       }
@@ -944,6 +950,19 @@ function ResolveModal({ call, onClose, onResolved }) {
               <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={changeLiters}
                 onChange={(e) => setChangeLiters(e.target.value)} className="tabular" />
             </Field>
+            <Field label={`שמן ישן שהוצא (ליטר)${call?.device?.scent_name ? ` · ${call.device.scent_name}` : ''}`} hint="רשות — כמה שמן מהריח הישן הוצא מהמכשיר">
+              <TextInput type="number" min={0} step={0.01} inputMode="decimal" value={oldLiters}
+                onChange={(e) => setOldLiters(e.target.value)} className="tabular" placeholder="0" />
+            </Field>
+            {Number(oldLiters) > 0 && (
+              <Field label="מה נעשה בשמן הישן?">
+                <Select value={oldReturned} onChange={(e) => setOldReturned(e.target.value)}
+                  options={[
+                    { value: 'returned', label: 'חזר לבקבוק (נכנס למלאי הנייד)' },
+                    { value: 'spilled', label: 'נשפך (שאריות)' },
+                  ]} />
+              </Field>
+            )}
           </div>
         )}
         <Field label="מה בוצע" hint="נשמר בהיסטוריית הקריאה ומשמש לחישוב זמן הסגירה הממוצע">
