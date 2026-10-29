@@ -472,7 +472,12 @@ async function loadCityRoutesMap() {
  * בעלי שם. missing/newDevices מקבלים route_name פר-מכשיר כדי שאפשר
  * יהיה להבדיל בתצוגה מאיזה קו כל שורה הגיעה כשהכול מאוחד יחד.
  */
-export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
+export async function getRouteLoadPlan(routeName, { includeNet = false, fullCycle = false } = {}) {
+  // fullCycle (2026-10-29, בקשה מפורשת): תצוגת "מחזור הבא" מתכננת מילוי מלא
+  // לכל מכשיר (מפלס 0%), לפי הנוהל — בתחילת חודש כל מכשיר נחשב ריק. לפני
+  // כן "מחזור הבא" שינה רק כותרת וחישב לפי המפלס הנוכחי, ויצא שכל הקו
+  // צריך כמה ליטרים בלבד. "מחזור נוכחי" ממשיך לחשב לפי המפלס האמיתי.
+  const levelOf = (device) => (fullCycle ? 0 : Number(device.oil_level_pct ?? 0));
   const [devicesRows, models, cityRoutes, settings, warehouseRows, openPoLines] = await Promise.all([
     supabase
       .from('devices')
@@ -558,9 +563,9 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
       customer_name: device.customer?.name ?? '—',
       address: shortAddress,
       model: device.model,
-      oil_level_pct: Number(device.oil_level_pct ?? 0),
+      oil_level_pct: levelOf(device),
       scent_name: scent || null,
-      needed_ml: capacity ? Math.round(capacity * (100 - Number(device.oil_level_pct ?? 0)) / 100) : null,
+      needed_ml: capacity ? Math.round(capacity * (100 - levelOf(device)) / 100) : null,
       route_name: deviceRoute,
     });
 
@@ -576,7 +581,7 @@ export async function getRouteLoadPlan(routeName, { includeNet = false } = {}) {
       continue;
     }
 
-    const neededMl = capacity * (100 - Number(device.oil_level_pct ?? 0)) / 100;
+    const neededMl = capacity * (100 - levelOf(device)) / 100;
     byScent.set(scent, (byScent.get(scent) ?? 0) + neededMl);
   }
 

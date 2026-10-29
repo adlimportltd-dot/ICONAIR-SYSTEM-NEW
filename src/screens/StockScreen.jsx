@@ -67,8 +67,8 @@ function TodayLoadCard() {
   // getRouteLoadPlan(null) = "כל הקווים" מאוחד (ר' ההערה על הפונקציה
   // ב-queries.js) — routeName===null זה סימן מפורש, לא סתם "לא נבחר".
   const plan = useQuery(
-    () => getRouteLoadPlan(isAllRoutes ? null : activeRoute, { includeNet: isAdmin }),
-    [activeRoute, isAdmin],
+    () => getRouteLoadPlan(isAllRoutes ? null : activeRoute, { includeNet: isAdmin, fullCycle: viewingCycle === 'next' }),
+    [activeRoute, isAdmin, viewingCycle],
     { enabled: Boolean(activeRoute) }
   );
   useRealtime(['devices', 'oil_tracking', ...(isAdmin ? ['warehouse_stock', 'purchase_order_lines'] : [])], plan.refetch, { enabled: Boolean(activeRoute) });
@@ -138,7 +138,7 @@ function TodayLoadCard() {
         title="מה להעמיס היום"
         subtitle={
           viewingCycle === 'next'
-            ? `הכנה מוקדמת למחזור הבא — ${cycle.label} (${cycle.start.getDate()}–${cycle.end.getDate()} לחודש)`
+            ? `הכנה מוקדמת למחזור הבא — ${cycle.label} (${cycle.start.getDate()}–${cycle.end.getDate()} לחודש) — מילוי מלא לכל מכשיר בקו`
             : `המחזור הפעיל — ${cycle.label} (עד ${cycle.end.getDate()} לחודש) — לפי מצב השמן הנוכחי בכל מכשיר`
         }
         action={plan.data ? (pdfBusy ? 'מייצא…' : 'ייצוא ל-PDF') : undefined}
