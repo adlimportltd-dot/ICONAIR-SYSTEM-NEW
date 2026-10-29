@@ -169,7 +169,7 @@ export function toContainers(liters) {
 export function containersLabel(liters) {
   const { jugs, bottles } = toContainers(liters);
   const parts = [];
-  if (jugs > 0) parts.push(`${jugs} גלון${jugs > 1 ? 'ים' : ''} (5 ל')`);
+  if (jugs > 0) parts.push(`${jugs} ${jugs > 1 ? 'גלונים' : 'גלון'} (5 ל')`);
   if (bottles > 0) parts.push(`${bottles} בקבוק${bottles > 1 ? 'ים' : ''} (0.5 ל')`);
   return parts.join(' + ') || 'אין צורך';
 }
