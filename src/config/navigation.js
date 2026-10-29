@@ -16,7 +16,7 @@ export const navItems = [
   { id: 'oils',      label: 'מעקב שמנים',      shortLabel: 'שמנים',   icon: 'drop' },
   { id: 'service',   label: 'קריאות שירות/התקנות', shortLabel: 'שירות/התקנות', icon: 'wrench', inTabBar: true, tabBarOrder: 4 },
   { id: 'routes',    label: 'מסלולים',         shortLabel: 'מסלולים', icon: 'route', inTabBar: true, tabBarOrder: 1 },
-  { id: 'stock',     label: 'מלאי נייד',       shortLabel: 'הכנה לקו', icon: 'box', inTabBar: true, tabBarOrder: 3 },
+  { id: 'stock',     label: 'העמסה ורכש',      shortLabel: 'הכנה לקו', icon: 'box', inTabBar: true, tabBarOrder: 3 },
   { id: 'reports',   label: 'דוחות',           shortLabel: 'דוחות',   icon: 'chart' },
   { id: 'catalog',   label: 'ניהול מלאי',        shortLabel: 'מלאי ראשי', icon: 'tag', adminOnly: true },
   { id: 'web_orders', label: 'הזמנות אתר',     shortLabel: 'הזמנות',  icon: 'cart', adminOnly: true },
@@ -53,7 +53,7 @@ export function screenMeta(id, kpis) {
     case 'routes':
       return 'עצירות לפי קו, עם ניווט חד-לחיצה';
     case 'stock':
-      return 'מה יש ברכב של כל טכנאי כרגע';
+      return 'כמה להעמיס לכל קו, רכש מאדל ומה יש ברכב';
     case 'reports':
       return 'סיכומים וייצוא נתונים';
     case 'catalog':

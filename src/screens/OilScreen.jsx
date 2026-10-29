@@ -433,7 +433,7 @@ function NewOilEntryModal({ open, deviceOptions, scentOptions, devices, deviceMo
         {noStockNotice && (
           <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
             הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה לך מלאי רשום שתואם לדגם/ניחוח הזה.
-            תעדכן את "מלאי נייד" כשתוכל, כדי שהניכוי האוטומטי יעבוד בפעם הבאה.
+            תעדכן בטאב "העמסה ורכש" כשתוכל, כדי שהניכוי האוטומטי יעבוד בפעם הבאה.
           </div>
         )}
 
