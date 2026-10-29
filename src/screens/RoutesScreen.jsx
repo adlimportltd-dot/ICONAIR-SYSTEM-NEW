@@ -2162,7 +2162,7 @@ function CompleteVisitModal({ open, device, customer, scents, capacityMl, batter
 
         {noStockNotice && (
           <div className="rounded-row border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[14px] text-warn">
-            הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה מלאי רשום שתואם. עדכן "מלאי נייד" כשתוכל.
+            הביקור נרשם בהצלחה — אבל לא ניכינו כלום מהמלאי הנייד שלך, כי לא היה מלאי רשום שתואם. עדכן בטאב "העמסה ורכש" כשתוכל.
           </div>
         )}
 
