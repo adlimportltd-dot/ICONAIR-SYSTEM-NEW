@@ -41,6 +41,7 @@ type VisitRow = {
   location: string | null;
   model: string | null;
   scent: string | null;
+  liters: number | null;
   status: 'filled' | 'checked' | 'none';
   notes: string | null;
   technician: string | null;
@@ -326,6 +327,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
                 <th className="px-3 py-2 text-start">מיקום</th>
                 <th className="px-3 py-2 text-start">דגם</th>
                 <th className="px-3 py-2 text-start">ניחוח</th>
+                <th className="px-3 py-2 text-start">כמות</th>
                 <th className="px-3 py-2 text-start">סטטוס</th>
               </tr>
             </thead>
@@ -335,6 +337,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
                   <td className="px-3 py-2.5 font-bold text-text">{r.location || '—'}</td>
                   <td className="px-3 py-2.5 text-text-dim">{r.model || '—'}</td>
                   <td className="px-3 py-2.5 text-text-dim">{r.scent || '—'}</td>
+                  <td className="px-3 py-2.5 tabular text-text-dim">{r.liters ? `${r.liters} ל׳` : '—'}</td>
                   <td className={`px-3 py-2.5 font-bold ${ROW_STATUS[r.status].cls}`}>
                     {ROW_STATUS[r.status].label}
                     {r.notes && <div className="text-[13px] font-normal text-text-faint">{r.notes}</div>}
