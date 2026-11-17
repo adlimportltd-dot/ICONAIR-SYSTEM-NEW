@@ -284,7 +284,18 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
     setPdfBusy(true);
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
-      const canvas = await html2canvas(ref.current, { scale: 2, backgroundColor: '#FFFFFF' });
+      // ה-PDF תמיד בפריסת טבלה ברוחב מסמך, גם כשמורידים מהטלפון (שבו מוצגים כרטיסים)
+      const el = ref.current;
+      el.classList.add('pdf-mode');
+      el.style.width = '760px';
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await html2canvas(el, { scale: 2, backgroundColor: '#FFFFFF', windowWidth: 800 });
+      } finally {
+        el.classList.remove('pdf-mode');
+        el.style.width = '';
+      }
       const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
@@ -311,7 +322,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
 
   return (
     <div className="mt-4">
-      <div ref={ref} className="bg-white p-1" dir="rtl">
+      <div ref={ref} className="group bg-white p-1" dir="rtl">
         <div className="mb-3">
           <div className="text-[13px] font-bold tracking-[0.8px] text-gold-600">ICON AIR · דוח ביקור</div>
           <div className="font-display text-[20px] font-bold text-text">{props.site.label}{props.site.city ? `, ${props.site.city}` : ''}</div>
@@ -320,7 +331,25 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
             <span className="tabular">{props.visit.filled}</span> מתוך <span className="tabular">{props.visit.devices}</span> מכשירים מולאו
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {/* טלפון: כרטיס לכל מכשיר, כדי שכמות וסטטוס תמיד ייראו בלי גלילה הצידה */}
+        <div className="space-y-2 sm:hidden group-[.pdf-mode]:hidden">
+          {rows.map((r, i) => (
+            <div key={i} className="inner-row rounded-xl px-3.5 py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="text-[15px] font-bold text-text">{r.location || '—'}</span>
+                <span className={`text-[14px] font-bold ${ROW_STATUS[r.status].cls}`}>
+                  {ROW_STATUS[r.status].label}
+                  {r.liters ? <span className="tabular font-normal text-text-dim"> · {r.liters} ל׳</span> : null}
+                </span>
+              </div>
+              <div className="mt-0.5 text-[13.5px] text-text-dim">
+                <span className="whitespace-nowrap">{r.model || '—'}</span> · {r.scent || '—'}
+              </div>
+              {r.notes && <div className="mt-1 text-[13px] text-text-faint">{r.notes}</div>}
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto sm:block group-[.pdf-mode]:block">
           <table className="w-full border-collapse text-[14px]">
             <thead>
               <tr className="text-[12.5px] font-semibold tracking-[0.8px] text-text-faint">
@@ -335,9 +364,9 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
               {rows.map((r, i) => (
                 <tr key={i} className="border-t border-black/[0.075] align-top">
                   <td className="px-3 py-2.5 font-bold text-text">{r.location || '—'}</td>
-                  <td className="px-3 py-2.5 text-text-dim">{r.model || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-text-dim">{r.model || '—'}</td>
                   <td className="px-3 py-2.5 text-text-dim">{r.scent || '—'}</td>
-                  <td className="px-3 py-2.5 tabular text-text-dim">{r.liters ? `${r.liters} ל׳` : '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 tabular text-text-dim">{r.liters ? `${r.liters} ל׳` : '—'}</td>
                   <td className={`px-3 py-2.5 font-bold ${ROW_STATUS[r.status].cls}`}>
                     {ROW_STATUS[r.status].label}
                     {r.notes && <div className="text-[13px] font-normal text-text-faint">{r.notes}</div>}
