@@ -5,7 +5,7 @@
  * הלקוח לא מקבל שום גישה לטבלאות המערכת עצמן.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 
 type Site = {
@@ -555,11 +555,62 @@ function CallList({ calls, hideSite = false }: { calls: Call[]; hideSite?: boole
   );
 }
 
+/* ---------- כניסה עם שם משתמש וסיסמה ---------- */
+
+const TOKEN_KEY = 'iconair_portal_token';
+
+function readStoredToken(): string {
+  try { return localStorage.getItem(TOKEN_KEY) ?? ''; } catch { return ''; }
+}
+
+function LoginCard({ onLogin }: { onLogin: (token: string) => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!username.trim() || !password) { setError('הזינו שם משתמש וסיסמה'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await rpc<string>('portal_login', { p_username: username, p_password: password });
+      try { localStorage.setItem(TOKEN_KEY, token); } catch { /* דפדפן בלי אחסון — הכניסה תחזיק עד סגירת הדף */ }
+      onLogin(token);
+    } catch (err) {
+      setError(errText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-sm">
+      <Card>
+        <h2 className="mb-1 font-display text-[22px] font-bold text-text">כניסה לפורטל</h2>
+        <p className="mb-5 text-[14px] text-text-dim">הזינו את שם המשתמש והסיסמה שקיבלתם מ-ICON AIR</p>
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="שם משתמש">
+            <input className={inputCls} dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} />
+          </Field>
+          <Field label="סיסמה">
+            <input className={inputCls} dir="ltr" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+          {error && <p className="text-[14px] font-bold text-crit">{error}</p>}
+          <PrimaryBtn type="submit" disabled={busy}>{busy ? 'נכנס...' : 'כניסה'}</PrimaryBtn>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
 /* ---------- האפליקציה ---------- */
 
 export default function PortalApp() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const token = params.get('portal') ?? '';
+  // כניסה רגילה = שם משתמש וסיסמה (המפתח נשמר בדפדפן). ?portal=KEY נתמך עדיין לקישור ישיר.
+  const [token, setToken] = useState<string>(() => params.get('portal') || readStoredToken());
   // קישור ממייל דוח הביקור: ?portal=…&site=…&date=YYYY-MM-DD פותח ישר את הבניין והביקור
   const linkDate = params.get('date');
   const [data, setData] = useState<Overview | null>(null);
@@ -576,15 +627,30 @@ export default function PortalApp() {
       setData(d);
       setError(null);
     } catch (e) {
-      setError(errText(e));
+      const msg = errText(e);
+      if (/אינו תקף/.test(msg)) {
+        try { localStorage.removeItem(TOKEN_KEY); } catch { /* לא קריטי */ }
+        setToken('');
+        setData(null);
+        setError(null);
+        return;
+      }
+      setError(msg);
     }
   }, [token]);
+
+  function logout() {
+    try { localStorage.removeItem(TOKEN_KEY); } catch { /* לא קריטי */ }
+    setToken('');
+    setData(null);
+    setSiteId(null);
+  }
 
   useEffect(() => {
     document.title = 'ICON AIR · פורטל לקוח';
     document.documentElement.dir = 'rtl';
     document.documentElement.lang = 'he';
-    if (!token) { setError('הקישור לפורטל אינו תקף'); return; }
+    if (!token) return;
     load();
   }, [token, load]);
 
@@ -613,7 +679,12 @@ export default function PortalApp() {
               פורטל לקוח{data ? ` · ${data.customer}` : ''}
             </h1>
           </div>
-          {data && <PrimaryBtn onClick={() => setSheet({ site: siteId, kind: 'fault' })}>+ פנייה חדשה</PrimaryBtn>}
+          {data && (
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={logout} className="text-[14px] font-bold text-text-dim">יציאה</button>
+              <PrimaryBtn onClick={() => setSheet({ site: siteId, kind: 'fault' })}>+ פנייה חדשה</PrimaryBtn>
+            </div>
+          )}
         </div>
       </header>
 
@@ -625,7 +696,9 @@ export default function PortalApp() {
           </Card>
         )}
 
-        {!error && !data && <p className="text-[15px] text-text-faint">טוען...</p>}
+        {!token && <LoginCard onLogin={(t) => { setError(null); setToken(t); }} />}
+
+        {token && !error && !data && <p className="text-[15px] text-text-faint">טוען...</p>}
 
         {data && site && (
           <SiteView
