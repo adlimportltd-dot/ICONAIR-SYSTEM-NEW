@@ -366,6 +366,7 @@ function SiteView(props: {
   onBack: () => void;
   onRequest: (kind: Kind) => void;
   onCodeSaved: () => void;
+  initialDate?: string | null;
 }) {
   const [detail, setDetail] = useState<SiteDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -380,7 +381,9 @@ function SiteView(props: {
       .then((d) => {
         if (!alive) return;
         setDetail(d);
-        if (d.visits[0]) setOpenVisit(d.visits[0].date);
+        const wanted = props.initialDate && d.visits.some((v) => v.date === props.initialDate) ? props.initialDate : null;
+        if (wanted) setOpenVisit(wanted);
+        else if (d.visits[0]) setOpenVisit(d.visits[0].date);
       })
       .catch((e) => { if (alive) setError(errText(e)); });
     return () => { alive = false; };
@@ -527,11 +530,14 @@ function CallList({ calls, hideSite = false }: { calls: Call[]; hideSite?: boole
 /* ---------- האפליקציה ---------- */
 
 export default function PortalApp() {
-  const token = useMemo(() => new URLSearchParams(window.location.search).get('portal') ?? '', []);
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const token = params.get('portal') ?? '';
+  // קישור ממייל דוח הביקור: ?portal=…&site=…&date=YYYY-MM-DD פותח ישר את הבניין והביקור
+  const linkDate = params.get('date');
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'sites' | 'calls'>('sites');
-  const [siteId, setSiteId] = useState<string | null>(null);
+  const [siteId, setSiteId] = useState<string | null>(() => params.get('site'));
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState<{ site: string | null; kind: Kind } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -602,6 +608,7 @@ export default function PortalApp() {
             onBack={() => setSiteId(null)}
             onRequest={(kind) => setSheet({ site: site.id, kind })}
             onCodeSaved={load}
+            initialDate={linkDate}
           />
         )}
 
