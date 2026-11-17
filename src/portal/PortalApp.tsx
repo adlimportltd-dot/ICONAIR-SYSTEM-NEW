@@ -343,7 +343,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
                 </span>
               </div>
               <div className="mt-0.5 text-[13.5px] text-text-dim">
-                <span className="whitespace-nowrap">{r.model || '—'}</span> · {r.scent || '—'}
+                <span dir="ltr" className="inline-block whitespace-nowrap">{r.model || '—'}</span> · {r.scent || '—'}
               </div>
               {r.notes && <div className="mt-1 text-[13px] text-text-faint">{r.notes}</div>}
             </div>
@@ -364,7 +364,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
               {rows.map((r, i) => (
                 <tr key={i} className="border-t border-black/[0.075] align-top">
                   <td className="px-3 py-2.5 font-bold text-text">{r.location || '—'}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-text-dim">{r.model || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-text-dim"><span dir="ltr">{r.model || '—'}</span></td>
                   <td className="px-3 py-2.5 text-text-dim">{r.scent || '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 tabular text-text-dim">{r.liters ? `${r.liters} ל׳` : '—'}</td>
                   <td className={`px-3 py-2.5 font-bold ${ROW_STATUS[r.status].cls}`}>
