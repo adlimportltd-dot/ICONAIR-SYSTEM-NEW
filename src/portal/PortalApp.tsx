@@ -33,7 +33,7 @@ type Call = {
 
 type Overview = { customer: string; sites: Site[]; calls: Call[] };
 
-type Visit = { date: string; devices: number; filled: number; liters: number; technician: string | null };
+type Visit = { date: string; devices: number; filled: number; technician: string | null };
 type Device = { model: string | null; location: string | null; scent: string | null };
 type SiteDetail = { devices: Device[]; visits: Visit[] };
 
@@ -41,7 +41,6 @@ type VisitRow = {
   location: string | null;
   model: string | null;
   scent: string | null;
-  liters: number | null;
   status: 'filled' | 'checked' | 'none';
   notes: string | null;
   technician: string | null;
@@ -317,8 +316,7 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
           <div className="font-display text-[20px] font-bold text-text">{props.site.label}{props.site.city ? `, ${props.site.city}` : ''}</div>
           <div className="text-[14px] text-text-dim">
             {props.customer} · ביקור {fmtDate(props.visit.date)} · טכנאי: {props.visit.technician ?? '—'} ·{' '}
-            <span className="tabular">{props.visit.devices}</span> מכשירים, <span className="tabular">{props.visit.filled}</span> מולאו,{' '}
-            <span className="tabular">{props.visit.liters}</span> ליטר
+            <span className="tabular">{props.visit.filled}</span> מתוך <span className="tabular">{props.visit.devices}</span> מכשירים מולאו
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -328,7 +326,6 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
                 <th className="px-3 py-2 text-start">מיקום</th>
                 <th className="px-3 py-2 text-start">דגם</th>
                 <th className="px-3 py-2 text-start">ניחוח</th>
-                <th className="px-3 py-2 text-start">כמות</th>
                 <th className="px-3 py-2 text-start">סטטוס</th>
               </tr>
             </thead>
@@ -338,7 +335,6 @@ function VisitTable(props: { token: string; site: Site; visit: Visit; customer: 
                   <td className="px-3 py-2.5 font-bold text-text">{r.location || '—'}</td>
                   <td className="px-3 py-2.5 text-text-dim">{r.model || '—'}</td>
                   <td className="px-3 py-2.5 text-text-dim">{r.scent || '—'}</td>
-                  <td className="px-3 py-2.5 tabular text-text-dim">{r.liters ? `${r.liters} ל׳` : '—'}</td>
                   <td className={`px-3 py-2.5 font-bold ${ROW_STATUS[r.status].cls}`}>
                     {ROW_STATUS[r.status].label}
                     {r.notes && <div className="text-[13px] font-normal text-text-faint">{r.notes}</div>}
@@ -473,7 +469,7 @@ function SiteView(props: {
               >
                 <span className="text-[16px] font-bold tabular text-text">{fmtDate(v.date)}</span>
                 <span className="text-[14px] text-text-dim">
-                  <span className="tabular">{v.filled}</span> מתוך <span className="tabular">{v.devices}</span> מולאו · <span className="tabular">{v.liters}</span> ליטר · {v.technician ?? '—'}
+                  <span className="tabular">{v.filled}</span> מתוך <span className="tabular">{v.devices}</span> מולאו · {v.technician ?? '—'}
                 </span>
               </button>
               {openVisit === v.date && <VisitTable token={props.token} site={props.site} visit={v} customer={props.customer} />}
